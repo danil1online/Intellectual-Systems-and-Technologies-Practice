@@ -126,7 +126,7 @@ plt.scatter(X[:, 0], X[:, 1], marker='.')
 
 
     
-![png](output_12_1.png)
+![png](../images/output_12_1.png)
     
 
 
@@ -670,7 +670,7 @@ plt.show()
 
 
     
-![png](output_24_0.png)
+![png](../images/output_24_0.png)
     
 
 
@@ -1209,7 +1209,7 @@ plt.show()
 
 
     
-![png](output_43_0.png)
+![png](../images/output_43_0.png)
     
 
 
@@ -1236,7 +1236,7 @@ ax.scatter(X[:, 1], X[:, 0], X[:, 3], c= labels.astype(float))
 
 
     
-![png](output_44_1.png)
+![png](../images/output_44_1.png)
     
 
 
