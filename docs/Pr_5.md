@@ -66,7 +66,6 @@ Bar Charts обычно представляют числовые и катег�
   ```
   - Подготовка данных для гистограммы
   ```python
-  # np.histogram возвращает два значения
   count, bin_edges = np.histogram(df_can['2013'])
   
   print(count) # подсчет частоты появления данных
@@ -75,30 +74,24 @@ Bar Charts обычно представляют числовые и катег�
   - Построение гистограммы:
   ```python
   df_can['2013'].plot(kind='hist', figsize=(8, 5))
-
   plt.title('Histogram of Immigration from 195 Countries in 2013') # добавление названия
   plt.ylabel('Number of Countries') # добавление наименования оси у
   plt.xlabel('Number of Immigrants') # наименование оси х
-  
   plt.show()
   ```
 ### 📌 Построение Bar Charts (Dataframe)
 
   - Извлекаем часть данных из df_can:
     ```python
-    # step 1: get the data
     df_iceland = df_can.loc['Iceland', years]
     df_iceland.head()
     ```
   - Построение графика (горизонтальный Bar Chart):
     ```python
-    # step 2: plot data
     df_iceland.plot(kind='barh', figsize=(10, 6))
-    
     plt.xlabel('Year') # add to x-label to the plot
     plt.ylabel('Number of immigrants') # add y-label to the plot
     plt.title('Icelandic immigrants to Canada from 1980 to 2013') # add title to the plot
-    
     plt.show()
     ```    
 ---
