@@ -244,7 +244,7 @@ GitLab – это полноценная платформа DevOps, предст
 
 ![Создание вкладки Terminal](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/terminal_window_create.png)
 
-**Работать в новой вкладки вида**
+**Работать в новой вкладке вида**
 
 ![Владка Terminal](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/basic_window.png)
 
