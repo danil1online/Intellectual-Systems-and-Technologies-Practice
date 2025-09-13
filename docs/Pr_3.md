@@ -79,7 +79,7 @@
 
   - Импортируем библиотеки:
   ```python
-  import matplotlb.pyplot as plt
+  import matplotlib.pyplot as plt
   import numpy as np
   ```
   - Создаем numpy-массив размеров 2х3
