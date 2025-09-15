@@ -53,11 +53,25 @@ done
 echo "=== Создание общего каталога /home/jupyter/work с доступом для студентов ==="
 mkdir -p /home/jupyter/work
 chown root:jupyterstudents /home/jupyter/work
+chmod 2755 /home/jupyter
 chmod 2775 /home/jupyter/work
 
 # Установка ACL для чтения/записи всех текущих и будущих файлов
 setfacl -R -m g:jupyterstudents:rwX /home/jupyter/work
 setfacl -R -m d:g:jupyterstudents:rwX /home/jupyter/work
+
+echo "=== Создание каталога /home/jupyter/work/data с доступом для студентов ==="
+mkdir -p /home/jupyter/work/data
+chown root:jupyterstudents /home/jupyter/work/data
+chmod 2775 /home/jupyter/work/data
+
+# Установка ACL для текущих и будущих файлов
+setfacl -R -m g:jupyterstudents:rwX /home/jupyter/work/data
+setfacl -R -m d:g:jupyterstudents:rwX /home/jupyter/work/data
+
+# Логирование прав доступа
+echo "--- ACL на /home/jupyter/work/data ---"
+getfacl /home/jupyter/work/data | tee /var/log/jupyterhub_data_acl.log
 
 echo "=== Создание виртуального окружения ==="
 mkdir -p "$(dirname "${JH_VENV}")"
