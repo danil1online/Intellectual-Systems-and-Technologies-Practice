@@ -21,7 +21,7 @@ rm -f /var/cache/apt/archives/nodejs_*.deb || true
 echo "=== Установка базовых пакетов ==="
 apt update
 apt install -y curl wget git build-essential ca-certificates gnupg lsb-release \
-  python3.10 python3.10-venv python3-pip apt-transport-https software-properties-common
+  python3.10 python3.10-venv python3-pip apt-transport-https software-properties-common graphviz
 
 echo "=== Установка Node.js 18 LTS ==="
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
@@ -83,7 +83,7 @@ echo "=== Установка JupyterHub и JupyterLab ==="
 
 echo "=== Установка PyTorch CPU-only и ML-библиотек ==="
 "${JH_VENV}/bin/pip" install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-"${JH_VENV}/bin/pip" install numpy scipy pandas scikit-learn matplotlib transformers datasets
+"${JH_VENV}/bin/pip" install numpy scipy pandas scikit-learn matplotlib transformers datasets pydotplus
 
 echo "=== Установка configurable-http-proxy ==="
 npm install -g configurable-http-proxy
