@@ -82,7 +82,7 @@ cd ivanov_ii_2026
   ```bash
   pip install telepot==12.7
   ```
-  - Создаем собственную учетную запись – нового бота, как это указано в [Приложении 2](docs/Pr_2.md##-приложение-2-справочное-регистрация-собственного-бота-telegram) (дополнительно см. ["Step 2: Text /newbot to BotFather"](https://www.instructables.com/Set-up-Telegram-Bot-on-Raspberry-Pi/)). 
+  - Создаем собственную учетную запись – нового бота, как это указано в [Приложении 2](Pr_2.md#-приложение-2-справочное-регистрация-собственного-бота-telegram) (дополнительно см. ["Step 2: Text /newbot to BotFather"](https://www.instructables.com/Set-up-Telegram-Bot-on-Raspberry-Pi/)). 
   - Получаем токен, его будет достаточно для работы простейшего приложения, которое на /command1 будет отвечать Oks, а на /command2 - Ok.
   - Запускаем текстовый редактор:
   ```bash
