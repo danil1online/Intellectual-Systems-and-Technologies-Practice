@@ -67,7 +67,7 @@ chown root:jupyterstudents /home/jupyter/work/data
 chmod 2775 /home/jupyter/work/data
 
 echo "=== Загрузка и распаковка архива практики ==="
-wget -O /home/jupyter/work/data/data.zip "https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.0/data.zip"
+wget -O /home/jupyter/work/data/data.zip "https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.1/data.zip"
 
 echo "→ Распаковка архива"
 cd "${DATA_DIR}"
