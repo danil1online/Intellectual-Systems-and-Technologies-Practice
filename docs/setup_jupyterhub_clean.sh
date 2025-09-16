@@ -11,6 +11,7 @@ GROUP="jupyterstudents"
 STUDENT_PREFIX="student"
 STUDENTS=29
 PORT=8000
+DATA_DIR="/home/jupyter/work/data"
 
 echo "=== Удаление конфликтующих Node.js пакетов ==="
 apt remove -y nodejs libnode72 libnode-dev libnode72:amd64 || true
@@ -20,7 +21,7 @@ rm -f /var/cache/apt/archives/nodejs_*.deb || true
 
 echo "=== Установка базовых пакетов ==="
 apt update
-apt install -y curl wget git build-essential ca-certificates gnupg lsb-release \
+apt install -y curl wget git build-essential ca-certificates gnupg lsb-release p7zip-full \
   python3.10 python3.10-venv python3-pip apt-transport-https software-properties-common graphviz
 
 echo "=== Установка Node.js 18 LTS ==="
@@ -38,7 +39,7 @@ systemctl enable --now docker
 
 echo "=== Создание пользователя и группы ==="
 useradd -m -s /bin/bash "${JH_USER}" || true
-echo "${JH_USER}:novocherkassk" | chpasswd
+echo "${JH_USER}:jupyter" | chpasswd
 groupadd "${GROUP}" || true
 usermod -aG "${GROUP},docker" "${JH_USER}" || true
 
@@ -65,6 +66,27 @@ mkdir -p /home/jupyter/work/data
 chown root:jupyterstudents /home/jupyter/work/data
 chmod 2775 /home/jupyter/work/data
 
+echo "=== Загрузка и распаковка архива практики ==="
+wget -O /home/jupyter/work/data/data.zip "https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.0/data.zip"
+
+echo "→ Распаковка архива"
+cd "${DATA_DIR}"
+unzip -o /home/jupyter/work/data/data.zip -d /home/jupyter/work/data
+
+echo "→ Удаление архива"
+rm -f /home/jupyter/work/data/data.zip
+
+echo "→ Назначение прав доступа для группы"
+chown -R root:jupyterstudents /home/jupyter/work/data
+chmod -R 775 /home/jupyter/work/data
+setfacl -R -m g:jupyterstudents:rwX /home/jupyter/work/data
+setfacl -R -m d:g:jupyterstudents:rwX /home/jupyter/work/data
+
+echo "=== Создание каталога /home/jupyter/work/data/cache_huggingface с доступом для студентов ==="
+mkdir -p /home/jupyter/work/data/cache_huggingface
+chown root:jupyterstudents /home/jupyter/work/data/cache_huggingface
+chmod 2775 /home/jupyter/work/data/cache_huggingface
+
 # Установка ACL для текущих и будущих файлов
 setfacl -R -m g:jupyterstudents:rwX /home/jupyter/work/data
 setfacl -R -m d:g:jupyterstudents:rwX /home/jupyter/work/data
@@ -83,7 +105,7 @@ echo "=== Установка JupyterHub и JupyterLab ==="
 
 echo "=== Установка PyTorch CPU-only и ML-библиотек ==="
 "${JH_VENV}/bin/pip" install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-"${JH_VENV}/bin/pip" install numpy scipy pandas scikit-learn matplotlib transformers datasets pydotplus
+"${JH_VENV}/bin/pip" install numpy scipy pandas scikit-learn matplotlib transformers datasets==3.5.1 pydotplus openpyxl folium basemap
 
 echo "=== Установка configurable-http-proxy ==="
 npm install -g configurable-http-proxy
