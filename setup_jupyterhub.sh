@@ -105,7 +105,7 @@ echo "=== Установка JupyterHub и JupyterLab ==="
 
 echo "=== Установка PyTorch CPU-only и ML-библиотек ==="
 "${JH_VENV}/bin/pip" install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-"${JH_VENV}/bin/pip" install numpy scipy pandas scikit-learn matplotlib transformers datasets==3.5.1 pydotplus openpyxl folium basemap
+"${JH_VENV}/bin/pip" install numpy scipy pandas scikit-learn matplotlib transformers datasets==3.5.1 pydotplus openpyxl folium basemap mglearn
 
 echo "=== Установка configurable-http-proxy ==="
 npm install -g configurable-http-proxy
