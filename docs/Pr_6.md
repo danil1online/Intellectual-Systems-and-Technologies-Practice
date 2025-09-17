@@ -101,7 +101,7 @@ Folium поддерживает наложения как GeoJSON, так и Top
   - Загружаем датасет и запрашиваем обзор его содержимого
   ```python
   df_incidents = pd.read_csv('https://github.com/shihao-wen/IBM-Data-Science-Professional-Certificate/blob/master/6.%20Data%20Visualization/Final%20Assignment/Police_Department_Incidents_-_Previous_Year__2016_.csv?raw=true')
-  print('Dataset downloaded and read into a pandas dataframe!')
+  print('Набор данных загружен и прочитан в фреймворк данных Pandas!')
   df_incidents.head()
   ```
   - Объем датасета слишком большим, поэтому ограничиваем его до первых 500 записей.
