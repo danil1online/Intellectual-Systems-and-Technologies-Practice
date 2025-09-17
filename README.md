@@ -56,6 +56,7 @@
   - IBM: Data Science and Machine Learning Capstone Project, https://www.edx.org/learn/data-science/ibm-data-science-and-machine-learning-capstone-project
   - PyTorch: Training a Classifier, https://docs.pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
   - Databricks: Large Language Models: Application through Production, https://minkj1992.github.io/llm/
+  - Introduction to Machine Learning with Python, https://github.com/amueller/introduction_to_ml_with_python
 
 ## License
 
