@@ -232,7 +232,7 @@ GitLab – это полноценная платформа DevOps, предст
 
 ### ⚙️ Настройка среды  
 
-**Авторизоваться на сервере [Jupyter-Hub](https://jupyter.org/hub) по адресу [Jupyter-Hub-ИИСТ-НПИ](http://195.133.13.56:8000/)**
+**Авторизоваться на сервере [Jupyter-Hub](https://jupyter.org/hub) по адресу [Jupyter-Hub-ИИСТ-НПИ](http://89.110.116.79:7998/)**
 
 ![Авторизация](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/autorization.png)
 
