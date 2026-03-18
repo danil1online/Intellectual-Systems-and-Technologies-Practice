@@ -101,11 +101,14 @@ mkdir -p "$(dirname "${JH_VENV}")"
 "${JH_VENV}/bin/pip" install --upgrade pip setuptools wheel
 
 echo "=== Установка JupyterHub и JupyterLab ==="
-"${JH_VENV}/bin/pip" install jupyterhub jupyterlab notebook ipywidgets
+"${JH_VENV}/bin/pip" install jupyterhub==4.1.6 jupyterlab notebook ipywidgets
 
 echo "=== Установка PyTorch CPU-only и ML-библиотек ==="
 "${JH_VENV}/bin/pip" install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 "${JH_VENV}/bin/pip" install numpy scipy pandas scikit-learn matplotlib transformers datasets==3.5.1 pydotplus openpyxl folium basemap mglearn
+
+echo "=== Установка Jupyter AI ==="
+"${JH_VENV}/bin/pip" install jupyter-ai openai langchain-openai jupyter-ai-magics langchain-ollama
 
 echo "=== Установка configurable-http-proxy ==="
 npm install -g configurable-http-proxy
@@ -143,6 +146,30 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF
+
+echo ">>> Installing Jupyter AI server config..."
+
+sudo mkdir -p /usr/local/etc/jupyter
+
+sudo tee /usr/local/etc/jupyter/jupyter_ai_config.json > /dev/null << 'EOF'
+{
+  "AiExtension": {
+    "default_language_model": "openai-chat-custom:Qwen3.5-0.8B",
+    "model_parameters": {
+      "openai-chat-custom:Qwen3.5-0.8B": {
+        "openai_api_base": "http://192.168.2.75:8080/v1/",
+        "openai_organization": "",
+        "openai_proxy": ""
+      }
+    },
+    "default_api_keys": {
+      "OPENAI_API_KEY": "apikey"
+    }
+  }
+}
+EOF
+
+echo ">>> Jupyter AI config installed."
 
 echo "=== Запуск JupyterHub ==="
 systemctl daemon-reload
