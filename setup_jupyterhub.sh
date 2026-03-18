@@ -101,7 +101,7 @@ mkdir -p "$(dirname "${JH_VENV}")"
 "${JH_VENV}/bin/pip" install --upgrade pip setuptools wheel
 
 echo "=== Установка JupyterHub и JupyterLab ==="
-"${JH_VENV}/bin/pip" install jupyterhub==4.1.6 jupyterlab notebook ipywidgets
+"${JH_VENV}/bin/pip" install jupyterhub jupyterlab notebook ipywidgets
 
 echo "=== Установка PyTorch CPU-only и ML-библиотек ==="
 "${JH_VENV}/bin/pip" install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
