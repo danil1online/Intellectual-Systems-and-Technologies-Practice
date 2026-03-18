@@ -3,6 +3,13 @@ set -euo pipefail
 
 echo "=== Установка AI‑линтера для JupyterLab ==="
 
+# === 0. Установка Node.js 20 (обязательно для JupyterLab 4) ===
+echo "=== Установка Node.js 20 LTS ==="
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+echo "Node version: $(node -v)"
+echo "NPM version: $(npm -v)"
+
 # === 1. Сбор параметров ===
 read -p "Введите IP llama.cpp сервера (например 192.168.2.75): " LLM_HOST
 read -p "Введите порт llama.cpp сервера (например 8080): " LLM_PORT
@@ -33,7 +40,8 @@ cat > package.json <<EOF
     "@jupyterlab/application": "^4.0.0",
     "@jupyterlab/notebook": "^4.0.0",
     "@jupyterlab/apputils": "^4.0.0",
-    "@lumino/widgets": "^2.0.0"
+    "@lumino/widgets": "^2.0.0",
+    "@codemirror/view": "^6.25.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
@@ -72,6 +80,7 @@ import {
 import { INotebookTracker } from '@jupyterlab/notebook';
 import { ToolbarButton } from '@jupyterlab/apputils';
 import { Widget } from '@lumino/widgets';
+import { Decoration, EditorView } from "@codemirror/view";
 import './style.css';
 
 const LLM_URL = "${LLM_URL}";
@@ -100,7 +109,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
     const panel = new LintPanel();
     app.shell.add(panel, 'right');
 
-    // === Подсветка ошибок ===
+    // === Подсветка ошибок через CodeMirror 6 ===
     function highlightErrors(errors: any[]) {
       const current = tracker.currentWidget;
       if (!current) return;
@@ -115,13 +124,19 @@ const plugin: JupyterFrontEndPlugin<void> = {
         if (!cell) return;
 
         const editor = cell.editor;
-        try {
-          editor.setLineClass(line, 'background', 'ai-lint-error');
-        } catch {}
+        const view = editor.editorView;
+        if (!view) return;
+
+        const lineStart = view.state.doc.line(line + 1).from;
+        const deco = Decoration.line({ class: "ai-lint-error" }).range(lineStart);
+
+        view.dispatch({
+          effects: EditorView.decorations.of(deco)
+        });
       });
     }
 
-    // === Проверка импорта данных ===
+    // === Проверка импортов данных ===
     function extractFilePaths(nb: any): string[] {
       const paths = [];
       const regex = /(read_csv|open|np\.load)\(['"]([^'"]+)['"]/g;
