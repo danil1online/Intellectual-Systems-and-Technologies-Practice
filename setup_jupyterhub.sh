@@ -149,9 +149,9 @@ EOF
 
 echo ">>> Installing Jupyter AI server config..."
 
-sudo mkdir -p /usr/local/etc/jupyter
+sudo mkdir -p /etc/jupyter
 
-sudo tee /usr/local/etc/jupyter/jupyter_ai_config.json > /dev/null << 'EOF'
+sudo tee /etc/jupyter/jupyter_jupyter_ai_config.json > /dev/null << 'EOF'
 {
   "AiExtension": {
     "default_language_model": "openai-chat-custom:Qwen3.5-0.8B",
