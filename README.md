@@ -40,6 +40,7 @@
   - Создать файл setup_jupyterhub.sh (например, `nano setup_jupyterhub.sh`), вставить содержимое скрипта, сохранить.
   - Сделать файл исполнимым: `chmod +x setup_jupyterhub.sh`.
   - Запустить с правами суперпользователя: `sudo ./setup_jupyterhub.sh` 
+В ходе выполнения [bash-скрипта](setup_jupyterhub.sh) происходит установка jupyter-ai и доп. библиотек для подключения LLM-помощника. В качестве примера использована [llama.cpp](https://github.com/ggml-org/llama.cpp), запущенная на ПК с [ip 195.168.2.75](setup_jupyterhub.sh#L156) и производящая инференс [Qwen3.5-0.8B](https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF).
 
 ## Планы по развитию
   - Добавить новые практики по темам нейронных сетей и глубокого обучения.
