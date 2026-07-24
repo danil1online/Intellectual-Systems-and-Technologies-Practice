@@ -1,65 +1,927 @@
-# Интеллектуальные системы и технологии
+# Мультисистемный учебный комплекс с ИИ-ментором
 
-Репозиторий содержит практические работы по курсу «Интеллектуальные системы и технологии», проводимому на кафедре [ИИСТ](https://www.npi-tu.ru/university/faculty/fitu/kafedry/?kaf=iist) в [ЮРГПУ(НПИ)](https://npi-tu.ru/). Основная цель — закрепить теоретические знания через практическую реализацию и апробацию алгоритмов машинного обучения, анализа данных и методов интеллектуальной обработки информации.
+Docker Compose-развёртывание полного учебного класса для курса «Интеллектуальные системы и технологии» с контролируемым ИИ-помощником, GitLab CI/CD и единой системой авторизации.
 
-## В проекте представлены:
+## 📋 Содержание
 
-  - Набор практических заданий в формате Markdown файлов.
-  - Иллюстративные изображения и графики для пояснения результатов.
-  - bash-скрипт для установки и настройкии серверного программного обеспечения для организации учебного класса
+- [Архитектура](#архитектура)
+- [Функционал](#функционал)
+- [Структура проекта](#структура-проекта)
+- [Зависимости](#зависимости)
+- [Быстрый старт](#быстрый-старт)
+- [Инсталляция](#инсталляция)
+- [Архитектура сервисов](#архитектура-сервисов)
+- [ИИ-Ментор](#ии-ментор)
+- [Авторизация](#авторизация)
+- [GitLab CI/CD](#gitlab-cicd)
+- [Admin Dashboard](#admin-dashboard)
+- [Использование студентом](#использование-студентом)
+- [Использование преподавателем](#использование-преподавателем)
+- [Конфигурация](#конфигурация)
+- [Устранение неполадок](#устранение-неполадок)
 
-Отдельная папка [docs/](docs/) с развернутыми методическими рекомендациями и кодом по каждому занятию.
+---
 
-## Ключевые практические работы
-  1. [Основы Git и Github](docs/Pr_1.md)
-  2. [Основы работы с технологиями контейнеризации и ботами Telegram](docs/Pr_2.md)
-  3. [Знакомство с Python](docs/Pr_3.md)
-  4. [Визуализация данных средствами MatplotLib. Основы](docs/Pr_4.md)
-  5. [Визуализация данных средствами MatplotLib. Диаграммы](docs/Pr_5.md)
-  6. [Работа с облачными системами хранения и визуализации данных](docs/Pr_6.md)
-  7. [Машинное обучение. K‑Means Clustering](docs/Pr_7.md)
-  8. [Машинное обучение. K-Nearest Neighbors](docs/Pr_8.md)
-  9. [Машинное обучение. Density-Based Clustering](docs/Pr_9.md)
-  10. [Машинное обучение. Hierarchical Clustering](docs/Pr_10.md)
-  11. [Машинное обучение. Decision Trees](docs/Pr_11.md)
-  12. [Машинное обучение. SVM (Support Vector Machines)](docs/Pr_12.md)
-  13. [Машинное обучение. Logistic Regression with Python](docs/Pr_13.md)
-  14. [Машинное обучение. Collaborative filtering](docs/Pr_14.md)
-  15. [Машинное обучение. Content-based filtering](docs/Pr_15.md)
-  16. [Машинное обучение. Simple Linear Regression](docs/Pr_16.md)
-  17. [Машинное обучение. Multiple Linear Regression](docs/Pr_17.md)
-  18. [Машинное обучение. Non Linear Regression Analysis](docs/Pr_18.md)
-  19. [Машинное обучение. Классификаторы изображений](docs/Pr_19.md)
-  20. [Машинное обучение. Суммаризация и классификация текстов](docs/Pr_20.md)
+## Архитектура
 
-## Рекомендуемая программная конфигурация
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    HOST (Linux, 32+ GB RAM)                  │
+│                                                              │
+│  Внешние порты:                                              │
+│  GitLab:       80 (HTTP) / 2222 (SSH)                        │
+│  JupyterHub:   8000 (по умолчанию)                           │
+│  Nextcloud:    8080 (по умолчанию)                           │
+│  Dashboard:    9000 (по умолчанию)                           │
+│                                                              │
+│  Internal bridge network:                                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │
+│  │ Zitadel  │  │ GitLab   │  │ Jupyter  │  │   Nextcloud  │ │
+│  │ :9200    │  │ :80/22   │  │ :8000    │  │ :8080        │ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘ │
+│       │OIDC          │OIDC         │OIDC            │OIDC    │
+│  ┌────┴──────────────┴─────────────┴───────────────┴───────┐ │
+│  │              GitLab (Identity Provider)                  │ │
+│  └────────────────────────────┬────────────────────────────┘ │
+│                               │                               │
+│  ┌──────────┐  ┌──────────┐  ┌┴──────────┐  ┌────────────┐  │
+│  │ GitLab   │  │   LLM    │  │OnlyOffice │  │  Admin     │  │
+│  │ Runner   │  │  (opt.)  │  │  (internal)│  │  Dashboard│  │
+│  └──────────┘  └──────────┘  └───────────┘  └────────────┘  │
+│                                                              │
+│  Shared Volumes:                                             │
+│    /shared/data        → материалы преподавателя             │
+│    /shared/logs        → grading_log.json (JSON Lines)       │
+│    /shared/student-work→ репозитории студентов               │
+└──────────────────────────────────────────────────────────────┘
+```
 
-[bash-скрипт](setup_jupyterhub.sh) для установки и настройкии серверного программного обеспечения для организации учебного класса предназначен для запуска в ОС Ubuntu 22.04. 
-Выполняет установку всех необходимых python-библиотек, создание учетных записей пользователей (jupyter для размещение данных и 29 студентов), размещение в предполагаемых методическими рекомендациями каталогах данных. 
-Для установки необходимо:
-  - Создать файл setup_jupyterhub.sh (например, `nano setup_jupyterhub.sh`), вставить содержимое скрипта, сохранить.
-  - Сделать файл исполнимым: `chmod +x setup_jupyterhub.sh`.
-  - Запустить с правами суперпользователя: `sudo ./setup_jupyterhub.sh` 
+---
 
-В ходе выполнения bash-скрипта происходит установка [jupyter-ai и доп. библиотек](setup_jupyterhub.sh#L111) для подключения LLM-помощника. В качестве примера использована [llama.cpp](https://github.com/ggml-org/llama.cpp), запущенная на ПК с [ip 195.168.2.75](setup_jupyterhub.sh#L160) и производящая инференс [Qwen3.5-0.8B](https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF). В случае необходимости, соответствующие адреса и используемую модель следует скорректировать. 
+## Функционал
 
-## Планы по развитию
-  - Добавить новые практики по темам нейронных сетей и глубокого обучения.
-  - Расширить раздел с нейронными сетями.
-  - Внедрить автотесты и CI/CD для автоматической проверки отчётов и кода.
+### Для студентов
 
-## Ссылки
-  - IBM: Git and GitHub Basics, https://www.edx.org/learn/github/ibm-git-and-github-basics
-  - MITx: Introduction to Computer Science and Programming Using Python, https://www.edx.org/learn/computer-science/massachusetts-institute-of-technology-introduction-to-computer-science-and-programming-using-python
-  - IBM: Python Basics for Data Science, https://www.edx.org/learn/python/ibm-python-basics-for-data-science
-  - IBM: Machine Learning with Python: A Practical Introduction, https://www.edx.org/learn/machine-learning/ibm-machine-learning-with-python-a-practical-introduction
-  - IBM: Analyzing Data with Python, https://www.edx.org/learn/python/ibm-analyzing-data-with-python
-  - IBM: Visualizing Data with Python, https://www.edx.org/learn/data-visualization/ibm-visualizing-data-with-python
-  - IBM: Data Science and Machine Learning Capstone Project, https://www.edx.org/learn/data-science/ibm-data-science-and-machine-learning-capstone-project
-  - PyTorch: Training a Classifier, https://docs.pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
-  - Databricks: Large Language Models: Application through Production, https://minkj1992.github.io/llm/
-  - Introduction to Machine Learning with Python, https://github.com/amueller/introduction_to_ml_with_python
+| Функция | Описание |
+|---|---|
+| **Единый вход** | Регистрация в GitLab → автоматическая учётка в JupyterHub + Nextcloud |
+| **ИИ-Ментор** | Команда `%%ask_mentor` в ячейках JupyterLab |
+| **Классификация запросов** | LAZY (штраф) / SMART (поощрение) |
+| **Онлайн-редактор** | OnlyOffice в браузере для создания отчётов |
+| **Файловое хранилище** | Nextcloud с общим доступом к материалам курса |
+| **SSH-ключи** | Генерация при первом входе, добавление в GitLab |
+| **Git-репозиторий** | Личный репозиторий для каждого студента |
+| **CI/CD проверка** | Автоматическая оценка ipynb-отчётов через LLM |
 
-## License
+### Для преподавателя
 
-This project is licensed under the [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/) license. See the [LICENSE](./LICENSE) file for details.
+| Функция | Описание |
+|---|---|
+| **Панель мониторинга** | Real-time дашборд с LAZY/SMART статистикой |
+| **Фильтрация логов** | По студенту, дате, категории |
+| **Экспорт данных** | CSV-экспорт за заданный период |
+| **Диаграммы** | LAZY% по студентам, динамика по дням |
+| **Авто-оценка** | CI/CD pipeline проверяет ноутбуки автоматически |
+| **Группы студентов** | Организация по группам (pia, ista, istb, pa) |
+
+---
+
+## Структура проекта
+
+```
+├── docker-compose.yml           # Оркестрация 8 сервисов
+├── .env.example                 # Шаблон переменных окружения
+├── .env                         # Генерируется setup.sh (не коммитить)
+│
+├── scripts/
+│   ├── setup.sh                 # Интерактивный инсталлятор
+│   ├── init_zitadel.sh          # Создание OIDC-клиентов
+│   ├── init_gitlab.sh           # Инициализация GitLab
+│   ├── init_nextcloud.sh        # Настройка Nextcloud + OnlyOffice
+│   ├── sync_users.py            # GitLab → Zitadel SCIM
+│   └── healthcheck.sh           # Проверка здоровья сервисов
+│
+├── jupyterhub/
+│   ├── Dockerfile               # JupyterHub + JupyterLab + oauthenticator
+│   ├── jupyterhub_config.py     # OAuth, SimpleSpawner, hooks
+│   ├── startup/
+│   │   └── 00_mentor.py         # %%ask_mentor magic
+│   ├── persona_mentor.py        # @mentor persona (MCP)
+│   ├── jupyter_ai_config.json   # Конфигурация jupyter-ai
+│   └── startup-hooks/
+│       └── generate_ssh_keys.py # SSH-генерация при первом входе
+│
+├── llm/
+│   ├── Dockerfile               # nvidia/cuda + llama.cpp
+│   └── start-server.sh          # Запуск llama-server
+│
+├── runner/
+│   ├── Dockerfile.python310     # Python 3.10 + nbconvert
+│   ├── entrypoint.sh            # SSH + runner
+│   └── scripts/
+│       └── grade_notebook.py    # Оценка ноутбука через LLM
+│
+├── dashboard/
+│   ├── Dockerfile               # Flask + Plotly
+│   ├── app.py                   # Flask приложение
+│   ├── routes.py                # REST API: logs, stats, export
+│   ├── models.py                # Кэш логов
+│   ├── templates/
+│   │   └── dashboard.html       # Real-time дашборд
+│   └── static/                  # CSS/JS (по желанию)
+│
+├── nextcloud/
+│   └── config/
+│       └── config.php           # OnlyOffice + OIDC настройки
+│
+├── docs/
+│   ├── Pr_1.md                  # Инструкция по SSH и регистрации
+│   └── ...                      # Остальные практические
+│
+├── shared/                      # Volumes mount point
+│   ├── data/                    # Материалы преподавателя
+│   ├── logs/                    # grading_log.json
+│   └── student-work/            # Репозитории студентов
+│
+└── README_new.md                # Этот файл
+```
+
+---
+
+## Зависимости
+
+### Системные требования
+
+| Компонент | Минимум | Рекомендуется |
+|---|---|---|
+| **ОС** | Ubuntu 22.04 LTS | Ubuntu 22.04 / 24.04 |
+| **RAM** | 24 GB | 32+ GB |
+| **CPU** | 4 cores | 8+ cores |
+| **GPU** | Не обязательно | NVIDIA GTX 1060+ (для локальной LLM) |
+| **Диск** | 50 GB | 100+ GB |
+| **Docker** | 24.0+ | 27+ |
+| **Docker Compose** | v2.20+ | v2.29+ |
+
+### Зависимости Docker-образов
+
+#### Zitadel
+```
+Image: ghcr.io/zitadel/zitadel:latest
+RAM: ~200 MB
+```
+
+#### GitLab CE
+```
+Image: gitlab/gitlab-ce:latest
+RAM: ~4 GB
+Ports: 80, 2222
+```
+
+#### GitLab Runner
+```
+Image: gitlab/gitlab-runner:latest
+RAM: ~100 MB
+Mount: /var/run/docker.sock
+```
+
+#### JupyterHub
+```
+Base: python:3.10-slim
+Packages: jupyterhub, jupyterlab, oauthenticator.zitadel, jupyter-ai
+RAM: ~500 MB на спавн
+```
+
+#### Nextcloud
+```
+Image: nextcloud:apache
+RAM: ~300 MB
+```
+
+#### OnlyOffice Document Server
+```
+Image: onlyoffice/documentserver:latest
+RAM: ~1 GB
+```
+
+#### LLM (опционально)
+```
+Base: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+Build: llama.cpp с CUDA support
+RAM: ~2 GB + VRAM (зависит от модели)
+```
+
+#### Admin Dashboard
+```
+Base: python:3.10-slim
+Packages: flask, plotly, requests
+RAM: ~50 MB
+```
+
+---
+
+## Быстрый старт
+
+### 1. Клонирование репозитория
+
+```bash
+git clone https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice.git
+cd Intellectual-Systems-and-Technologies-Practice
+```
+
+### 2. Проверка Docker
+
+```bash
+docker --version
+docker compose version
+```
+
+### 3. Запуск инсталляции
+
+```bash
+sudo chmod +x scripts/setup.sh
+sudo ./scripts/setup.sh
+```
+
+Скрипт задаст:
+1. Порт JupyterHub (по умолчанию: `8000`)
+2. Порт Admin Dashboard (по умолчанию: `9000`)
+3. LLM для ментора: OpenAI API / локальный контейнер
+4. LLM для CI/CD: OpenAI API / локальный контейнер
+5. Путь к `.gguf` модели (если локальный режим)
+6. SSH-ключ для GitLab Runner
+
+### 4. Доступы
+
+После установки скрипт выведет:
+
+```
+GitLab:       http://localhost:80
+  Root:       root / <generated password>
+
+JupyterHub:   http://localhost:8000
+  Admin:      admin (через GitLab OAuth)
+
+Nextcloud:    http://localhost:8080
+  Admin:      admin / <generated password>
+
+Dashboard:    http://localhost:9000
+  Admin:      admin (через Zitadel OIDC)
+
+Zitadel:      http://localhost:9200
+  Admin:      zitadel-admin / <generated password>
+```
+
+### 5. Добавление SSH-ключа для GitLab Runner
+
+```bash
+# Скопируйте публичный ключ
+cat shared/data/runner-keys/runner_ed25519.pub
+
+# Добавьте в GitLab:
+# Settings → Repository → Deploy Keys → Add key
+```
+
+---
+
+## Инсталляция
+
+### Интерактивный setup.sh
+
+Скрипт `scripts/setup.sh` выполняет последовательно:
+
+```
+ШАГ 1/7: Настройка портов
+  → JupyterHub (по умолчанию 8000)
+  → Dashboard (по умолчанию 9000)
+  → Nextcloud (по умолчанию 8080)
+
+ШАГ 2/7: LLM для ИИ-Ментора
+  → Выбор: OpenAI API / Локальный контейнер
+  → Если OpenAI: endpoint IP:port + API ключ
+  → Если локальный: путь к .gguf (2 попытки, иначе выход)
+
+ШАГ 3/7: LLM для CI/CD
+  → Выбор: OpenAI API / Локальный
+  → Если обе локальные: предупреждение, одна модель
+  → Если OpenAI + локальная: второй путь к .gguf
+
+ШАГ 4/7: Генерация паролей
+  → Zitadel admin, GitLab root, Nextcloud admin, OnlyOffice JWT
+
+ШАГ 5/7: SSH-ключ для GitLab Runner
+  → Генерация ED25519 ключа
+  → Сохранение в shared/data/runner-keys/
+
+ШАГ 6/7: Генерация .env
+  → Запись всех конфигураций в .env файл
+
+ШАГ 7/7: Запуск сервисов
+  → docker compose up -d
+  → Healthcheck Zitadel, GitLab, Nextcloud
+  → Инициализация Zitadel (OIDC-клиенты)
+  → Инициализация GitLab (группа, админ)
+  → Инициализация Nextcloud (OnlyOffice)
+  → Регистрация GitLab Runner
+```
+
+### Ручная установка
+
+```bash
+# 1. Скопируйте шаблон
+cp .env.example .env
+
+# 2. Отредактируйте .env
+nano .env
+
+# 3. Поднимите сервисы
+docker compose up -d zitadel gitlab nextcloud onlyoffice admin-dashboard
+# Для локальной LLM:
+docker compose --profile local-llm up -d llm
+
+# 4. Дождитесь готовности
+sleep 300
+docker compose up -d jupyterhub
+
+# 5. Инициализация
+bash scripts/init_zitadel.sh
+bash scripts/init_gitlab.sh
+bash scripts/init_nextcloud.sh
+
+# 6. Регистрация Runner
+docker exec -it gitlab-runner gitlab-runner register \
+  --url http://gitlab:80 \
+  --token <registration-token> \
+  --executor docker \
+  --docker-image python:3.10 \
+  --tag-list docker_runner
+```
+
+---
+
+## Архитектура сервисов
+
+### 1. Zitadel (OIDC Provider)
+
+```yaml
+Image: ghcr.io/zitadel/zitadel:latest
+Port: 9200 (internal)
+Volume: zitadel-data
+```
+
+**Роль:** Единый провайдер аутентификации (OIDC) для всех сервисов.
+
+**OIDC-клиенты:**
+| Клиент | Redirect URI |
+|---|---|
+| JupyterHub | `http://localhost:8000/hub/oauth_callback` |
+| Admin Dashboard | `http://localhost:9000/callback` |
+| Nextcloud | `http://localhost:8080/apps/oidc_login/callback` |
+| GitLab | `http://localhost/oauth/callback` |
+
+**Авторизация:** GitLab → Zitadel OIDC → все сервисы
+
+### 2. GitLab CE
+
+```yaml
+Image: gitlab/gitlab-ce:latest
+Ports: 80 (HTTP), 2222 (SSH)
+Volumes: gitlab-config, gitlab-logs, gitlab-data
+```
+
+**Роль:** SCM, CI/CD, Identity Provider.
+
+**Группы:** `students` — для всех студенческих проектов.
+
+**SSH-порты:** `git@gitlab:2222` для SSH-доступа.
+
+### 3. JupyterHub
+
+```yaml
+Build: ./jupyterhub
+Port: 8000 (по умолчанию)
+Auth: Zitadel OAuth (oauthenticator.zitadel)
+Spawner: SimpleSpawner
+```
+
+**Ключевые компоненты:**
+- **oauthenticator.zitadel** — авторизация через Zitadel OIDC
+- **create_missing_users = True** — авто-создание учётки при первом OAuth-входе
+- **SimpleSpawner** — простой спавнер JupyterLab
+- **pre_spawn_start hook** — копирование шаблонов `.ipynb` при первом входе
+- **SSH-генерация** — Ed25519 ключ при первом входе
+
+### 4. Nextcloud + OnlyOffice
+
+```yaml
+Nextcloud:  nextcloud:apache
+OnlyOffice: onlyoffice/documentserver:latest
+Port: 8080 (Nextcloud)
+```
+
+**Роль:** Файловое хранилище + онлайн-редактор документов.
+
+**OnlyOffice интеграция:**
+- Создание DOCX в браузере
+- Экспорт в PDF
+- Коллаборативное редактирование
+
+**OIDC авторизация:** через Zitadel
+
+### 5. LLM (опционально)
+
+```yaml
+Build: ./llm (nvidia/cuda + llama.cpp)
+Port: 8080 (internal only)
+Model: Qwen3.5-0.8B-Q4_K_M.gguf
+Args: -ngl 99 -c 32768
+```
+
+**Роль:** Локальный инференс LLM через OpenAI-совместимый API.
+
+**API Endpoints:**
+```
+POST /v1/chat/completions
+POST /v1/embeddings
+GET  /v1/models
+```
+
+### 6. GitLab Runner
+
+```yaml
+Image: gitlab/gitlab-runner:latest
+Docker: python:3.10
+Tags: docker_runner, python3.10
+```
+
+**Роль:** CI/CD runner для проверки ноутбуков.
+
+**Пайплайн:**
+```yaml
+stages:
+  - review
+
+ai_review:
+  stage: review
+  tags: [docker_runner]
+  script:
+    - jupyter execute notebook.ipynb
+    - python grade_notebook.py notebook.ipynb
+  artifacts:
+    paths:
+      - ai_report.json
+    expire_in: 1 week
+```
+
+### 7. Admin Dashboard
+
+```yaml
+Build: ./dashboard (Flask)
+Port: 9000
+Refresh: auto 5 seconds
+```
+
+**API Endpoints:**
+| Эндпоинт | Описание |
+|---|---|
+| `GET /` | HTML дашборд |
+| `GET /api/logs` | Логи с фильтрацией |
+| `GET /api/stats` | LAZY/SMART ratio по студентам |
+| `GET /api/summary` | Общая сводка |
+| `GET /api/export` | CSV экспорт |
+
+**Фильтры:**
+- По студенту (`?student=student_pia_01`)
+- По дате (`?date_from=2025-09-01&date_to=2025-12-31`)
+- По категории (`?category=LAZY|SMART`)
+
+---
+
+## ИИ-Ментор
+
+### Магическая команда `%%ask_mentor`
+
+```python
+%%ask_mentor
+Я пытаюсь написать цикл для сортировки, вот мой код:
+def sort_list(arr):
+    for i in range(len(arr)+1):
+        min_idx = i
+        ...
+Почему возникает IndexError?
+```
+
+### Как работает
+
+```
+Студент → %%ask_mentor → LLM → Классификация
+                        │     ├─ LAZY (штраф)
+                        │     └─ SMART (поощрение)
+                        │
+                        ├→ /shared/logs/grading_log.json
+                        └→ Ответ студенту
+```
+
+### Системный промпт ментора
+
+```python
+SYSTEM_PROMPT = """Ты — строгий ментор по программированию.
+Классифицируй запрос студента:
+1. "LAZY": просит готовый код без усилий.
+2. "SMART": размышляет, прикрепляет свой ошибочный код.
+Отвечай СТРОГО в формате JSON:
+{"category": "LAZY"|"SMART", "penalty": true|false, 
+ "reason": "...", "assistant_response": "..."}"""
+```
+
+### Лог-файл (JSON Lines)
+
+```json
+{"timestamp": "2025-09-15T14:30:00", "student": "student_pia_01", "prompt": "...", "category": "SMART", "penalty": false, "reason": "Студент приложил свой код и спросил про ошибку"}
+{"timestamp": "2025-09-15T14:35:00", "student": "student_pia_01", "prompt": "...", "category": "LAZY", "penalty": true, "reason": "Просит написать весь код"}
+```
+
+### AI Persona @mentor
+
+Помимо ячейковой магии, студенты могут использовать чат Jupyter-AI с персонажем:
+
+```
+@mentor Как мне решить задачу 3?
+```
+
+Персона регистрируется через `persona_mentor.py` с жёстко заданным системным промптом.
+
+### Конфигурация LLM
+
+Через переменные окружения в `.env`:
+
+```bash
+# Для ментора
+LLM_MENTOR_TYPE=local           # или "openai"
+LLM_MENTOR_BASE_URL=http://llm:8080/v1
+LLM_MENTOR_API_KEY=local-api-key
+
+# Для CI/CD
+LLM_CI_TYPE=local
+LLM_CI_BASE_URL=http://llm:8080/v1
+LLM_CI_API_KEY=local-api-key
+```
+
+---
+
+## Авторизация
+
+### Схема OAuth / OIDC
+
+```
+Студент регистрируется в GitLab
+            │
+            ▼
+      Zitadel (OIDC Provider)
+            │
+    ┌───────┼──────────┐
+    │       │          │
+    ▼       ▼          ▼
+GitLab  JupyterHub  Nextcloud
+(IDP)   (OAuth)     (OIDC)
+```
+
+### Auto-provisioning
+
+1. Студент регистрируется в GitLab
+2. Залогинивается в JupyterHub через GitLab OAuth
+3. `oauthenticator.zitadel` создаёт учётку автоматически (`create_missing_users = True`)
+4. **pre_spawn_start** копирует шаблоны `.ipynb` в домашнюю директорию
+5. Генерируется SSH-ключ для Git
+
+### Fallback
+
+**Нет fallback** — при недоступности Zitadel/JitHub студенты не смогут войти. Рекомендуется:
+- Дублирование Zitadel-бэкапов
+- Мониторинг через healthcheck
+
+---
+
+## GitLab CI/CD
+
+### Структура пайплайна
+
+```
+┌─────────────────────────────────────────────┐
+│  Студент загружает notebook.ipynb в GitLab  │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+          ┌────────────────┐
+          │  CI/CD Trigger │
+          └───────┬────────┘
+                  │
+                  ▼
+          ┌────────────────┐
+          │  Runner Job    │
+          │  1. Clone      │
+          │  2. Execute    │
+          │  3. Grade      │
+          │  4. Artifact   │
+          └───────┬────────┘
+                  │
+                  ▼
+          ┌────────────────┐
+          │  LLM Review    │
+          │  AI Report     │
+          └────────────────┘
+```
+
+### .gitlab-ci.yml (студенческий)
+
+```yaml
+stages:
+  - review
+
+ai_review:
+  stage: review
+  tags: [docker_runner]
+  script:
+    - pip install jupyter nbconvert
+    - jupyter execute notebook.ipynb
+    - python grade_notebook.py notebook.ipynb
+  artifacts:
+    paths:
+      - ai_report.json
+    expire_in: 1 week
+  only:
+    - main
+```
+
+### Оценка ноутбука
+
+`grade_notebook.py` проверяет:
+1. **executes** — выполняется ли код без ошибок
+2. **has_explanation** — есть ли поясняющие ячейки
+3. **score** — оценка 0-100
+4. **grade** — A/B/C/D/F
+5. **feedback** — детальный отзыв
+6. **issues** — список проблем
+7. **recommendations** — рекомендации
+
+### Шаблон проекта
+
+При создании группы `students` автоматически создаётся шаблонный проект `academic-template`, который студенты форкают.
+
+---
+
+## Admin Dashboard
+
+### Интерфейс
+
+```
+╔══════════════════════════════════════════╗
+║  🎓 Панель преподавателя — Monitoring    ║
+╠══════════════════════════════════════════╣
+║  ┌────┐ ┌────┐ ┌────┐ ┌────┐ ┌────┐    ║
+║  │All │ │LAZY│ │SMART││Pen ││Std │    ║
+║  │142 │ │ 43 │ │  99 │ │ 28 │ │ 29 │    ║
+║  └────┘ └────┘ └────┘ └────┘ └────┘    ║
+╠══════════════════════════════════════════╣
+║  Фильтры: [Студент ▼] [Катег ▼] [С-По] ║
+╠══════════════════════════════════════════╣
+║  Время  │ Студент  │ LAZY│ ⚠ │ Запрос  ║
+║  14:30  │ pia_01   │SMART│ — │ "Как..."║
+║  14:35  │ pia_02   │ LAZY│ ⚠ │ "Напиши"║
+║  ...
+╚══════════════════════════════════════════╝
+```
+
+### Real-time обновление
+
+- Auto-refresh каждые 5 секунд через `setInterval`
+- SSE (Server-Sent Events) для push-уведомлений (в будущем)
+
+### API эндпоинты
+
+```bash
+# Все логи с фильтрацией
+curl http://localhost:9000/api/logs?student=student_pia_01&category=LAZY
+
+# Статистика по студентам
+curl http://localhost:9000/api/stats
+
+# Общая сводка
+curl http://localhost:9000/api/summary
+
+# CSV экспорт
+curl -O http://localhost:9000/api/export?date_from=2025-09-01
+```
+
+---
+
+## Использование студентом
+
+### Пошаговый алгоритм
+
+```
+Шаг 1. Регистрация
+  └→ Открыть GitLab → Sign up → student_<группа>_<номер>
+
+Шаг 2. SSH-ключ
+  └→ JupyterLab Terminal → ssh-keygen
+  └→ GitLab Settings → SSH Keys → добавить ключ
+
+Шаг 3. Практическая 1 (Git)
+  └→ Терминал JupyterLab + GitLab UI
+  └→ Отчёт: PDF → репозиторий Reports (вручную)
+
+Шаг 4. Практическая 2+ (ipynb)
+  ├── ИИ-Ментор: %%ask_mentor в ячейках
+  ├── Отчёт: ipynb → скачать → PDF → репозиторий Reports (вручную)
+  └── CI/CD: Runner проверяет ipynb автоматически
+```
+
+### Пример работы с ИИ-Ментором
+
+```python
+# SMART запрос (поощрение)
+%%ask_mentor
+Я написал функцию, но возникает ошибка KeyError.
+Вот мой код:
+df = pd.read_csv('data.csv')
+print(df['nonexistent_column'])
+# Почему возникает KeyError?
+
+# Результат:
+# 🤖 Ментор: Отлично, что вы приложили код! KeyError означает,
+# что столбец 'nonexistent_column' не существует в датафрейме.
+# Попробуйте print(df.columns) чтобы увидеть доступные столбцы.
+# ✅ Запрос классифицирован как SMART — правильное использование ИИ!
+
+# LAZY запрос (штраф)
+%%ask_mentor
+Напиши мне функцию сортировки QuickSort
+
+# Результат:
+# 🤖 Ментор: Я не буду писать за вас. Попробуйте реализовать
+# сами. Подсказка: QuickSort использует принцип "разделяй и властвуй".
+# ⚠️ Системой зафиксирован LAZY-запрос. Баллы могут быть снижены.
+```
+
+---
+
+## Использование преподавателем
+
+### Мониторинг в реальном времени
+
+1. Открыть Dashboard: `http://<server-ip>:9000`
+2. Смотреть LAZY/SMART ratio по студентам
+3. Фильтровать по студенту, дате, категории
+4. Экспортировать CSV для отчётов
+
+### Проверка CI/CD
+
+1. Открыть проект студента в GitLab
+2. Перейти в **CI/CD → Pipelines**
+3. Посмотреть результат `ai_review`
+4. Скачать артефакт `ai_report.json`
+
+### Просмотр логов
+
+```bash
+# Все запросы студента
+tail -f shared/logs/grading_log.json | grep student_pia_01
+
+# LAZY запросы
+grep '"LAZY"' shared/logs/grading_log.json
+
+# Счёт
+grep -c '"LAZY"' shared/logs/grading_log.json
+grep -c '"SMART"' shared/logs/grading_log.json
+```
+
+---
+
+## Конфигурация
+
+### .env переменные
+
+| Переменная | Описание | По умолчанию |
+|---|---|---|
+| `JUPYTERHUB_PORT` | Порт JupyterHub | `8000` |
+| `DASHBOARD_PORT` | Порт Dashboard | `9000` |
+| `NEXTCLOUD_PORT` | Порт Nextcloud | `8080` |
+| `ZITADEL_PORT` | Порт Zitadel | `9200` |
+| `LLM_MENTOR_TYPE` | Тип LLM для ментора | `local` |
+| `LLM_MENTOR_BASE_URL` | Endpoint LLM ментора | `http://llm:8080/v1` |
+| `LLM_CI_TYPE` | Тип LLM для CI/CD | `local` |
+| `LLM_CI_BASE_URL` | Endpoint LLM CI/CD | `http://llm:8080/v1` |
+| `GGUF_PATH` | Путь к модели | `/models/Qwen3.5-0.8B-Q4_K_M.gguf` |
+| `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
+| `ZITADEL_ADMIN_PASSWORD` | Пароль Zitadel admin | auto-generated |
+| `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
+| `NC_ADMIN_PASSWORD` | Пароль Nextcloud admin | auto-generated |
+| `ONLYOFFICE_JWT_SECRET` | JWT для OnlyOffice | auto-generated |
+| `JH_API_TOKEN` | JupyterHub API token | auto-generated |
+| `HOST_DOMAIN` | Домен хоста | `localhost` |
+
+### docker-compose profile
+
+```bash
+# Без LLM (OpenAI API)
+docker compose up -d
+
+# С локальной LLM
+docker compose --profile local-llm up -d
+```
+
+---
+
+## Устранение неполадок
+
+### GitLab не стартует
+
+```bash
+# GitLab требует 2-3 минуты на первый запуск
+docker logs gitlab
+
+# Проверка базы данных
+docker exec gitlab gitlab-rake db:status
+```
+
+### Zitadel не отвечает
+
+```bash
+# Zitadel должен быть health перед другими сервисами
+docker inspect --format='{{.State.Health.Status}}' zitadel
+
+# Проверка логов
+docker logs zitadel
+```
+
+### JupyterHub не входит
+
+```bash
+# Проверка OAuth-конфигурации
+docker logs jupyterhub | grep -i oauth
+
+# Проверка OIDC-клиента в Zitadel
+docker exec zitadel zitadel oidc client list
+```
+
+### Runner не запускает jobs
+
+```bash
+# Проверка регистрации
+docker exec gitlab-runner gitlab-runner verify
+
+# Проверка SSH-ключа
+ls -la shared/data/runner-keys/
+
+# Проверка known_hosts
+docker exec gitlab-runner cat ~/.ssh/known_hosts
+```
+
+### LLM не отвечает
+
+```bash
+# Проверка контейнера
+docker logs llm
+
+# Проверка модели
+docker exec llm ls -la /models/
+
+# Проверка API
+curl http://llm:8080/v1/models
+```
+
+### Dashboard не показывает логи
+
+```bash
+# Проверка volume
+docker exec admin-dashboard ls -la /app/logs/
+
+# Проверка прав
+ls -la shared/logs/
+
+# Проверка формата
+head -5 shared/logs/grading_log.json
+```
+
+### Full restart
+
+```bash
+# Остановить всё
+docker compose down -v
+
+# Очистить volumes (⚠️ удалит все данные!)
+docker volume prune -f
+
+# Перезапустить
+sudo ./scripts/setup.sh
+```
+
+### Health check
+
+```bash
+bash scripts/healthcheck.sh
+
+# Ручная проверка каждого сервиса
+docker compose ps
+docker compose logs --tail=20
+```

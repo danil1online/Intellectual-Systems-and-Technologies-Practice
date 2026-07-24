@@ -1,0 +1,10 @@
+{
+  "AiExtension": {
+    "default_chat_model": "",
+    "model_parameters": {},
+    "default_api_keys": {}
+  },
+  "AiMagicsExtension": {
+    "enabled": true
+  }
+}

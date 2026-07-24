@@ -1,0 +1,46 @@
+FROM python:3.10-slim
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    openssh-client \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Установка Python пакетов
+RUN pip install --no-cache-dir \
+    jupyterhub==4.1.6 \
+    jupyterlab==4.3.4 \
+    notebook==7.3.2 \
+    oauthenticator==24.1.0 \
+    jupyter-ai==2.32.0 \
+    jupyter-ai-magics==2.32.0 \
+    langchain-openai==0.2.14 \
+    langchain-ollama==0.2.2 \
+    ipywidgets==8.1.5 \
+    anywidget==0.9.15 \
+    requests==2.32.3 \
+    traitlets==5.14.3 \
+    aiohttp==3.11.11 \
+
+WORKDIR /app
+
+# Копирование конфигураций
+COPY jupyterhub_config.py /app/jupyterhub_config.py
+COPY jupyter_ai_config.json /etc/jupyter/jupyter_ai_config.json
+COPY persona_mentor.py /app/persona_mentor.py
+COPY startup/ /app/startup/
+COPY notebooks/ /app/notebooks/
+
+# Создание директорий
+RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work
+
+# Копирование скрипта для генерации SSH-ключей
+RUN mkdir -p /usr/local/bin/startup-hooks
+COPY startup-hooks/generate_ssh_keys.py /usr/local/bin/startup-hooks/generate_ssh_keys.py
+RUN chmod +x /usr/local/bin/startup-hooks/generate_ssh_keys.py
+
+EXPOSE 8000
+
+CMD ["jupyterhub", "--config", "/app/jupyterhub_config.py"]

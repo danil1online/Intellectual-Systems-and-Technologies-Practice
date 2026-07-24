@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .header {
+            background: #1a1a2e;
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .header a {
+            color: #4fc3f7;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-card .label { font-size: 13px; color: #666; margin-bottom: 4px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card.lazy .value { color: #e53935; }
+        .stat-card.smart .value { color: #43a047; }
+        .stat-card.penalty .value { color: #ff9800; }
+
+        .filters {
+            background: white;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filters label { font-size: 13px; color: #555; }
+        .filters select, .filters input {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .filters button {
+            padding: 6px 16px;
+            background: #1a1a2e;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .filters .export-btn {
+            background: #43a047;
+            margin-left: auto;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background: #f8f8f8;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #eee;
+        }
+        td {
+            padding: 10px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+        tr:hover { background: #fafafa; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-lazy { background: #ffebee; color: #c62828; }
+        .badge-smart { background: #e8f5e9; color: #2e7d32; }
+        .penalty-flag {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            text-align: center;
+            line-height: 24px;
+            border-radius: 50%;
+            font-size: 14px;
+        }
+
+        #auto-refresh-info {
+            font-size: 12px;
+            color: #999;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎓 Панель преподавателя — Monitoring</h1>
+        <a href="/api/export?{{ request.query_string.decode() }}">📥 Экспорт CSV</a>
+    </div>
+
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="label">Всего запросов</div>
+                <div class="value" id="total-requests">—</div>
+            </div>
+            <div class="stat-card lazy">
+                <div class="label">LAZY запросы</div>
+                <div class="value" id="total-lazy">—</div>
+            </div>
+            <div class="stat-card smart">
+                <div class="label">SMART запросы</div>
+                <div class="value" id="total-smart">—</div>
+            </div>
+            <div class="stat-card penalty">
+                <div class="label">Штрафов</div>
+                <div class="value" id="total-penalties">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Студентов</div>
+                <div class="value" id="total-students">—</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <label>Студент:</label>
+            <select id="filter-student">
+                <option value="">Все</option>
+            </select>
+
+            <label>Категория:</label>
+            <select id="filter-category">
+                <option value="">Все</option>
+                <option value="LAZY">LAZY</option>
+                <option value="SMART">SMART</option>
+            </select>
+
+            <label>С:</label>
+            <input type="date" id="filter-date-from">
+
+            <label>По:</label>
+            <input type="date" id="filter-date-to">
+
+            <button onclick="loadLogs()">🔍 Фильтровать</button>
+            <button class="export-btn" onclick="exportCSV()">📥 CSV</button>
+            <span id="auto-refresh-info">Auto-refresh: 5s</span>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Время</th>
+                        <th>Студент</th>
+                        <th>Категория</th>
+                        <th>Штраф</th>
+                        <th>Причина</th>
+                        <th>Запрос</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-tbody">
+                    <tr><td colspan="6" style="text-align:center;color:#999">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let currentFilters = {};
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/summary');
+                const data = await res.json();
+
+                document.getElementById('total-requests').textContent = data.total_requests || 0;
+                document.getElementById('total-lazy').textContent = data.lazy || 0;
+                document.getElementById('total-smart').textContent = data.smart || 0;
+                document.getElementById('total-penalties').textContent = data.penalties || 0;
+                document.getElementById('total-students').textContent = data.unique_students || 0;
+
+                // Populate student filter
+                const sel = document.getElementById('filter-student');
+                const current = sel.value;
+                sel.innerHTML = '<option value="">Все</option>';
+                Object.keys(data.daily || {}).forEach(() => {}); // just placeholder
+            } catch (e) {
+                console.log('Stats load error:', e);
+            }
+        }
+
+        async function loadLogs() {
+            const student = document.getElementById('filter-student').value;
+            const category = document.getElementById('filter-category').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            let url = '/api/logs?';
+            if (student) url += `student=${student}&`;
+            if (category) url += `category=${category}&`;
+            if (dateFrom) url += `date_from=${dateFrom}&`;
+            if (dateTo) url += `date_to=${dateTo}&`;
+
+            try {
+                const res = await fetch(url);
+                const logs = await res.json();
+
+                const tbody = document.getElementById('logs-tbody');
+                if (!logs || logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999">Нет записей</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = logs.map(log => {
+                    const catClass = log.category === 'LAZY' ? 'badge-lazy' : 'badge-smart';
+                    const penaltyIcon = log.penalty ? '<span class="penalty-flag" title="Штраф">⚠️</span>' : '<span style="color:#ccc">—</span>';
+                    const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '—';
+                    const promptPreview = (log.prompt || '').substring(0, 80) + '...';
+
+                    return `<tr>
+                        <td style="white-space:nowrap">${timestamp}</td>
+                        <td><strong>${log.student || '—'}</strong></td>
+                        <td><span class="badge ${catClass}">${log.category || '—'}</span></td>
+                        <td>${penaltyIcon}</td>
+                        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${(log.reason||'').replace(/"/g,'&quot;')}">${log.reason || '—'}</td>
+                        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${(log.prompt||'').replace(/"/g,'&quot;')}">${promptPreview}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                console.log('Logs load error:', e);
+            }
+        }
+
+        function exportCSV() {
+            const student = document.getElementById('filter-student').value;
+            const category = document.getElementById('filter-category').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            let url = '/api/export?';
+            if (student) url += `student=${student}&`;
+            if (category) url += `category=${category}&`;
+            if (dateFrom) url += `date_from=${dateFrom}&`;
+            if (dateTo) url += `date_to=${dateTo}&`;
+
+            window.open(url, '_blank');
+        }
+
+        // Auto-refresh every 5 seconds
+        function refresh() {
+            loadLogs();
+            loadStats();
+        }
+
+        refresh();
+        setInterval(refresh, 5000);
+    </script>
+</body>
+</html>

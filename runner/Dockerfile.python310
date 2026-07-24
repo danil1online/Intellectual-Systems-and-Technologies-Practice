@@ -1,0 +1,32 @@
+FROM python:3.10-slim
+
+# Системные зависимости
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    openssh-client \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python зависимости для CI/CD
+RUN pip install --no-cache-dir \
+    jupyter_client \
+    nbformat \
+    nbconvert \
+    requests \
+    openai \
+    python-dotenv \
+    numpy \
+    pandas \
+    ipykernel
+
+# Создание директорий
+RUN mkdir -p /runner/work /runner/scripts
+
+# Копирование скриптов
+COPY runner/entrypoint.sh /runner/entrypoint.sh
+COPY runner/scripts/grade_notebook.py /runner/scripts/grade_notebook.py
+
+RUN chmod +x /runner/entrypoint.sh
+RUN chmod +x /runner/scripts/grade_notebook.py
+
+WORKDIR /runner
