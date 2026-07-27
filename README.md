@@ -37,7 +37,7 @@ Docker Compose-развёртывание полного учебного кла
 │                                                              │
 │  Internal bridge network:                                    │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │
-│  │ Zitadel  │  │ GitLab   │  │ Jupyter  │  │   Nextcloud  │ │
+│  │ Keycloak │  │ GitLab   │  │ Jupyter  │  │   Nextcloud  │ │
 │  │ :9200    │  │ :80/22   │  │ :8000    │  │ :8080        │ │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘ │
 │       │OIDC          │OIDC         │OIDC            │OIDC    │
@@ -99,11 +99,10 @@ Docker Compose-развёртывание полного учебного кла
 │
 ├── scripts/
 │   ├── setup.sh                 # Интерактивный инсталлятор
-│   ├── init_zitadel.sh          # Создание OIDC-клиентов
-│   ├── init_gitlab.sh           # Инициализация GitLab
-│   ├── init_nextcloud.sh        # Настройка Nextcloud + OnlyOffice
-│   ├── sync_users.py            # GitLab → Zitadel SCIM
-│   └── healthcheck.sh           # Проверка здоровья сервисов
+  │   ├── init_keycloak.sh         # Создание OIDC-клиентов
+   │   ├── init_gitlab.sh           # Инициализация GitLab
+   │   ├── init_nextcloud.sh        # Настройка Nextcloud + OnlyOffice
+   │   └── healthcheck.sh           # Проверка здоровья сервисов
 │
 ├── jupyterhub/
 │   ├── Dockerfile               # JupyterHub + JupyterLab + oauthenticator
@@ -168,10 +167,10 @@ Docker Compose-развёртывание полного учебного кла
 
 ### Зависимости Docker-образов
 
-#### Zitadel
+#### Keycloak
 ```
-Image: ghcr.io/zitadel/zitadel:latest
-RAM: ~200 MB
+Image: quay.io/keycloak/keycloak:26.1
+RAM: ~700 MB
 ```
 
 #### GitLab CE
@@ -191,7 +190,7 @@ Mount: /var/run/docker.sock
 #### JupyterHub
 ```
 Base: python:3.10-slim
-Packages: jupyterhub, jupyterlab, oauthenticator.zitadel, jupyter-ai
+Packages: jupyterhub, jupyterlab, GenericOAuthenticator, jupyter-ai
 RAM: ~500 MB на спавн
 ```
 
@@ -271,10 +270,10 @@ Nextcloud:    http://localhost:8080
   Admin:      admin / <generated password>
 
 Dashboard:    http://localhost:9000
-  Admin:      admin (через Zitadel OIDC)
+  Admin:      admin (через Keycloak OIDC)
 
-Zitadel:      http://localhost:9200
-  Admin:      zitadel-admin / <generated password>
+Keycloak:     http://localhost:9200
+  Admin:      admin / Keycloak123!
 ```
 
 ### 5. Добавление SSH-ключа для GitLab Runner
@@ -315,7 +314,7 @@ cat shared/data/runner-keys/runner_ed25519.pub
   → Если OpenAI + локальная: второй путь к .gguf
 
 ШАГ 5/8: Генерация паролей
-  → Zitadel admin, GitLab root, Nextcloud admin, OnlyOffice JWT
+   → Keycloak admin, GitLab root, Nextcloud admin, OnlyOffice JWT
 
 ШАГ 6/8: SSH-ключ для GitLab Runner
   → Генерация ED25519 ключа
@@ -325,12 +324,12 @@ cat shared/data/runner-keys/runner_ed25519.pub
   → Запись всех конфигураций в .env файл
 
 ШАГ 8/8: Запуск сервисов
-  → docker compose up -d
-  → Healthcheck Zitadel, GitLab, Nextcloud
-  → Инициализация Zitadel (OIDC-клиенты)
-  → Инициализация GitLab (группа, админ)
-  → Инициализация Nextcloud (OnlyOffice)
-  → Регистрация GitLab Runner
+   → docker compose up -d
+   → Healthcheck Keycloak, GitLab, Nextcloud
+   → Инициализация Keycloak (OIDC-клиенты)
+   → Инициализация GitLab (группа, админ)
+   → Инициализация Nextcloud (OnlyOffice)
+   → Регистрация GitLab Runner
 ```
 
 ### Ручная установка
@@ -343,16 +342,16 @@ cp .env.example .env
 nano .env
 
 # 3. Поднимите сервисы
-docker compose up -d zitadel gitlab nextcloud onlyoffice admin-dashboard
+docker compose up -d keycloak gitlab nextcloud onlyoffice admin-dashboard
 # Для локальной LLM:
-docker compose --profile local-llm up -d llm
+docker compose up -d llm
 
 # 4. Дождитесь готовности
 sleep 300
 docker compose up -d jupyterhub
 
 # 5. Инициализация
-bash scripts/init_zitadel.sh
+bash scripts/init_keycloak.sh
 bash scripts/init_gitlab.sh
 bash scripts/init_nextcloud.sh
 
@@ -369,12 +368,12 @@ docker exec -it gitlab-runner gitlab-runner register \
 
 ## Архитектура сервисов
 
-### 1. Zitadel (OIDC Provider)
+### 1. Keycloak (OIDC Provider)
 
 ```yaml
-Image: ghcr.io/zitadel/zitadel:latest
+Image: quay.io/keycloak/keycloak:26.1
 Port: 9200 (internal)
-Volume: zitadel-data
+Volume: keycloak-data
 ```
 
 **Роль:** Единый провайдер аутентификации (OIDC) для всех сервисов.
@@ -385,9 +384,9 @@ Volume: zitadel-data
 | JupyterHub | `http://localhost:8000/hub/oauth_callback` |
 | Admin Dashboard | `http://localhost:9000/callback` |
 | Nextcloud | `http://localhost:8080/apps/oidc_login/callback` |
-| GitLab | `http://localhost/oauth/callback` |
+| GitLab | `http://<gitlab-host>/oauth/callback` |
 
-**Авторизация:** GitLab → Zitadel OIDC → все сервисы
+**Авторизация:** GitLab → Keycloak OIDC → все сервисы
 
 ### 2. GitLab CE
 
@@ -408,12 +407,12 @@ Volumes: gitlab-config, gitlab-logs, gitlab-data
 ```yaml
 Build: ./jupyterhub
 Port: 8000 (по умолчанию)
-Auth: Zitadel OAuth (oauthenticator.zitadel)
+Auth: Keycloak OAuth (GenericOAuthenticator)
 Spawner: SimpleSpawner
 ```
 
 **Ключевые компоненты:**
-- **oauthenticator.zitadel** — авторизация через Zitadel OIDC
+- **GenericOAuthenticator** — авторизация через Keycloak OIDC
 - **create_missing_users = True** — авто-создание учётки при первом OAuth-входе
 - **SimpleSpawner** — простой спавнер JupyterLab
 - **pre_spawn_start hook** — копирование шаблонов `.ipynb` при первом входе
@@ -434,7 +433,7 @@ Port: 8080 (Nextcloud)
 - Экспорт в PDF
 - Коллаборативное редактирование
 
-**OIDC авторизация:** через Zitadel
+**OIDC авторизация:** через Keycloak
 
 ### 5. LLM (опционально)
 
@@ -585,7 +584,7 @@ LLM_CI_API_KEY=local-api-key
 Студент регистрируется в GitLab
             │
             ▼
-      Zitadel (OIDC Provider)
+      Keycloak (OIDC Provider)
             │
     ┌───────┼──────────┐
     │       │          │
@@ -598,14 +597,14 @@ GitLab  JupyterHub  Nextcloud
 
 1. Студент регистрируется в GitLab
 2. Залогинивается в JupyterHub через GitLab OAuth
-3. `oauthenticator.zitadel` создаёт учётку автоматически (`create_missing_users = True`)
+3. `GenericOAuthenticator` создаёт учётку автоматически (`create_missing_users = True`)
 4. **pre_spawn_start** копирует шаблоны `.ipynb` в домашнюю директорию
 5. Генерируется SSH-ключ для Git
 
 ### Fallback
 
-**Нет fallback** — при недоступности Zitadel/JitHub студенты не смогут войти. Рекомендуется:
-- Дублирование Zitadel-бэкапов
+**Нет fallback** — при недоступности Keycloak/JupyterHub студенты не смогут войти. Рекомендуется:
+- Дублирование Keycloak-бэкапов
 - Мониторинг через healthcheck
 
 ---
@@ -833,14 +832,15 @@ grep -c '"SMART"' shared/logs/grading_log.json
 | `JUPYTERHUB_PORT` | Порт JupyterHub | `8000` |
 | `DASHBOARD_PORT` | Порт Dashboard | `9000` |
 | `NEXTCLOUD_PORT` | Порт Nextcloud | `8080` |
-| `ZITADEL_PORT` | Порт Zitadel | `9200` |
+| `KEYCLOAK_PORT` | Порт Keycloak | `9200` |
 | `LLM_MENTOR_TYPE` | Тип LLM для ментора | `local` |
 | `LLM_MENTOR_BASE_URL` | Endpoint LLM ментора | `http://llm:8080/v1` |
 | `LLM_CI_TYPE` | Тип LLM для CI/CD | `local` |
 | `LLM_CI_BASE_URL` | Endpoint LLM CI/CD | `http://llm:8080/v1` |
 | `GGUF_PATH` | Путь к модели | `/models/Qwen3.5-0.8B-Q4_K_M.gguf` |
 | `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
-| `ZITADEL_ADMIN_PASSWORD` | Пароль Zitadel admin | auto-generated |
+| `KC_ADMIN_PASSWORD` | Пароль Keycloak admin | `Keycloak123!` |
+| `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `REGISTRY_PORT` | Порт Docker Registry | `5050` |
 | `NC_ADMIN_PASSWORD` | Пароль Nextcloud admin | auto-generated |
@@ -872,14 +872,14 @@ docker logs gitlab
 docker exec gitlab gitlab-rake db:status
 ```
 
-### Zitadel не отвечает
+### Keycloak не отвечает
 
 ```bash
-# Zitadel должен быть health перед другими сервисами
-docker inspect --format='{{.State.Health.Status}}' zitadel
+# Keycloak должен быть health перед другими сервисами
+docker inspect --format='{{.State.Health.Status}}' keycloak
 
 # Проверка логов
-docker logs zitadel
+docker logs keycloak
 ```
 
 ### JupyterHub не входит
@@ -887,9 +887,6 @@ docker logs zitadel
 ```bash
 # Проверка OAuth-конфигурации
 docker logs jupyterhub | grep -i oauth
-
-# Проверка OIDC-клиента в Zitadel
-docker exec zitadel zitadel oidc client list
 ```
 
 ### Runner не запускает jobs

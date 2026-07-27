@@ -289,14 +289,13 @@ fi
 # ============================================
 print_header "ШАГ 5/7: Генерация паролей"
 
-ZITADEL_ADMIN_PASSWORD=$(generate_password)
+KC_ADMIN_PASSWORD=$(generate_password)
 GITLAB_ROOT_PASSWORD=$(generate_password)
 NC_ADMIN_PASSWORD=$(generate_password)
 ONLYOFFICE_JWT_SECRET=$(generate_password)
 JH_API_TOKEN=$(generate_password)
-ZITADEL_ADMIN_TOKEN=$(generate_password)
 
-print_success "Zitadel admin: $(echo $ZITADEL_ADMIN_PASSWORD | cut -c1-8)... "
+print_success "Keycloak admin: $(echo $KC_ADMIN_PASSWORD | cut -c1-8)... "
 print_success "GitLab root: $(echo $GITLAB_ROOT_PASSWORD | cut -c1-8)... "
 print_success "Nextcloud admin: $(echo $NC_ADMIN_PASSWORD | cut -c1-8)... "
 print_success "OnlyOffice JWT: $(echo $ONLYOFFICE_JWT_SECRET | cut -c1-8)... "
@@ -332,7 +331,7 @@ cat > "$PROJECT_DIR/.env" <<ENVEOF
 JUPYTERHUB_PORT=$JUPYTERHUB_PORT
 DASHBOARD_PORT=$DASHBOARD_PORT
 NEXTCLOUD_PORT=$NEXTCLOUD_PORT
-ZITADEL_PORT=$ZITADEL_PORT
+KEYCLOAK_PORT=${KEYCLOAK_PORT:-9200}
 HOST_DOMAIN=$HOST_DOMAIN
 GITLAB_EXTERNAL_URL=$GITLAB_EXTERNAL_URL
 
@@ -348,15 +347,14 @@ LLM_CI_API_KEY=$LLM_CI_API_KEY
 
 LLM_USE_LOCAL=$LLM_USE_LOCAL
 
-ZITADEL_ADMIN_PASSWORD=$ZITADEL_ADMIN_PASSWORD
-ZITADEL_ADMIN_TOKEN=$ZITADEL_ADMIN_TOKEN
+KC_ADMIN_PASSWORD=$KC_ADMIN_PASSWORD
 
 GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD
 GITLAB_ADMIN_TOKEN=glpat-placeholder
 
 JH_API_TOKEN=$JH_API_TOKEN
-JH_ZITADEL_CLIENT_ID=placeholder
-JH_ZITADEL_CLIENT_SECRET=placeholder
+JH_KEYCLOAK_CLIENT_ID="${JH_KEYCLOAK_CLIENT_ID}"
+JH_KEYCLOAK_CLIENT_SECRET="${JH_KEYCLOAK_CLIENT_SECRET}"
 DASH_CLIENT_ID=placeholder
 DASH_CLIENT_SECRET=placeholder
 
@@ -383,16 +381,16 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     LLM_PROFILES="--profile local-llm"
 fi
 
-docker compose up -d zitadel gitlab nextcloud onlyoffice admin-dashboard $LLM_PROFILES
+docker compose up -d keycloak gitlab nextcloud onlyoffice admin-dashboard $LLM_PROFILES
 
-print_step "Ожидание запуска Zitadel..."
+print_step "Ожидание запуска Keycloak..."
 for i in $(seq 1 30); do
-    if docker inspect --format='{{.State.Health.Status}}' zitadel 2>/dev/null | grep -q "healthy"; then
-        print_success "Zitadel запущен"
+    if docker inspect --format='{{.State.Health.Status}}' keycloak 2>/dev/null | grep -q "healthy"; then
+        print_success "Keycloak запущен"
         break
     fi
     if [[ $i -eq 30 ]]; then
-        print_error "Zitadel не запустился за 5 минут"
+        print_error "Keycloak не запустился за 5 минут"
         exit 1
     fi
     sleep 10
@@ -439,10 +437,10 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 # ============================================
-# Инициализация Zitadel
+# Инициализация Keycloak
 # ============================================
-print_step "Инициализация Zitadel (создание OIDC клиентов)..."
-bash "$SCRIPT_DIR/init_zitadel.sh"
+print_step "Инициализация Keycloak (создание OIDC клиентов)..."
+bash "$SCRIPT_DIR/init_keycloak.sh"
 
 # ============================================
 # Инициализация GitLab
@@ -549,10 +547,10 @@ echo -e "  ${BOLD}Nextcloud:${NC}    http://localhost:$NEXTCLOUD_PORT"
 echo -e "    Admin:      $NC_ADMIN_USER / $NC_ADMIN_PASSWORD"
 echo ""
 echo -e "  ${BOLD}Dashboard:${NC}    http://localhost:$DASHBOARD_PORT"
-echo -e "    Admin:      admin (через Zitadel OIDC)"
-echo ""
-echo -e "  ${BOLD}Zitadel:${NC}      http://localhost:$ZITADEL_PORT"
-echo -e "    Admin:      zitadel-admin / $ZITADEL_ADMIN_PASSWORD"
+echo -e "    Admin:      admin (через Keycloak OIDC)"
+ echo ""
+ echo -e "  ${BOLD}Keycloak:${NC}     http://localhost:$KEYCLOAK_PORT"
+ echo -e "    Admin:      admin / $KC_ADMIN_PASSWORD"
 echo ""
 
 echo -e "${YELLOW}Следующие шаги:${NC}"
