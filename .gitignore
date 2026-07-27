@@ -1,0 +1,33 @@
+# Environment & secrets
+.env
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Docker volumes / runtime data
+shared/data/gitlab-data/
+shared/data/gitlab-logs/
+shared/data/registry/
+shared/data/llm-models/
+shared/data/runner-config/
+shared/data/runner-keys/
+shared/data/cache_huggingface/
+shared/data/shared-data/
+shared/data/shared-logs/
+shared/data/logs/
+shared/config/
+
+# Generated SSH keys (keep .pub for docs, ignore private)
+shared/data/runner-keys/runner_ed25519
+shared/data/runner-keys/runner_ed25519.pub
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
