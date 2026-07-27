@@ -30,10 +30,12 @@ echo "  Context: $CONTEXT_SIZE"
 echo "  Host: $HOST"
 echo "  Port: $PORT"
 
-exec /opt/llama.cpp/build/bin/llama-server \
+exec /app/llama-server \
     -m "$MODEL_PATH" \
     -ngl "$NGPU_LAYERS" \
     -c "$CONTEXT_SIZE" \
     --host "$HOST" \
     --port "$PORT" \
-    --ctx-size "$CONTEXT_SIZE"
+    --ctx-size "$CONTEXT_SIZE" \
+    --cache-type-k q8_0 \
+    --cache-type-v q8_0

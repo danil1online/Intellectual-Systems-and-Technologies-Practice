@@ -1,14 +1,14 @@
 """
 JupyterHub конфигурация для учебного комплекса.
-Авторизация: GitLab через Zitadel OIDC.
-Автор спавна: SimpleSpawner с хуками первого входа.
+Авторизация: GitLab через Keycloak OIDC.
+Автор спавна: LocalProcessSpawner с хуками первого входа.
 """
 
 import os
 import json
 import datetime
 from pathlib import Path
-from oauthenticator.zitadel import ZitadelOAuthenticator
+from oauthenticator.generic import GenericOAuthenticator
 
 # ============================================
 # Основные настройки
@@ -30,46 +30,40 @@ c.JupyterHub.cookie_secret_file = str(secret_file)
 c.JupyterHub.db_url = "sqlite:///jupyterhub.db"
 
 # ============================================
-# Авторизация через Zitadel OAuth
+# Авторизация через Keycloak OAuth
 # ============================================
-c.JupyterHub.authenticator_class = ZitadelOAuthenticator
+c.JupyterHub.authenticator_class = GenericOAuthenticator
 
-# Zitadel OAuth конфигурация
-c.ZitadelOAuthenticator.zitadel_url = os.environ.get("ZITADEL_ISSUER_URL", "http://zitadel:9200")
-c.ZitadelOAuthenticator.client_id = os.environ.get("JH_ZITADEL_CLIENT_ID", "placeholder")
-c.ZitadelOAuthenticator.client_secret = os.environ.get("JH_ZITADEL_CLIENT_SECRET", "placeholder")
-c.ZitadelOAuthenticator.zitadel_instance_url = os.environ.get("ZITADEL_ISSUER_URL", "http://zitadel:9200")
+# Keycloak OAuth конфигурация
+c.GenericOAuthenticator.login_service = "Keycloak"
+c.GenericOAuthenticator.authorize_url = os.environ.get("KEYCLOAK_ISSUER", "http://keycloak:8080/auth/realms/istp") + "/protocol/openid-connect/auth"
+c.GenericOAuthenticator.token_url = os.environ.get("KEYCLOAK_ISSUER", "http://keycloak:8080/auth/realms/istp") + "/protocol/openid-connect/token"
+c.GenericOAuthenticator.userdata_url = os.environ.get("KEYCLOAK_ISSUER", "http://keycloak:8080/auth/realms/istp") + "/protocol/openid-connect/userinfo"
+c.GenericOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
+c.GenericOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")
+c.GenericOAuthenticator.oauth_callback_url = os.environ.get("OAUTH2_REDIRECT_URI", "http://localhost:8000/hub/oauth_callback")
+# Force full URL (env may contain just path)
+if not c.GenericOAuthenticator.oauth_callback_url.startswith("http"):
+    c.GenericOAuthenticator.oauth_callback_url = f"http://localhost:{c.JupyterHub.port}{c.GenericOAuthenticator.oauth_callback_url}"
+c.GenericOAuthenticator.username_key = "preferred_username"
+c.GenericOAuthenticator.scope = ["openid", "profile", "email"]
+c.GenericOAuthenticator.tls_verify = False
 
 # Автоматическое создание пользователя при OAuth-входе (ключевой параметр)
-c.ZitadelOAuthenticator.create_missing_users = True
-c.ZitadelOAuthenticator.allow_all = True
-
-# OAuth callback
-c.ZitadelOAuthenticator.oauth_callback_url = os.path.join(
-    os.environ.get("OAUTH2_REDIRECT_URI", "http://localhost:8000/hub/oauth_callback")
-)
-
-# Захват email из OIDC токена
-c.ZitadelOAuthenticator.scope = ["openid", "profile", "email"]
-c.ZitadelOAuthenticator.username_key = "preferred_username"
-
-# Связывание username GitLab с JupyterHub
-def normalize_username(username):
-    """Нормализация имени пользователя для JupyterHub."""
-    return username.lower().replace("-", "_").replace(".", "_")
-
-c.ZitadelOAuthenticator.username_normalize = "lowercase"
+c.GenericOAuthenticator.create_missing_users = True
+c.GenericOAuthenticator.auto_login = True
+c.GenericOAuthenticator.normalize_username = lambda username: username.lower().replace("-", "_").replace(".", "_")
 
 # ============================================
-# Spawner — SimpleSpawner
+# Spawner — LocalProcessSpawner
 # ============================================
-from jupyterhub.spawner import SimpleSpawner
+from jupyterhub.spawner import LocalProcessSpawner
 
-c.JupyterHub.spawner_class = SimpleSpawner
+c.JupyterHub.spawner_class = LocalProcessSpawner
 
-c.SimpleSpawner.cmd = ["jupyter-lab"]
-c.SimpleSpawner.ip = "127.0.0.1"
-c.SimpleSpawner.port = 0
+c.LocalProcessSpawner.cmd = ["jupyter-lab"]
+c.LocalProcessSpawner.ip = "127.0.0.1"
+c.LocalProcessSpawner.port = 0
 
 # Домашняя директория студента
 def get_user_home_dir(user):
@@ -77,7 +71,7 @@ def get_user_home_dir(user):
     username = user.name.lower().replace("-", "_").replace(".", "_")
     return f"/home/{username}"
 
-c.SimpleSpawner.home_dir = "/home"
+# Note: LocalProcessSpawner uses system home directories by default
 
 # Environment переменные для singleuser
 c.Spawner.environment = {
@@ -99,42 +93,20 @@ c.Spawner.environment = {
 # Хуки первого входа
 # ============================================
 
-# Копирование шаблонов notebooks при первом входе пользователя
-@c.Spawner.pre_spawn_start
-def pre_spawn_start(spawner, user):
+def my_pre_spawn_hook(spawner, user):
     """Хук: выполняется перед спавном контейнера."""
     username = user.name.lower().replace("-", "_").replace(".", "_")
     user_home = f"/home/{username}"
-    notebooks_dir = f"{user_home}/notebooks"
-    shared_data_dir = "/app/notebooks"
-    shared_logs_dir = "/app/logs"
 
     # Создаём домашнюю директорию если не существует
     import os
     os.makedirs(user_home, exist_ok=True)
-    os.makedirs(notebooks_dir, exist_ok=True)
     os.chmod(user_home, 0o755)
 
-    # Копируем шаблоны практических работ при первом входе
-    template_files = []
-    try:
-        for f in os.listdir(shared_data_dir):
-            if f.endswith(".ipynb"):
-                template_files.append(f)
-    except FileNotFoundError:
-        pass
-
-    if template_files:
-        copied = 0
-        for template in template_files:
-            src = os.path.join(shared_data_dir, template)
-            dst = os.path.join(notebooks_dir, template)
-            if not os.path.exists(dst):
-                import shutil
-                shutil.copy2(src, dst)
-                copied += 1
-        if copied > 0:
-            spawner.log.info(f"Скопировано {copied} шаблонов для пользователя {username}")
+    # Создаём symlink для общих данных
+    data_link = f"{user_home}/data"
+    if not os.path.exists(data_link):
+        os.symlink("/shared/data", data_link)
 
     # Настраиваем IPython startup
     startup_dir = f"{user_home}/.ipython/profile_default/startup"
@@ -167,11 +139,14 @@ def pre_spawn_start(spawner, user):
     # Сохраняем username для environment
     spawner.environment["JUPYTERHUB_USER"] = username
 
+# Устанавливаем хук первого входа
+c.LocalProcessSpawner.pre_spawn_hook = my_pre_spawn_hook
+
 
 # ============================================
 # Настройка IPython для singleuser
 # ============================================
-c.Spawner.args = ["--no-browser"]
+c.LocalProcessSpawner.args = ["--no-browser"]
 
 # IPython конфигурация
 c.PromptManager.template = ""
@@ -200,7 +175,7 @@ c.JupyterHub.log_level = logging.INFO
 # Cleanup
 # ============================================
 c.JupyterHub.cleanup_servers = True
-c.Spawner.notebook_dir = "~"
+c.LocalProcessSpawner.notebook_dir = "~"
 
 # ============================================
 # Proxy

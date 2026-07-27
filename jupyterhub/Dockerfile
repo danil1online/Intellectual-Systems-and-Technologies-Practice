@@ -1,28 +1,43 @@
 FROM python:3.10-slim
 
-# Установка системных зависимостей
+# Установка Node.js для configurable-http-proxy
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
     openssh-client \
     procps \
+    build-essential \
+    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Установка configurable-http-proxy
+RUN npm install -g configurable-http-proxy
 
 # Установка Python пакетов
 RUN pip install --no-cache-dir \
     jupyterhub==4.1.6 \
     jupyterlab==4.3.4 \
     notebook==7.3.2 \
-    oauthenticator==24.1.0 \
-    jupyter-ai==2.32.0 \
-    jupyter-ai-magics==2.32.0 \
+    oauthenticator==17.4.0 \
+    jupyter-ai==2.31.7 \
+    jupyter-ai-magics==2.31.7 \
     langchain-openai==0.2.14 \
     langchain-ollama==0.2.2 \
     ipywidgets==8.1.5 \
     anywidget==0.9.15 \
     requests==2.32.3 \
     traitlets==5.14.3 \
-    aiohttp==3.11.11 \
+    aiohttp==3.11.11
+
+# ML-библиотеки (CPU-only PyTorch)
+RUN pip install --no-cache-dir \
+    torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cpu \
+    numpy scipy pandas scikit-learn matplotlib \
+    transformers datasets==3.5.1 \
+    pydotplus openpyxl folium mglearn \
+    basemap || true
 
 WORKDIR /app
 
@@ -31,15 +46,13 @@ COPY jupyterhub_config.py /app/jupyterhub_config.py
 COPY jupyter_ai_config.json /etc/jupyter/jupyter_ai_config.json
 COPY persona_mentor.py /app/persona_mentor.py
 COPY startup/ /app/startup/
-COPY notebooks/ /app/notebooks/
+COPY startup-hooks/ /app/startup-hooks/
 
 # Создание директорий
-RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work
+RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/data/cache_huggingface
 
 # Копирование скрипта для генерации SSH-ключей
-RUN mkdir -p /usr/local/bin/startup-hooks
-COPY startup-hooks/generate_ssh_keys.py /usr/local/bin/startup-hooks/generate_ssh_keys.py
-RUN chmod +x /usr/local/bin/startup-hooks/generate_ssh_keys.py
+RUN chmod +x /app/startup-hooks/generate_ssh_keys.py
 
 EXPOSE 8000
 

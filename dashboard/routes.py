@@ -167,3 +167,8 @@ def get_summary():
         "unique_students": unique_students,
         "daily": daily,
     })
+
+
+def create_api_blueprint():
+    """Создание и возврат API blueprint."""
+    return api_bp

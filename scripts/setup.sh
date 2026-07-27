@@ -138,6 +138,8 @@ while true; do
     break
 done
 
+REGISTRY_PORT=5050
+
 # ============================================
 # ШАГ 2: LLM для ИИ-Ментора
 # ============================================
@@ -184,6 +186,50 @@ else
     done
 
     GGUF_PATH="$(realpath "$GGUF_PATH")"
+    
+    print_step "Копирование модели в хранилище системы..."
+    mkdir -p "$PROJECT_DIR/shared/data/llm-models"
+    MODEL_FILE="Qwen3.5-0.8B-Q4_K_M.gguf"
+    MODEL_DEST="$PROJECT_DIR/shared/data/llm-models/$MODEL_FILE"
+    
+    if [[ ! -f "$MODEL_DEST" ]]; then
+        print_step "Копирование $GGUF_PATH -> shared/data/llm-models/ ..."
+        cp "$GGUF_PATH" "$MODEL_DEST"
+        
+        if [[ -f "$MODEL_DEST" ]]; then
+            MODEL_SIZE=$(du -h "$MODEL_DEST" | cut -f1)
+            print_success "Модель скопирована (${MODEL_SIZE})"
+        else
+            print_error "Не удалось скопировать модель!"
+            exit 1
+        fi
+    else
+        MODEL_SIZE=$(du -h "$MODEL_DEST" | cut -f1)
+        print_success "Модель уже в хранилище (${MODEL_SIZE})"
+    fi
+    
+    # Копирование модели в Docker volume (независимо от оригинала)
+    print_step "Запись модели в Docker volume..."
+    if docker volume inspect llm-models >/dev/null 2>&1; then
+        print_step "Volume llm-models уже существует, проверяем содержимое..."
+        if docker run --rm -v llm-models:/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+            print_success "Модель уже в Docker volume"
+        else
+            print_step "Копирование модели в Docker volume..."
+            docker run --rm -v llm-models:/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
+            if docker run --rm -v llm-models:/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+                print_success "Модель записана в Docker volume"
+                print_warn "Оригинал в $GGUF_PATH можно удалить"
+            else
+                print_error "Не удалось записать модель в Docker volume"
+                exit 1
+            fi
+        fi
+    else
+        print_warn "Volume llm-models не существует (будет создана при запуске)"
+        print_warn "Запустите: bash scripts/setup_llm_volume.sh"
+    fi
+    
     LLM_MENTOR_TYPE="local"
     LLM_MENTOR_BASE_URL="http://llm:8080/v1"
     LLM_MENTOR_API_KEY="local-api-key"
@@ -290,6 +336,8 @@ ZITADEL_PORT=$ZITADEL_PORT
 HOST_DOMAIN=$HOST_DOMAIN
 GITLAB_EXTERNAL_URL=$GITLAB_EXTERNAL_URL
 
+REGISTRY_PORT=$REGISTRY_PORT
+
 LLM_MENTOR_TYPE=$LLM_MENTOR_TYPE
 LLM_MENTOR_BASE_URL=$LLM_MENTOR_BASE_URL
 LLM_MENTOR_API_KEY=$LLM_MENTOR_API_KEY
@@ -299,7 +347,6 @@ LLM_CI_BASE_URL=$LLM_CI_BASE_URL
 LLM_CI_API_KEY=$LLM_CI_API_KEY
 
 LLM_USE_LOCAL=$LLM_USE_LOCAL
-GGUF_PATH=$GGUF_PATH
 
 ZITADEL_ADMIN_PASSWORD=$ZITADEL_ADMIN_PASSWORD
 ZITADEL_ADMIN_TOKEN=$ZITADEL_ADMIN_TOKEN

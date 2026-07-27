@@ -28,11 +28,12 @@ Docker Compose-развёртывание полного учебного кла
 ┌──────────────────────────────────────────────────────────────┐
 │                    HOST (Linux, 32+ GB RAM)                  │
 │                                                              │
-│  Внешние порты:                                              │
+ │  Внешние порты:                                              │
 │  GitLab:       80 (HTTP) / 2222 (SSH)                        │
 │  JupyterHub:   8000 (по умолчанию)                           │
 │  Nextcloud:    8080 (по умолчанию)                           │
 │  Dashboard:    9000 (по умолчанию)                           │
+│  Registry:     5050 (Docker Container Registry)              │
 │                                                              │
 │  Internal bridge network:                                    │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │
@@ -48,6 +49,9 @@ Docker Compose-развёртывание полного учебного кла
 │  │ GitLab   │  │   LLM    │  │OnlyOffice │  │  Admin     │  │
 │  │ Runner   │  │  (opt.)  │  │  (internal)│  │  Dashboard│  │
 │  └──────────┘  └──────────┘  └───────────┘  └────────────┘  │
+│  ┌──────────┐                                                │
+│  │ Registry │  :5050 (Docker images для CI/CD)               │
+│  └──────────┘                                                │
 │                                                              │
 │  Shared Volumes:                                             │
 │    /shared/data        → материалы преподавателя             │
@@ -89,7 +93,7 @@ Docker Compose-развёртывание полного учебного кла
 ## Структура проекта
 
 ```
-├── docker-compose.yml           # Оркестрация 8 сервисов
+├── docker-compose.yml           # Оркестрация 9 сервисов
 ├── .env.example                 # Шаблон переменных окружения
 ├── .env                         # Генерируется setup.sh (не коммитить)
 │
@@ -205,8 +209,8 @@ RAM: ~1 GB
 
 #### LLM (опционально)
 ```
-Base: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
-Build: llama.cpp с CUDA support
+Base: ghcr.io/ggml-org/llama.cpp:server-cuda12
+Build: Dockerfile → start-server.sh, initialize.sh
 RAM: ~2 GB + VRAM (зависит от модели)
 ```
 
@@ -245,10 +249,12 @@ sudo ./scripts/setup.sh
 Скрипт задаст:
 1. Порт JupyterHub (по умолчанию: `8000`)
 2. Порт Admin Dashboard (по умолчанию: `9000`)
-3. LLM для ментора: OpenAI API / локальный контейнер
-4. LLM для CI/CD: OpenAI API / локальный контейнер
-5. Путь к `.gguf` модели (если локальный режим)
-6. SSH-ключ для GitLab Runner
+3. Порт Nextcloud (по умолчанию: `8080`)
+4. Адрес GitLab (http://<IP_или_домен>)
+5. LLM для ментора: OpenAI API / локальный контейнер
+6. LLM для CI/CD: OpenAI API / локальный контейнер
+7. Путь к `.gguf` модели (если локальный режим)
+8. SSH-ключ для GitLab Runner
 
 ### 4. Доступы
 
@@ -290,32 +296,35 @@ cat shared/data/runner-keys/runner_ed25519.pub
 Скрипт `scripts/setup.sh` выполняет последовательно:
 
 ```
-ШАГ 1/7: Настройка портов
+ШАГ 1/8: Настройка портов
   → JupyterHub (по умолчанию 8000)
   → Dashboard (по умолчанию 9000)
   → Nextcloud (по умолчанию 8080)
 
-ШАГ 2/7: LLM для ИИ-Ментора
+ШАГ 2/8: Адрес GitLab
+  → http://<IP_или_домен>
+
+ШАГ 3/8: LLM для ИИ-Ментора
   → Выбор: OpenAI API / Локальный контейнер
   → Если OpenAI: endpoint IP:port + API ключ
   → Если локальный: путь к .gguf (2 попытки, иначе выход)
 
-ШАГ 3/7: LLM для CI/CD
+ШАГ 4/8: LLM для CI/CD
   → Выбор: OpenAI API / Локальный
   → Если обе локальные: предупреждение, одна модель
   → Если OpenAI + локальная: второй путь к .gguf
 
-ШАГ 4/7: Генерация паролей
+ШАГ 5/8: Генерация паролей
   → Zitadel admin, GitLab root, Nextcloud admin, OnlyOffice JWT
 
-ШАГ 5/7: SSH-ключ для GitLab Runner
+ШАГ 6/8: SSH-ключ для GitLab Runner
   → Генерация ED25519 ключа
   → Сохранение в shared/data/runner-keys/
 
-ШАГ 6/7: Генерация .env
+ШАГ 7/8: Генерация .env
   → Запись всех конфигураций в .env файл
 
-ШАГ 7/7: Запуск сервисов
+ШАГ 8/8: Запуск сервисов
   → docker compose up -d
   → Healthcheck Zitadel, GitLab, Nextcloud
   → Инициализация Zitadel (OIDC-клиенты)
@@ -430,10 +439,10 @@ Port: 8080 (Nextcloud)
 ### 5. LLM (опционально)
 
 ```yaml
-Build: ./llm (nvidia/cuda + llama.cpp)
+Build: ./llm (ghcr.io/ggml-org/llama.cpp:server-cuda12)
 Port: 8080 (internal only)
 Model: Qwen3.5-0.8B-Q4_K_M.gguf
-Args: -ngl 99 -c 32768
+Args: -ngl 99 -c 65536
 ```
 
 **Роль:** Локальный инференс LLM через OpenAI-совместимый API.
@@ -667,6 +676,24 @@ ai_review:
 
 При создании группы `students` автоматически создаётся шаблонный проект `academic-template`, который студенты форкают.
 
+### Docker Container Registry
+
+Система включает локальный Docker Registry на порту `5050` для хранения образов, используемых в CI/CD.
+
+```bash
+# Авторизация в registry
+docker login http://<gitlab-ip>:5050
+
+# Push образа (пример из CI/CD пайплайна)
+docker tag my-app <gitlab-ip>:5050/students/my-app:latest
+docker push <gitlab-ip>:5050/students/my-app:latest
+
+# Pull образа (runner использует для запуска задач)
+docker pull <gitlab-ip>:5050/students/my-app:latest
+```
+
+Registry доступен по адресу `http://<gitlab-ip>:5050` (порт настраивается через `REGISTRY_PORT` в `.env`).
+
 ---
 
 ## Admin Dashboard
@@ -815,6 +842,7 @@ grep -c '"SMART"' shared/logs/grading_log.json
 | `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
 | `ZITADEL_ADMIN_PASSWORD` | Пароль Zitadel admin | auto-generated |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
+| `REGISTRY_PORT` | Порт Docker Registry | `5050` |
 | `NC_ADMIN_PASSWORD` | Пароль Nextcloud admin | auto-generated |
 | `ONLYOFFICE_JWT_SECRET` | JWT для OnlyOffice | auto-generated |
 | `JH_API_TOKEN` | JupyterHub API token | auto-generated |

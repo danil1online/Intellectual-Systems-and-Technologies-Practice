@@ -1,54 +1,50 @@
-# Практическая работа №2 Основы работы с технологиями контейнеризации и ботами Telegram
+# Практическая работа №2: Основы работы с технологиями контейнеризации и ботами Telegram
 
 ---
 
-## 🎯 Цель работы.
+## 🎯 Цель работы
 
-Создание сервера с постоянно работающим Telegram ботом
+Создание сервера с постоянно работающим Telegram ботом в Docker-контейнере
 
 ---
 
 ## 📁 Материалы и методы
 
-- Операционная система - [Ubuntu 22.04](https://help.ubuntu.ru/wiki/командная_строка)
-- Язык программирования – [bash](https://habr.com/ru/articles/47163/).
-- Основные библиотеки:
-  -  [git](https://habr.com/ru/articles/541258/).
-  -  [Docker](https://www.docker.com/).
-  -  [BotFather](https://telegram.me/BotFather)
- 
----
-
-## 🧪 Программа работы 
+- Операционная система — [Ubuntu 22.04](https://help.ubuntu.ru/wiki/командная_строка)
+- Язык программирования — [bash](https://habr.com/ru/articles/47163/)
+- Основные технологии:
+  - [git](https://habr.com/ru/articles/541258/)
+  - [Docker](https://www.docker.com/)
+  - [Telegram BotFather](https://telegram.me/BotFather)
 
 ---
 
-### ⚙️ Настройка среды  
+## 🧪 Программа работы
 
-**Авторизоваться на сервере [Jupyter-Hub](https://jupyter.org/hub) по адресу [Jupyter-Hub-ИИСТ-НПИ](http://89.110.116.79:7998/)**
+---
+
+### ⚙️ Настройка среды
+
+**Авторизуйтесь на сервере JupyterHub**: `http://<server-ip>:<port>`
 
 ![Авторизация](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/autorization.png)
 
-**Создать новую вкладку символом +**
-
-![Создание новой вкладки](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/new_window_create.png)
-
-**Выбрать тип новой вкладки -- Terminal**
+**Создайте новую вкладку Terminal**
 
 ![Создание вкладки Terminal](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/terminal_window_create.png)
 
-**Работать в новой вкладке вида**
+**Откройте GitLab в другой вкладке браузера** — вы будете параллельно работать с терминалом и GitLab.
 
-![Владка Terminal](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/basic_window.png)
+![GitLab](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/basic_window.png)
 
-
-**(При первом входе на сервер) Создать каталог с именем, соответствующим Вашим ФИО и году обучения, например:**
+**(При первом входе) Создайте каталог с именем, соответствующим Вашим ФИО и году обучения:**
 
 ```bash
 mkdir ivanov_ii_2026
+cd ivanov_ii_2026
 ```
 
-**(При втором и последующих входах на сервер) Перейти каталог с именем, соответствующим Вашим ФИО и году обучения, например:**
+**(При последующих входах):**
 
 ```bash
 cd ivanov_ii_2026
@@ -313,6 +309,31 @@ cd ivanov_ii_2026
   ```bash
   docker image rm 000000
   ```
+---
+
+---
+
+## 3. Создание репозитория для отчётов
+
+Аналогично Pr_1: создайте репозиторий `reports_<группа>_<номер>` в GitLab.
+
+## 4. Nextcloud + OnlyOffice для PDF-отчёта
+
+1. Откройте **Nextcloud**: `http://<server-ip>:8080`
+2. Войдите через GitLab OAuth
+3. Создайте DOCX-документ с описанием работы и скриншотами
+4. Экспортируйте в PDF: **File → Export → PDF**
+
+## 5. Загрузка отчёта
+
+```bash
+cd reports_<группа>_<номер>
+cp Pr_2_<группа>_<номер>.pdf .
+git add .
+git commit -m "Pr_2 report"
+git push
+```
+
 ---
 
 ## 📌 Подготовить отчет о выполненной работе

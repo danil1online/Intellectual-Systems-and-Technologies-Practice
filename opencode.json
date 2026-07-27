@@ -18,7 +18,7 @@
             "output": ["text"]
           },
           "limit": {
-            "context": 98304,
+            "context": 196608,
             "output": 16384
           },
           "capabilities": {
