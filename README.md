@@ -10,6 +10,7 @@ Docker Compose-развёртывание полного учебного кла
 - [Зависимости](#зависимости)
 - [Быстрый старт](#быстрый-старт)
 - [Инсталляция](#инсталляция)
+- [Административные доступы](#административные-доступы)
 - [Архитектура сервисов](#архитектура-сервисов)
 - [ИИ-Ментор](#ии-ментор)
 - [Авторизация](#авторизация)
@@ -42,9 +43,9 @@ Docker Compose-развёртывание полного учебного кла
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘ │
 │       │OIDC          │OIDC         │OIDC            │OIDC    │
 │  ┌────┴──────────────┴─────────────┴───────────────┴───────┐ │
-│  │              GitLab (Identity Provider)                  │ │
-│  └────────────────────────────┬────────────────────────────┘ │
-│                               │                               │
+│  │              Keycloak (Identity Provider)                │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                               │
 │  ┌──────────┐  ┌──────────┐  ┌┴──────────┐  ┌────────────┐  │
 │  │ GitLab   │  │   LLM    │  │OnlyOffice │  │  Admin     │  │
 │  │ Runner   │  │  (opt.)  │  │  (internal)│  │  Dashboard│  │
@@ -68,7 +69,7 @@ Docker Compose-развёртывание полного учебного кла
 
 | Функция | Описание |
 |---|---|
-| **Единый вход** | Регистрация в GitLab → автоматическая учётка в JupyterHub + Nextcloud |
+| **Единый вход** | Регистрация в Keycloak → автоматический доступ ко всем сервисам |
 | **ИИ-Ментор** | Команда `%%ask_mentor` в ячейках JupyterLab |
 | **Классификация запросов** | LAZY (штраф) / SMART (поощрение) |
 | **Онлайн-редактор** | OnlyOffice в браузере для создания отчётов |
@@ -260,23 +261,41 @@ sudo ./scripts/setup.sh
 После установки скрипт выведет:
 
 ```
-GitLab:       http://localhost:80
+Keycloak (регистрация): http://<IP>:9200/auth/realms/istp/account/
+
+GitLab:       http://<IP>:80
   Root:       root / <generated password>
+  Lecturer:   lecturer_01 / <generated password> (смените!)
+  Lecturer:   lecturer_02 / <generated password> (смените!)
 
-JupyterHub:   http://localhost:8000
-  Admin:      admin (через GitLab OAuth)
+JupyterHub:   http://<IP>:8000
+  Вход:       через Keycloak (кнопка на странице входа)
 
-Nextcloud:    http://localhost:8080
+Nextcloud:    http://<IP>:8080
   Admin:      admin / <generated password>
 
-Dashboard:    http://localhost:9000
-  Admin:      admin (через Keycloak OIDC)
-
-Keycloak:     http://localhost:9200
-  Admin:      admin / Keycloak123!
+Dashboard:    http://<IP>:9000
+  Admin:      lecturer_01 (через Keycloak OIDC)
 ```
 
-### 5. Добавление SSH-ключа для GitLab Runner
+### 5. Административные доступы
+
+| Сервис | Логин | Пароль | URL |
+|---|---|---|---|
+| **GitLab (root)** | `root` | см. `.env` → `GITLAB_ROOT_PASSWORD` | `http://<IP>:80` |
+| **Keycloak (admin)** | `admin` | см. `.env` → `KC_ADMIN_PASSWORD` | `http://<IP>:9200/auth` |
+| **Nextcloud (admin)** | `admin` | см. `.env` → `NC_ADMIN_PASSWORD` | `http://<IP>:8080` |
+| **JupyterHub** | любой (через Keycloak) | тот же, что в Keycloak | `http://<IP>:<JUPYTERHUB_PORT>` |
+| **Dashboard** | lecturer_01 (через Keycloak OIDC) | см. `.env` → `LECTURER_01_PASSWORD` | `http://<IP>:<DASHBOARD_PORT>` |
+
+> **Важно:** Все пароли генерируются при запуске `setup.sh` и хранятся в файле `.env`.
+> Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|KC_ADMIN_PASSWORD|NC_ADMIN_PASSWORD|LECTURER_"`
+>
+> **Пароль Keycloak admin по умолчанию:** `Keycloak123!` (если не переопределён в `.env`)
+>
+> **⚠️ Лекторы:** пароли lecturer_01/lecturer_02 нужно сменить после первого входа!
+
+### 6. Добавление SSH-ключа для GitLab Runner
 
 ```bash
 # Скопируйте публичный ключ
@@ -381,12 +400,12 @@ Volume: keycloak-data
 **OIDC-клиенты:**
 | Клиент | Redirect URI |
 |---|---|
-| JupyterHub | `http://localhost:8000/hub/oauth_callback` |
-| Admin Dashboard | `http://localhost:9000/callback` |
-| Nextcloud | `http://localhost:8080/apps/oidc_login/callback` |
-| GitLab | `http://<gitlab-host>/oauth/callback` |
+| JupyterHub | `http://<IP>:8000/hub/oauth_callback` |
+| Admin Dashboard | `http://<IP>:9000/callback` |
+| Nextcloud | `http://<IP>:8080/apps/oidc_login/callback` |
+| GitLab | `http://<IP>/oauth/callback` |
 
-**Авторизация:** GitLab → Keycloak OIDC → все сервисы
+**Авторизация:** Keycloak OIDC → GitLab, JupyterHub, Nextcloud, Dashboard
 
 ### 2. GitLab CE
 
@@ -396,7 +415,9 @@ Ports: 80 (HTTP), 2222 (SSH)
 Volumes: gitlab-config, gitlab-logs, gitlab-data
 ```
 
-**Роль:** SCM, CI/CD, Identity Provider.
+**Роль:** SCM, CI/CD, файловое хранилище отчётов.
+
+**Авторизация:** Keycloak OIDC (через кнопку "Keycloak" на странице входа).
 
 **Группы:** `students` — для всех студенческих проектов.
 
@@ -407,7 +428,7 @@ Volumes: gitlab-config, gitlab-logs, gitlab-data
 ```yaml
 Build: ./jupyterhub
 Port: 8000 (по умолчанию)
-Auth: Keycloak OAuth (GenericOAuthenticator)
+Auth: Keycloak OIDC (GenericOAuthenticator)
 Spawner: SimpleSpawner
 ```
 
@@ -581,25 +602,24 @@ LLM_CI_API_KEY=local-api-key
 ### Схема OAuth / OIDC
 
 ```
-Студент регистрируется в GitLab
-            │
-            ▼
-      Keycloak (OIDC Provider)
-            │
-    ┌───────┼──────────┐
-    │       │          │
-    ▼       ▼          ▼
-GitLab  JupyterHub  Nextcloud
-(IDP)   (OAuth)     (OIDC)
+Keycloak (Identity Provider)
+    │
+    │ self-registration + OIDC
+    │
+    ┌───────┼──────────┬──────────────┐
+    │       │          │              │
+    ▼       ▼          ▼              ▼
+GitLab  JupyterHub  Nextcloud   Admin Dashboard
+(OIDC)  (OIDC)      (OIDC)      (OIDC)
 ```
 
 ### Auto-provisioning
 
-1. Студент регистрируется в GitLab
-2. Залогинивается в JupyterHub через GitLab OAuth
+1. Студент регистрируется в Keycloak (через GitLab → Keycloak → Register)
+2. С теми же данными входит в JupyterHub, Nextcloud, GitLab
 3. `GenericOAuthenticator` создаёт учётку автоматически (`create_missing_users = True`)
-4. **pre_spawn_start** копирует шаблоны `.ipynb` в домашнюю директорию
-5. Генерируется SSH-ключ для Git
+4. **pre_spawn_hook** копирует шаблоны `.ipynb`, генерирует SSH-ключ
+5. GitLab создаёт пользователя при первом OIDC-входе
 
 ### Fallback
 
@@ -726,16 +746,16 @@ Registry доступен по адресу `http://<gitlab-ip>:5050` (порт 
 
 ```bash
 # Все логи с фильтрацией
-curl http://localhost:9000/api/logs?student=student_pia_01&category=LAZY
+curl http://<IP>:9000/api/logs?student=student_pia_01&category=LAZY
 
 # Статистика по студентам
-curl http://localhost:9000/api/stats
+curl http://<IP>:9000/api/stats
 
 # Общая сводка
-curl http://localhost:9000/api/summary
+curl http://<IP>:9000/api/summary
 
 # CSV экспорт
-curl -O http://localhost:9000/api/export?date_from=2025-09-01
+curl -O http://<IP>:9000/api/export?date_from=2025-09-01
 ```
 
 ---
@@ -746,7 +766,7 @@ curl -O http://localhost:9000/api/export?date_from=2025-09-01
 
 ```
 Шаг 1. Регистрация
-  └→ Открыть GitLab → Sign up → student_<группа>_<номер>
+  └→ Открыть GitLab → Sign in → Keycloak → Register → student_<группа>_<номер>
 
 Шаг 2. SSH-ключ
   └→ JupyterLab Terminal → ssh-keygen
@@ -841,12 +861,12 @@ grep -c '"SMART"' shared/logs/grading_log.json
 | `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
 | `KC_ADMIN_PASSWORD` | Пароль Keycloak admin | `Keycloak123!` |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
-| `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `REGISTRY_PORT` | Порт Docker Registry | `5050` |
 | `NC_ADMIN_PASSWORD` | Пароль Nextcloud admin | auto-generated |
 | `ONLYOFFICE_JWT_SECRET` | JWT для OnlyOffice | auto-generated |
 | `JH_API_TOKEN` | JupyterHub API token | auto-generated |
-| `HOST_DOMAIN` | Домен хоста | `localhost` |
+| `GITLAB_HOST` | IP/домен GitLab | `10.8.1.3` (или другой) |
+| `HOST_DOMAIN` | Домен хоста | `10.8.1.3` |
 
 ### docker-compose profile
 

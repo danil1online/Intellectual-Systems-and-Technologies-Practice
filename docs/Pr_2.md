@@ -317,18 +317,19 @@ cd ivanov_ii_2026
 
 Аналогично Pr_1: создайте репозиторий `reports_<группа>_<номер>` в GitLab.
 
-## 4. Nextcloud + OnlyOffice для PDF-отчёта
+## 4. Nextcloud для хранения отчётов
 
 1. Откройте **Nextcloud**: `http://<server-ip>:8080`
-2. Войдите через GitLab OAuth
-3. Создайте DOCX-документ с описанием работы и скриншотами
-4. Экспортируйте в PDF: **File → Export → PDF**
+2. Войдите через **Keycloak**
+3. Создайте папку `reports_<группа>_<номер>`
+4. Создайте файл отчёта `Pr_2_<группа>_<номер>.md` нативно в Nextcloud (Markdown)
+5. Используйте [справочник по Markdown](./MD_Instructions.md) для форматирования
 
 ## 5. Загрузка отчёта
 
 ```bash
 cd reports_<группа>_<номер>
-cp Pr_2_<группа>_<номер>.pdf .
+cp Pr_2_<группа>_<номер>.md .
 git add .
 git commit -m "Pr_2 report"
 git push

@@ -28,16 +28,28 @@ RUN pip install --no-cache-dir \
     anywidget==0.9.15 \
     requests==2.32.3 \
     traitlets==5.14.3 \
-    aiohttp==3.11.11
+    aiohttp==3.11.11 \
+    nbconvert[webpdf]
 
 # ML-библиотеки (CPU-only PyTorch)
 RUN pip install --no-cache-dir \
     torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Научные пакеты
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgeos-dev libproj-dev \
+    texlive-latex-recommended \
+    texlive-fonts-recommended \
+    texlive-fonts-extra \
+    texlive-xetex \
+    texlive-luatex \
+    cm-super \
+    && pip install --no-cache-dir \
     numpy scipy pandas scikit-learn matplotlib \
     transformers datasets==3.5.1 \
-    pydotplus openpyxl folium mglearn \
-    basemap || true
+    pydotplus openpyxl folium mglearn basemap \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -49,7 +61,10 @@ COPY startup/ /app/startup/
 COPY startup-hooks/ /app/startup-hooks/
 
 # Создание директорий
-RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/data/cache_huggingface
+RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/data/cache_huggingface /shared/pip-cache
+
+# Добавление shared packages в PYTHONPATH
+RUN echo "/usr/local/lib/python3.10/shared-packages" > /usr/local/lib/python3.10/site-packages/shared-packages.pth
 
 # Копирование скрипта для генерации SSH-ключей
 RUN chmod +x /app/startup-hooks/generate_ssh_keys.py

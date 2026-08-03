@@ -5,9 +5,43 @@
 import os
 import json
 import datetime
-from flask import Blueprint, jsonify, request, render_template
+import base64
+from flask import Blueprint, jsonify, request, render_template, Response, abort
 
 api_bp = Blueprint("api", __name__)
+
+DASHBOARD_USERNAME = os.environ.get("DASHBOARD_USERNAME", "admin")
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+
+def require_auth():
+    """Проверка базовой аутентификации."""
+    if not DASHBOARD_PASSWORD:
+        return True
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return False
+    try:
+        auth_type, auth_data = auth.split(" ", 1)
+        if auth_type != "Basic":
+            return False
+        username, password = base64.b64decode(auth_data).decode("utf-8").split(":", 1)
+        return username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD
+    except Exception:
+        return False
+
+def auth_required(f):
+    """Декоратор для проверки аутентификации."""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not require_auth():
+            return Response(
+                'Authentication required',
+                401,
+                {'WWW-Authenticate': 'Basic realm="Dashboard"'}
+            )
+        return f(*args, **kwargs)
+    return decorated_function
 
 LOG_FILE = os.environ.get("LOG_FILE", "/app/logs/grading_log.json")
 
@@ -34,12 +68,14 @@ def read_logs():
 
 
 @api_bp.route("/")
+@auth_required
 def index():
     """Главная страница — дашборд."""
     return render_template("dashboard.html", title="Панель преподавателя")
 
 
 @api_bp.route("/api/logs")
+@auth_required
 def get_logs():
     """Получить логи с фильтрацией."""
     logs = read_logs()
@@ -69,6 +105,7 @@ def get_logs():
 
 
 @api_bp.route("/api/stats")
+@auth_required
 def get_stats():
     """Статистика: LAZY/SMART ratio по студентам."""
     logs = read_logs()
@@ -101,6 +138,7 @@ def get_stats():
 
 
 @api_bp.route("/api/export")
+@auth_required
 def export_logs():
     """Экспорт логов в CSV."""
     logs = read_logs()
@@ -137,6 +175,7 @@ def export_logs():
 
 
 @api_bp.route("/api/summary")
+@auth_required
 def get_summary():
     """Общая сводка за период."""
     logs = read_logs()

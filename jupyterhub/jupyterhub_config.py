@@ -1,12 +1,15 @@
 """
 JupyterHub конфигурация для учебного комплекса.
-Авторизация: GitLab через Keycloak OIDC.
-Автор спавна: LocalProcessSpawner с хуками первого входа.
+Авторизация: Keycloak OIDC.
+Спавнер: LocalProcessSpawner с хуками первого входа.
 """
 
 import os
 import json
 import datetime
+import shutil
+import pwd
+import subprocess
 from pathlib import Path
 from oauthenticator.generic import GenericOAuthenticator
 
@@ -16,43 +19,63 @@ from oauthenticator.generic import GenericOAuthenticator
 c = get_config()
 
 c.JupyterHub.bind_url = "http://0.0.0.0:8000"
-c.JupyterHub.ip = "0.0.0.0"
 c.JupyterHub.port = int(os.environ.get("JUPYTERHUB_PORT", "8000"))
 
-# Секреты
-secret_file = Path("/app/jupyterhub_cookie_secret")
-if not secret_file.exists():
+# Секреты — используем env переменную или генерируем
+cookie_secret_str = os.environ.get("JUPYTERHUB_COOKIE_SECRET")
+if not cookie_secret_str:
     import secrets
-    secret_file.write_text(secrets.token_hex(32))
-    os.chmod(secret_file, 0o600)
+    cookie_secret_str = secrets.token_hex(32)
+    os.environ["JUPYTERHUB_COOKIE_SECRET"] = cookie_secret_str
 
-c.JupyterHub.cookie_secret_file = str(secret_file)
+c.JupyterHub.cookie_secret = bytes.fromhex(cookie_secret_str)
 c.JupyterHub.db_url = "sqlite:///jupyterhub.db"
+
+# Cookie settings для cross-domain OAuth
+c.JupyterHub.cookie_options = {
+    "samesite": os.environ.get("COOKIE_SAMESITE", "None"),
+    "secure": os.environ.get("COOKIE_SECURE", "false").lower() == "true",
+}
 
 # ============================================
 # Авторизация через Keycloak OAuth
 # ============================================
-c.JupyterHub.authenticator_class = GenericOAuthenticator
+HOST_IP = os.environ.get('HOST_IP', '10.8.1.3')
+HOST_IP_LOCAL = os.environ.get('HOST_IP_LOCAL', 'localhost')
+KEYCLOAK_PORT = os.environ.get('KEYCLOAK_PORT', '9200')
+JUPYTERHUB_PORT = os.environ.get('JUPYTERHUB_PORT', '8000')
 
-# Keycloak OAuth конфигурация
-c.GenericOAuthenticator.login_service = "Keycloak"
-c.GenericOAuthenticator.authorize_url = os.environ.get("KEYCLOAK_ISSUER", "http://keycloak:8080/auth/realms/istp") + "/protocol/openid-connect/auth"
-c.GenericOAuthenticator.token_url = os.environ.get("KEYCLOAK_ISSUER", "http://keycloak:8080/auth/realms/istp") + "/protocol/openid-connect/token"
-c.GenericOAuthenticator.userdata_url = os.environ.get("KEYCLOAK_ISSUER", "http://keycloak:8080/auth/realms/istp") + "/protocol/openid-connect/userinfo"
-c.GenericOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
-c.GenericOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")
-c.GenericOAuthenticator.oauth_callback_url = os.environ.get("OAUTH2_REDIRECT_URI", "http://localhost:8000/hub/oauth_callback")
-# Force full URL (env may contain just path)
-if not c.GenericOAuthenticator.oauth_callback_url.startswith("http"):
-    c.GenericOAuthenticator.oauth_callback_url = f"http://localhost:{c.JupyterHub.port}{c.GenericOAuthenticator.oauth_callback_url}"
-c.GenericOAuthenticator.username_key = "preferred_username"
-c.GenericOAuthenticator.scope = ["openid", "profile", "email"]
-c.GenericOAuthenticator.tls_verify = False
+class CustomOAuthenticator(GenericOAuthenticator):
+    username_claim = "preferred_username"
+    scope = ["openid", "profile", "email"]
+    tls_verify = False
+    auto_login = True
+    create_missing_users = True
 
-# Автоматическое создание пользователя при OAuth-входе (ключевой параметр)
-c.GenericOAuthenticator.create_missing_users = True
-c.GenericOAuthenticator.auto_login = True
-c.GenericOAuthenticator.normalize_username = lambda username: username.lower().replace("-", "_").replace(".", "_")
+    @property
+    def issuer_url(self):
+        return f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp"
+
+c.JupyterHub.authenticator_class = CustomOAuthenticator
+c.CustomOAuthenticator.login_service = "Keycloak"
+
+# INTERNAL URL: JupyterHub server → Keycloak (через Docker internal DNS)
+c.CustomOAuthenticator.token_url = f"http://keycloak:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/token"
+c.CustomOAuthenticator.userdata_url = f"http://keycloak:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/userinfo"
+
+# EXTERNAL URL: браузер пользователя → Keycloak
+c.CustomOAuthenticator.authorize_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/auth"
+c.CustomOAuthenticator.oauth_callback_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/oauth_callback"
+
+c.CustomOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
+c.CustomOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")
+
+# Разрешить всех аутентифицированных пользователей
+c.CustomOAuthenticator.allow_all = True
+c.CustomOAuthenticator.admin_users = {
+    "lecturer_01",
+    "lecturer_02",
+}
 
 # ============================================
 # Spawner — LocalProcessSpawner
@@ -61,25 +84,13 @@ from jupyterhub.spawner import LocalProcessSpawner
 
 c.JupyterHub.spawner_class = LocalProcessSpawner
 
-c.LocalProcessSpawner.cmd = ["jupyter-lab"]
-c.LocalProcessSpawner.ip = "127.0.0.1"
-c.LocalProcessSpawner.port = 0
-
-# Домашняя директория студента
-def get_user_home_dir(user):
-    """Определение домашней директории для пользователя."""
-    username = user.name.lower().replace("-", "_").replace(".", "_")
-    return f"/home/{username}"
-
-# Note: LocalProcessSpawner uses system home directories by default
+c.LocalProcessSpawner.cmd = ["jupyterhub-singleuser"]
+c.LocalProcessSpawner.ip = "0.0.0.0"
 
 # Environment переменные для singleuser
+# JUPYTERHUB_API_TOKEN задаётся автоматически JupyterHub при спавне — НЕ перезаписывать!
 c.Spawner.environment = {
-    "JUPYTERHUB_USER": "",  # будет установлено JupyterHub
-    "JUPYTERHUB_API_TOKEN": os.environ.get("JH_API_TOKEN", ""),
-    "JUPYTERHUB_HOST": "0.0.0.0",
-    "JUPYTERHUB_PORT": os.environ.get("JUPYTERHUB_PORT", "8000"),
-    "JUPYTERHUB_OAUTH_CALLBACK_URL": "/hub/oauth_callback",
+    "JUPYTERHUB_USER": "",
     "LLM_MENTOR_TYPE": os.environ.get("LLM_MENTOR_TYPE", "local"),
     "LLM_MENTOR_BASE_URL": os.environ.get("LLM_MENTOR_BASE_URL", "http://llm:8080/v1"),
     "LLM_MENTOR_API_KEY": os.environ.get("LLM_MENTOR_API_KEY", "local-api-key"),
@@ -87,83 +98,111 @@ c.Spawner.environment = {
     "LLM_CI_BASE_URL": os.environ.get("LLM_CI_BASE_URL", "http://llm:8080/v1"),
     "LLM_CI_API_KEY": os.environ.get("LLM_CI_API_KEY", "local-api-key"),
     "GGUF_PATH": os.environ.get("GGUF_PATH", "/models/Qwen3.5-0.8B-Q4_K_M.gguf"),
+    "PIP_CACHE_DIR": "/shared/pip-cache",
 }
 
 # ============================================
 # Хуки первого входа
 # ============================================
 
-def my_pre_spawn_hook(spawner, user):
-    """Хук: выполняется перед спавном контейнера."""
-    username = user.name.lower().replace("-", "_").replace(".", "_")
-    user_home = f"/home/{username}"
+def my_pre_spawn_hook(spawner):
+    """Хук: выполняется перед спавном singleuser-сервера."""
+    user = spawner.user
+    # Системное имя: заменяем спецсимволы на underscore
+    system_name = user.name.lower().replace("-", "_").replace(".", "_")
+    user_home = f"/home/{system_name}"
 
-    # Создаём домашнюю директорию если не существует
-    import os
+    print(f"pre_spawn_hook: user={user.name}, system_name={system_name}, home={user_home}")
+
+    # Создаём системного пользователя, если не существует
+    try:
+        pwd.getpwnam(system_name)
+    except KeyError:
+        print(f"Creating system user: {system_name}")
+        result = subprocess.run(
+            ["useradd", "-m", "-d", user_home, "-s", "/bin/bash", system_name],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            print(f"useradd error: {result.stderr}")
+            raise RuntimeError(f"Failed to create system user {system_name}: {result.stderr}")
+
     os.makedirs(user_home, exist_ok=True)
     os.chmod(user_home, 0o755)
 
-    # Создаём symlink для общих данных
+    # Символическая ссылка на общие данные
     data_link = f"{user_home}/data"
     if not os.path.exists(data_link):
-        os.symlink("/shared/data", data_link)
+        try:
+            os.symlink("/shared/data", data_link)
+        except FileExistsError:
+            pass
 
-    # Настраиваем IPython startup
+    # Копируем startup-файл ментора
     startup_dir = f"{user_home}/.ipython/profile_default/startup"
     os.makedirs(startup_dir, exist_ok=True)
 
-    # Копируем 00_mentor.py
     mentor_startup = "/app/startup/00_mentor.py"
     dst_startup = f"{startup_dir}/00_mentor.py"
     if os.path.exists(mentor_startup) and not os.path.exists(dst_startup):
-        import shutil
         shutil.copy2(mentor_startup, dst_startup)
 
-    # Настраиваем SSH-директорию
+    # Генерируем SSH-ключи для Git
     ssh_dir = f"{user_home}/.ssh"
     os.makedirs(ssh_dir, exist_ok=True)
     os.chmod(ssh_dir, 0o700)
 
-    # Устанавливаем владельца
+    pub_key_path = os.path.join(ssh_dir, "id_ed25519.pub")
+    priv_key_path = os.path.join(ssh_dir, "id_ed25519")
+    if not os.path.exists(pub_key_path) or not os.path.exists(priv_key_path):
+        try:
+            cmd = [
+                "ssh-keygen",
+                "-t", "ed25519",
+                "-f", priv_key_path,
+                "-N", "",
+                "-C", f"{system_name}@academic-platform",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                os.chmod(priv_key_path, 0o600)
+                os.chmod(pub_key_path, 0o644)
+        except Exception as e:
+            print(f"SSH key generation warning for {system_name}: {e}")
+
+    # Устанавливаем права владения
     try:
-        import pwd
-        pw = pwd.getpwnam(username)
+        pw = pwd.getpwnam(system_name)
         uid = pw.pw_uid
         gid = pw.pw_gid
         os.chown(user_home, uid, gid)
         os.chown(startup_dir, uid, gid, follow_symlinks=False)
         os.chown(ssh_dir, uid, gid)
+        if os.path.exists(priv_key_path):
+            os.chown(priv_key_path, uid, gid)
+        if os.path.exists(pub_key_path):
+            os.chown(pub_key_path, uid, gid)
     except KeyError:
-        pass
+        print(f"Warning: system user {system_name} not found in passwd after creation")
+    except Exception as e:
+        print(f"Chown warning for {system_name}: {e}")
 
-    # Сохраняем username для environment
-    spawner.environment["JUPYTERHUB_USER"] = username
+    spawner.environment["JUPYTERHUB_USER"] = system_name
 
-# Устанавливаем хук первого входа
 c.LocalProcessSpawner.pre_spawn_hook = my_pre_spawn_hook
 
-
 # ============================================
-# Настройка IPython для singleuser
+# Настройка IPython
 # ============================================
 c.LocalProcessSpawner.args = ["--no-browser"]
-
-# IPython конфигурация
 c.PromptManager.template = ""
 
 # ============================================
-# Jupyter AI конфигурация
+# Jupyter AI
 # ============================================
-
-# Отключаем стандартный чат Jupyter-AI (используем только %%ask_mentor)
 c.AiExtension.default_chat_model = ""
 c.AiExtension.enabled = False
-
-# Но разрешаем %%ai магические команды для %%ask_mentor (он определяется отдельно)
 c.AiMagicsExtension.enabled = True
-
-# Настройка модели для %%ask_mentor (через переменные окружения)
-# Модель определяется в 00_mentor.py через OPENAI_API_BASE_URL
 
 # ============================================
 # Логирование
@@ -176,9 +215,5 @@ c.JupyterHub.log_level = logging.INFO
 # ============================================
 c.JupyterHub.cleanup_servers = True
 c.LocalProcessSpawner.notebook_dir = "~"
-
-# ============================================
-# Proxy
-# ============================================
 c.JupyterHub.cleanup_proxy = False
-c.JupyterHub.default_server = True
+c.JupyterHub.default_url = "/hub/spawn"

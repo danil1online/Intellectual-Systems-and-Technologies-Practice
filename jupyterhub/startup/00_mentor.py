@@ -12,6 +12,7 @@ from IPython.core.magic import register_cell_magic
 import json
 import requests
 import os
+from datetime import datetime
 
 SYSTEM_PROMPT = """Ты — строгий ментор по программированию в учебном курсе.
 Классифицируй запрос студента строго по правилам:
@@ -93,7 +94,7 @@ def ask_mentor(line, cell):
 
         # Формируем лог
         student = os.environ.get("JUPYTERHUB_USER", "local_user")
-        timestamp = datetime.datetime.now().isoformat()
+        timestamp = datetime.now().isoformat()
 
         log_entry = {
             "timestamp": timestamp,
@@ -132,6 +133,3 @@ def ask_mentor(line, cell):
     except Exception as e:
         print(f"❌ Ошибка связи с ИИ-ментором: {type(e).__name__}: {e}")
 
-
-# Импортируем datetime для логирования
-from datetime import datetime

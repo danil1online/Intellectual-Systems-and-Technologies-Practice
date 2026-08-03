@@ -221,11 +221,21 @@
                 document.getElementById('total-penalties').textContent = data.penalties || 0;
                 document.getElementById('total-students').textContent = data.unique_students || 0;
 
-                // Populate student filter
+                // Populate student filter from stats
+                const statsRes = await fetch('/api/stats');
+                const stats = await statsRes.json();
                 const sel = document.getElementById('filter-student');
                 const current = sel.value;
                 sel.innerHTML = '<option value="">Все</option>';
-                Object.keys(data.daily || {}).forEach(() => {}); // just placeholder
+                if (stats) {
+                    Object.keys(stats).sort().forEach(student => {
+                        const opt = document.createElement('option');
+                        opt.value = student;
+                        opt.textContent = student;
+                        if (student === current) opt.selected = true;
+                        sel.appendChild(opt);
+                    });
+                }
             } catch (e) {
                 console.log('Stats load error:', e);
             }

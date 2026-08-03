@@ -43,7 +43,7 @@ print_warn() {
 
 ask() {
     local prompt="$1"
-    local default="$2"
+    local default="${2:-}"
     local response
 
     if [[ -n "$default" ]]; then
@@ -66,12 +66,12 @@ ask_choice() {
     local default="$6"
     local response
 
-    echo ""
-    echo -e "  ${BOLD}$prompt${NC}"
-    echo -e "    [1] $text1"
-    echo -e "    [2] $text2"
+    echo "" >&2
+    echo -e "  ${BOLD}$prompt${NC}" >&2
+    echo -e "    [1] $text1" >&2
+    echo -e "    [2] $text2" >&2
     if [[ -n "$default" ]]; then
-        echo -e "    Default: $default"
+        echo -e "    Default: $default" >&2
     fi
     read -rp "    Ваш выбор [1/2] [$default]: " response
 
@@ -91,9 +91,113 @@ generate_password() {
 }
 
 # ============================================
-# ШАГ 1: Порт JupyterHub
+# АВТООПРЕДЕЛЕНИЕ СЕТЕВЫХ ПАРАМЕТРОВ
 # ============================================
-print_header "ШАГ 1/7: Настройка портов"
+print_header "ШАГ 0/10: Проверка портов и автоопределение сетевых параметров"
+
+# Проверка занятых портов
+REQUIRED_PORTS="80 2222 8000 8080 9000 9200 5050"
+PORTS_IN_USE=""
+for port in $REQUIRED_PORTS; do
+    if ss -tlnp 2>/dev/null | grep -q ":${port} " || netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
+        PORTS_IN_USE="${PORTS_IN_USE} ${port}"
+        print_warn "Порт ${port} может быть занят другим процессом"
+    fi
+done
+
+if [[ -n "$PORTS_IN_USE" ]]; then
+    print_warn "Занятые порты:${PORTS_IN_USE}"
+    print_warn "Продолжаем, но это может вызвать конфликты"
+fi
+
+# Находим все локальные IP (исключая loopback, docker, amnezia WG)
+LOCAL_IPS=$(ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | grep -v '^172\.' | grep -v '10\.8\.1' | sort -u)
+
+if [[ -z "$LOCAL_IPS" ]]; then
+    print_error "Локальные IP не найдены!"
+    exit 1
+fi
+
+# Берём первый не-docker IP как основной локальный
+PRIMARY_LOCAL_IP=$(echo "$LOCAL_IPS" | head -1)
+print_step "Основной локальный IP: $PRIMARY_LOCAL_IP"
+
+# Находим VPN IP (amnezia WG — интерфейсы awg*)
+VPN_IP=$(ip -4 addr show | grep -A1 'awg0' | grep -oP 'inet \K[\d.]+')
+if [[ -z "$VPN_IP" ]]; then
+    VPN_IP=$(ip -4 addr show | grep -A1 'awg' | grep -oP 'inet \K[\d.]+')
+fi
+
+if [[ -z "$VPN_IP" ]]; then
+    print_warn "VPN (amnezia WG) интерфейс не найден"
+    print_warn "Будет запрошен вручную"
+    VPN_IP=""
+else
+    print_step "VPN IP (amnezia WG): $VPN_IP"
+fi
+
+# Находим подсеть и шлюз для локальной сети
+SUBNET=$(ip -4 route show | grep -E "proto dhcp|proto kernel" | grep -v "172\." | grep -v "10\." | head -1 | grep -oP '([\d.]+/\d+)' || true)
+DEFAULT_GW=$(ip route show default | head -1 | grep -oP 'via \K[\d.]+' || true)
+PRIMARY_IFACE=$(ip route show default | head -1 | grep -oP 'dev \K\S+' || true)
+
+print_step "Основной интерфейс: ${PRIMARY_IFACE:-авто}"
+print_step "Подсеть: ${SUBNET:-авто}"
+print_step "Шлюз: ${DEFAULT_GW:-авто}"
+
+# ============================================
+# ШАГ 1/10: Внешний адрес сервера
+# ============================================
+print_header "ШАГ 1/10: Внешний адрес сервера"
+
+echo ""
+echo -e "  ${BOLD}Внимание!${NC}"
+echo -e "  Это адрес, по которому сервер будет доступен ИЗВНЕ:"
+echo -e "  - Со студентовких ПК через VPN (amnezia WireGuard)"
+echo -e "  - Для git clone/push/pull"
+echo -e "  - Для всех OIDC callback URL"
+echo -e "  - GitLab external_url (критично!)"
+echo -e ""
+echo -e "  Если VPN настроен — укажите VPN IP сервера (например, 10.8.1.3)"
+echo -e "  Если без VPN — укажите локальный IP ($PRIMARY_LOCAL_IP)"
+echo -e ""
+
+if [[ -n "$VPN_IP" ]]; then
+    print_warn "Обнаружен VPN IP: $VPN_IP"
+    print_warn "Рекомендуется использовать его для внешнего доступа"
+    echo ""
+fi
+
+while true; do
+    EXTERNAL_IP=$(ask "Внешний IP сервера (без http://, для доступа извне)" "$PRIMARY_LOCAL_IP")
+    
+    if [[ -z "$EXTERNAL_IP" ]]; then
+        print_error "IP не может быть пустым!"
+        continue
+    fi
+    
+    # Проверка формата IP
+    if [[ ! "$EXTERNAL_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        print_error "Неверный формат IP. Пример: 10.8.1.3"
+        continue
+    fi
+    
+    print_success "Внешний IP: $EXTERNAL_IP"
+    break
+done
+
+# Извлекаем домен для hostname контейнеров
+GITLAB_EXTERNAL_URL="http://$EXTERNAL_IP"
+
+# Для доступа с самого сервера используем localhost
+print_success "GitLab external_url: $GITLAB_EXTERNAL_URL"
+print_warn "Для доступа с самого сервера используйте localhost или $PRIMARY_LOCAL_IP"
+print_warn "Доступ через $EXTERNAL_IP с самого сервера потребует DNAT (настроим)"
+
+# ============================================
+# ШАГ 2/10: Порты сервисов
+# ============================================
+print_header "ШАГ 2/10: Порты сервисов"
 
 print_step "Порт для JupyterHub (для доступа студентов к JupyterLab)"
 JUPYTERHUB_PORT=$(ask "Введите порт" "8000")
@@ -107,48 +211,14 @@ NEXTCLOUD_PORT=$(ask "Введите порт" "8080")
 print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_PORT, Nextcloud=$NEXTCLOUD_PORT"
 
 # ============================================
-# ШАГ 1.5: Адрес GitLab
+# ШАГ 3/10: LLM для ИИ-Ментора
 # ============================================
-print_header "ШАГ 2/7: Адрес GitLab"
-
-echo ""
-echo -e "  ${BOLD}Важно:${NC}"
-echo -e "  GitLab принимает только ОДИН адрес (external_url)."
-echo -e "  Он влияет на clone URLs, CI/CD webhook URLs и OIDC redirects."
-echo -e "  После установки изменить адрес НЕНАЗОРИЛЬНО — нужно пересоздавать volumes."
-echo -e "  Укажите адрес, который будет доступен из лабсети И из интернета."
-echo -e "  Формат: http://<IP_или_домен>"
-echo -e ""
-
-while true; do
-    GITLAB_EXTERNAL_URL=$(ask "Адрес GitLab (http://IP_или_домен)")
-    
-    if [[ -z "$GITLAB_EXTERNAL_URL" ]]; then
-        print_error "Адрес не может быть пустым!"
-        continue
-    fi
-    
-    # Проверка формата
-    if [[ ! "$GITLAB_EXTERNAL_URL" =~ ^https?://[a-zA-Z0-9._-]+(:[0-9]+)?$ ]]; then
-        print_error "Неверный формат. Примеры: http://192.168.1.100 или http://gitlab.university.edu"
-        continue
-    fi
-    
-    print_success "Адрес GitLab: $GITLAB_EXTERNAL_URL"
-    break
-done
-
-REGISTRY_PORT=5050
-
-# ============================================
-# ШАГ 2: LLM для ИИ-Ментора
-# ============================================
-print_header "ШАГ 3/7: Настройка LLM для ИИ-Ментора"
+print_header "ШАГ 3/10: Настройка LLM для ИИ-Ментора"
 
 LLM_MENTOR_TYPE=$(ask_choice \
-    "Использовать для ментора:" \
-    "1" "OpenAI API (уже существующий сервис)" \
-    "2" "Собственный контейнер (локально)" \
+    "Как запустить LLM для ИИ-Ментора?" \
+    "1" "OpenAI API (уже существующий внешний сервис)" \
+    "2" "Локальный контейнер (загрузит свою модель)" \
     "2")
 
 if [[ "$LLM_MENTOR_TYPE" == "1" ]]; then
@@ -208,7 +278,7 @@ else
         print_success "Модель уже в хранилище (${MODEL_SIZE})"
     fi
     
-    # Копирование модели в Docker volume (независимо от оригинала)
+    # Копирование модели в Docker volume
     print_step "Запись модели в Docker volume..."
     if docker volume inspect llm-models >/dev/null 2>&1; then
         print_step "Volume llm-models уже существует, проверяем содержимое..."
@@ -226,8 +296,16 @@ else
             fi
         fi
     else
-        print_warn "Volume llm-models не существует (будет создана при запуске)"
-        print_warn "Запустите: bash scripts/setup_llm_volume.sh"
+        print_step "Создание Docker volume llm-models..."
+        docker volume create llm-models
+        print_step "Копирование модели в Docker volume..."
+        docker run --rm -v llm-models:/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
+        if docker run --rm -v llm-models:/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+            print_success "Модель записана в Docker volume"
+        else
+            print_error "Не удалось записать модель в Docker volume"
+            exit 1
+        fi
     fi
     
     LLM_MENTOR_TYPE="local"
@@ -237,14 +315,14 @@ else
 fi
 
 # ============================================
-# ШАГ 3: LLM для CI/CD
+# ШАГ 4/10: LLM для CI/CD
 # ============================================
-print_header "ШАГ 4/7: Настройка LLM для CI/CD"
+print_header "ШАГ 4/10: Настройка LLM для CI/CD"
 
 LLM_CI_TYPE=$(ask_choice \
-    "Использовать для CI/CD:" \
-    "1" "OpenAI API (уже существующий сервис)" \
-    "2" "Собственный контейнер (локально)" \
+    "Как запустить LLM для CI/CD?" \
+    "1" "OpenAI API (уже существующий внешний сервис)" \
+    "2" "Локальный контейнер (загрузит свою модель)" \
     "1")
 
 LLM_CI_BASE_URL=""
@@ -257,7 +335,6 @@ if [[ "$LLM_CI_TYPE" == "1" ]]; then
     LLM_CI_API_KEY=$(ask "OpenAI API Key")
     print_success "CI/CD LLM: OpenAI API → $LLM_CI_BASE_URL"
 else
-    # Локальная модель для CI/CD
     if [[ "$LLM_MENTOR_TYPE" == "local" ]]; then
         print_warn "Вы выбрали локальную модель и для ментора, и для CI/CD."
         print_warn "Будет использоваться та же модель ($GGUF_PATH) через один LLM-контейнер."
@@ -285,29 +362,33 @@ else
 fi
 
 # ============================================
-# ШАГ 4: Генерация паролей
+# ШАГ 5/10: Генерация паролей
 # ============================================
-print_header "ШАГ 5/7: Генерация паролей"
+print_header "ШАГ 5/10: Генерация паролей"
 
 KC_ADMIN_PASSWORD=$(generate_password)
 GITLAB_ROOT_PASSWORD=$(generate_password)
 NC_ADMIN_PASSWORD=$(generate_password)
-ONLYOFFICE_JWT_SECRET=$(generate_password)
 JH_API_TOKEN=$(generate_password)
+LECTURER_01_PASSWORD=$(generate_password)
+LECTURER_02_PASSWORD=$(generate_password)
+DASHBOARD_PASSWORD=$(generate_password)
 
 print_success "Keycloak admin: $(echo $KC_ADMIN_PASSWORD | cut -c1-8)... "
 print_success "GitLab root: $(echo $GITLAB_ROOT_PASSWORD | cut -c1-8)... "
 print_success "Nextcloud admin: $(echo $NC_ADMIN_PASSWORD | cut -c1-8)... "
-print_success "OnlyOffice JWT: $(echo $ONLYOFFICE_JWT_SECRET | cut -c1-8)... "
+print_warn "Lecturer 01: $(echo $LECTURER_01_PASSWORD | cut -c1-8)... (смените пароль после первого входа!)"
+print_warn "Lecturer 02: $(echo $LECTURER_02_PASSWORD | cut -c1-8)... (смените пароль после первого входа!)"
 
 # ============================================
-# ШАГ 5: SSH-ключ для GitLab Runner
+# ШАГ 6/10: SSH-ключ для GitLab Runner
 # ============================================
-print_header "ШАГ 6/7: SSH-ключ для GitLab Runner"
+print_header "ШАГ 6/10: SSH-ключ для GitLab Runner"
 
 print_step "Генерация SSH-ключа для GitLab Runner..."
 mkdir -p "$PROJECT_DIR/shared/data/runner-keys"
 
+rm -f "$PROJECT_DIR/shared/data/runner-keys/runner_ed25519" "$PROJECT_DIR/shared/data/runner-keys/runner_ed25519.pub"
 ssh-keygen -t ed25519 -f "$PROJECT_DIR/shared/data/runner-keys/runner_ed25519" -N "" -C "gitlab-runner@academic" -q
 
 RUNNER_SSH_PUB=$(cat "$PROJECT_DIR/shared/data/runner-keys/runner_ed25519.pub")
@@ -318,9 +399,70 @@ print_warn "Запишите публичный ключ для добавлен
 echo "  $RUNNER_SSH_PUB"
 
 # ============================================
-# ШАГ 6: Запись .env
+# ШАГ 7/10: Настройка iptables DNAT
 # ============================================
-print_header "ШАГ 7/7: Генерация конфигурации"
+print_header "ШАГ 7/10: Настройка iptables DNAT"
+
+echo ""
+echo -e "  ${BOLD}Зачем это нужно:${NC}"
+echo -e "  Когда вы обращаетесь к $EXTERNAL_IP с самого сервера,"
+echo -e "  Linux маршрутизирует это на loopback (lo), а не на Docker."
+echo -e "  DNAT перенаправляет запросы с $EXTERNAL_IP на localhost."
+echo -e ""
+
+# Проверяем, настроен ли уже DNAT
+if iptables -t nat -C PREROUTING -d "$EXTERNAL_IP" -j DNAT --to-destination 127.0.0.1 2>/dev/null; then
+    print_success "DNAT для $EXTERNAL_IP уже настроен"
+else
+    print_step "Настройка iptables DNAT для $EXTERNAL_IP → localhost..."
+    
+    USE_DNAT="true"
+    
+    # Добавляем DNAT правило
+    iptables -t nat -A PREROUTING -d "$EXTERNAL_IP" -p tcp -j DNAT --to-destination 127.0.0.1 2>/dev/null || {
+        print_warn "Не удалось добавить iptables правило (возможно, нет прав root)"
+        print_warn "DNAT нужно настроить вручную или запустить setup.sh с sudo"
+        USE_DNAT="false"
+    }
+    
+    if [[ "${USE_DNAT}" == "true" ]]; then
+        # Проверяем, что правило добавилось
+        if iptables -t nat -C PREROUTING -d "$EXTERNAL_IP" -p tcp -j DNAT --to-destination 127.0.0.1 2>/dev/null; then
+            print_success "DNAT настроен: $EXTERNAL_IP → 127.0.0.1"
+            
+            # Сохраняем правило для persistency
+            mkdir -p "$PROJECT_DIR/shared/scripts"
+            cat > "$PROJECT_DIR/shared/scripts/setup-dnat.sh" << DNATEOF
+#!/bin/bash
+# DNAT правило для VPN IP -> localhost
+# Добавлено: $(date '+%Y-%m-%d %H:%M:%S')
+iptables -t nat -A PREROUTING -d $EXTERNAL_IP -p tcp -j DNAT --to-destination 127.0.0.1 2>/dev/null || true
+DNATEOF
+            chmod +x "$PROJECT_DIR/shared/scripts/setup-dnat.sh"
+            print_success "Скрипт сохранения правил: shared/scripts/setup-dnat.sh"
+        else
+            print_error "Не удалось настроить DNAT"
+        fi
+    fi
+fi
+
+# Сохраняем локальный IP для дальнейшей настройки
+print_success "Локальный IP для iptables: $PRIMARY_LOCAL_IP"
+
+# ============================================
+# ШАГ 8/10: Запись .env
+# ============================================
+print_header "ШАГ 8/10: Генерация конфигурации"
+
+# Генерируем OIDC секреты
+OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
+OIDC_JUPYTER_SECRET=$(openssl rand -hex 32)
+OIDC_NEXTCLOUD_SECRET=$(openssl rand -hex 32)
+OIDC_DASHBOARD_SECRET=$(openssl rand -hex 32)
+OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
+
+# Извлекаем чистый IP из GITLAB_EXTERNAL_URL
+GITLAB_HOST=$(echo "$GITLAB_EXTERNAL_URL" | sed 's|http://||' | sed 's|:.*||')
 
 cat > "$PROJECT_DIR/.env" <<ENVEOF
 # ============================================
@@ -328,60 +470,116 @@ cat > "$PROJECT_DIR/.env" <<ENVEOF
 # Сгенерировано $(date '+%Y-%m-%d %H:%M:%S')
 # ============================================
 
+# --- Сетевые параметры ---
+# Внешний IP (для доступа из VPN/лабсети) — используется как GitLab external_url
+GITLAB_HOST=$GITLAB_HOST
+GITLAB_EXTERNAL_URL=$GITLAB_EXTERNAL_URL
+# Локальный IP сервера (для доступа из той же подсети)
+LOCAL_IP=$PRIMARY_LOCAL_IP
+# Для доступа с самого сервера (localhost)
+HOST_IP_LOCAL=localhost
+
+# Порты
 JUPYTERHUB_PORT=$JUPYTERHUB_PORT
 DASHBOARD_PORT=$DASHBOARD_PORT
 NEXTCLOUD_PORT=$NEXTCLOUD_PORT
-KEYCLOAK_PORT=${KEYCLOAK_PORT:-9200}
-HOST_DOMAIN=$HOST_DOMAIN
-GITLAB_EXTERNAL_URL=$GITLAB_EXTERNAL_URL
+KEYCLOAK_PORT=9200
+REGISTRY_PORT=5050
 
-REGISTRY_PORT=$REGISTRY_PORT
-
+# --- LLM ---
 LLM_MENTOR_TYPE=$LLM_MENTOR_TYPE
 LLM_MENTOR_BASE_URL=$LLM_MENTOR_BASE_URL
 LLM_MENTOR_API_KEY=$LLM_MENTOR_API_KEY
-
 LLM_CI_TYPE=$LLM_CI_TYPE
 LLM_CI_BASE_URL=$LLM_CI_BASE_URL
 LLM_CI_API_KEY=$LLM_CI_API_KEY
-
 LLM_USE_LOCAL=$LLM_USE_LOCAL
 
+# --- Keycloak ---
 KC_ADMIN_PASSWORD=$KC_ADMIN_PASSWORD
 
+# --- Лекторы ---
+LECTURER_01_PASSWORD=$LECTURER_01_PASSWORD
+LECTURER_02_PASSWORD=$LECTURER_02_PASSWORD
+
+# --- GitLab ---
 GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD
 GITLAB_ADMIN_TOKEN=glpat-placeholder
 
+# --- JupyterHub ---
 JH_API_TOKEN=$JH_API_TOKEN
-JH_KEYCLOAK_CLIENT_ID="${JH_KEYCLOAK_CLIENT_ID}"
-JH_KEYCLOAK_CLIENT_SECRET="${JH_KEYCLOAK_CLIENT_SECRET}"
-DASH_CLIENT_ID=placeholder
-DASH_CLIENT_SECRET=placeholder
+
+# --- Dashboard ---
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
+
+# --- OIDC секреты ---
+OIDC_GITLAB_SECRET=$OIDC_GITLAB_SECRET
+OIDC_JUPYTER_SECRET=$OIDC_JUPYTER_SECRET
+OIDC_NEXTCLOUD_SECRET=$OIDC_NEXTCLOUD_SECRET
+OIDC_DASHBOARD_SECRET=$OIDC_DASHBOARD_SECRET
+OIDC_REGISTRY_SECRET=$OIDC_REGISTRY_SECRET
+
+DASH_CLIENT_ID=admin-dashboard
+DASH_CLIENT_SECRET=$OIDC_DASHBOARD_SECRET
 
 NC_ADMIN_USER=admin
 NC_ADMIN_PASSWORD=$NC_ADMIN_PASSWORD
-
-ONLYOFFICE_JWT_SECRET=$ONLYOFFICE_JWT_SECRET
 ENVEOF
 
 chmod 600 "$PROJECT_DIR/.env"
 print_success "Конфигурация записана в .env"
 
 # ============================================
-# ШАГ 7: Запуск и инициализация
+# ШАГ 9/10: Очистка и запуск сервисов
 # ============================================
-print_header "ШАГ 8/8: Запуск сервисов"
+print_header "ШАГ 9/10: Очистка и запуск"
 
-print_step "Запуск docker-compose..."
+print_step "Очистка предыдущих данных сервисов..."
 cd "$PROJECT_DIR"
 
-# Поднять сервисы кроме LLM (если локальный) и runner
+# Удаляем bind-mounted данные GitLab
+if [ -d "$PROJECT_DIR/shared/data/gitlab-data" ]; then
+    docker run --rm -v "$PROJECT_DIR/shared/data/gitlab-data:/data" alpine sh -c "rm -rf /data/* /data/.* 2>/dev/null; mkdir -p /data" 2>/dev/null || true
+    print_success "GitLab data очищен"
+fi
+if [ -d "$PROJECT_DIR/shared/data/gitlab-config" ]; then
+    docker run --rm -v "$PROJECT_DIR/shared/data/gitlab-config:/config" alpine sh -c "rm -rf /config/* /config/.* 2>/dev/null; mkdir -p /config" 2>/dev/null || true
+    print_success "GitLab config очищен"
+fi
+if [ -d "$PROJECT_DIR/shared/data/runner-config" ]; then
+    docker run --rm -v "$PROJECT_DIR/shared/data/runner-config:/runner" alpine sh -c "rm -rf /runner/* /runner/.* 2>/dev/null; mkdir -p /runner" 2>/dev/null || true
+    print_success "Runner config очищен"
+fi
+
+if [ -d "$PROJECT_DIR/shared/data/nextcloud-data" ]; then
+    rm -rf "$PROJECT_DIR/shared/data/nextcloud-data"
+    print_success "Nextcloud data очищен"
+fi
+
+# Удаляем Docker тома
+print_step "Удаление Docker томов..."
+for vol in keycloak-data kc-postgres-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged; do
+    docker volume rm "$vol" 2>/dev/null && print_success "Том $vol удалён" || true
+done
+
+print_step "Очистка завершена"
+
+# Запуск
+print_header "ШАГ 10/10: Запуск сервисов"
+
+print_step "Запуск docker-compose..."
+
 LLM_PROFILES=""
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     LLM_PROFILES="--profile local-llm"
 fi
 
-docker compose up -d keycloak gitlab nextcloud onlyoffice admin-dashboard $LLM_PROFILES
+if [[ -n "$LLM_PROFILES" ]]; then
+    docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard
+else
+    docker compose up -d keycloak gitlab nextcloud admin-dashboard
+fi
 
 print_step "Ожидание запуска Keycloak..."
 for i in $(seq 1 30); do
@@ -437,29 +635,15 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 # ============================================
-# Инициализация Keycloak
+# Инициализация сервисов
 # ============================================
-print_step "Инициализация Keycloak (создание OIDC клиентов)..."
-bash "$SCRIPT_DIR/init_keycloak.sh"
-
-# ============================================
-# Инициализация GitLab
-# ============================================
-print_step "Инициализация GitLab..."
+print_step "Инициализация GitLab (группы, runner)..."
 bash "$SCRIPT_DIR/init_gitlab.sh"
 
-# ============================================
-# Инициализация Nextcloud
-# ============================================
 print_step "Инициализация Nextcloud + OnlyOffice..."
 bash "$SCRIPT_DIR/init_nextcloud.sh"
 
-# ============================================
-# Инициализация JupyterHub
-# ============================================
-print_step "Запуск JupyterHub (после OIDC настройки)..."
-
-# Ждём готовности LLM (если локальный)
+print_step "Запуск JupyterHub..."
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_step "Ожидание готовности LLM..."
     for i in $(seq 1 120); do
@@ -478,55 +662,85 @@ fi
 docker compose up -d jupyterhub
 
 # ============================================
-# Инициализация Runner
+# Регистрация GitLab Runner
 # ============================================
 print_step "Регистрация GitLab Runner..."
 
-# Ждём пока runner контейнер стартует
-sleep 10
+print_step "Ожидание готовности GitLab для регистрации Runner..."
+for i in $(seq 1 90); do
+    if docker exec gitlab curl -sf http://localhost:80 > /dev/null 2>&1; then
+        print_success "GitLab готов для Runner ($i попыток)"
+        break
+    fi
+    sleep 10
+done
 
-# Генерируем токен регистрации (нужен root токен GitLab)
-GITLAB_URL="http://localhost"
+print_step "Получение root Personal Access Token..."
+ROOT_TOKEN=$(timeout 60 docker exec gitlab gitlab-rails runner '
+  user = User.find_by_username("root")
+  token = user.personal_access_tokens.where(name: "runner-setup-token").first
+  if token
+    puts token.token
+  else
+    token = user.personal_access_tokens.create!(
+      name: "runner-setup-token",
+      scopes: ["api", "admin_mode"],
+      expires_at: Date.today + 365.days
+    )
+    puts token.token
+  end
+' 2>&1 | tr -d '[:space:]' | grep "glpat-" | head -1)
 
-# Получаем root токен (используем сгенерированный пароль)
-# Создаём временный токен через API
-ROOT_TOKEN=$(docker exec gitlab ruby -r ./lib/gitlab/current_status \
-  -e 'puts "waiting..." until Gitlab::CurrentStatus.checks.ok?' 2>/dev/null || true)
-
-# Альтернативный способ: через admin shell
-RUNNER_AUTH_TOKEN=$(docker exec -it gitlab gitlab-rails runner "
-  user = User.find_by_username('root')
-  token = PersonalAccessTokens.create!(
-    user: user,
-    name: 'runner-auth',
-    expires_at: Date.today + 365.days
-  )
-  puts token.token
-" 2>/dev/null | tail -1)
-
-if [[ -z "$RUNNER_AUTH_TOKEN" || "$RUNNER_AUTH_TOKEN" == "placeholder" ]]; then
-    print_warn "Не удалось получить runner auth token из GitLab."
-    print_warn "Запустите вручную после настройки GitLab:"
-    echo "  docker exec -it gitlab-runner gitlab-runner register \\"
-    echo "    --url http://gitlab:80 \\"
-    echo "    --registration-token <ваш_registration_token>"
-else
-    docker exec -it gitlab-runner gitlab-runner register \
-      --url http://gitlab:80 \
-      --token "$RUNNER_AUTH_TOKEN" \
-      --executor docker \
-      --description "academic-runner" \
-      --docker-image "python:3.10" \
-      --locked=false \
-      --tag-list "docker_runner,python3.10" \
-      --docker-volumes "/cache" \
-      --docker-privileged=false \
-      --run-untagged=false \
-      --contact-locked=false \
-      2>&1 | tee -a "$PROJECT_DIR/shared/data/logs/runner_register.log"
-
-    print_success "Runner зарегистрирован"
+if [[ -z "$ROOT_TOKEN" ]]; then
+    print_error "Не удалось получить root PAT"
+    exit 1
 fi
+print_success "Root PAT получен"
+
+print_step "Создание Runner в GitLab через API..."
+RUNNER_RESPONSE=$(curl -s --request POST --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{"name": "academic-runner", "runner_type": "group_type"}' \
+  "http://localhost/api/v4/runners" 2>&1 | tee -a "$PROJECT_DIR/shared/data/logs/runner_register.log")
+
+RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | jq -r '.token' 2>/dev/null)
+RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null)
+
+if [[ -z "$RUNNER_TOKEN" || "$RUNNER_TOKEN" == "null" ]]; then
+    print_error "Не удалось получить токен Runner"
+    exit 1
+fi
+
+echo "Runner ID: $RUNNER_ID"
+echo "Runner Token: $RUNNER_TOKEN"
+
+RUNNER_CONFIG="$PROJECT_DIR/shared/data/runner-config/config.toml"
+mkdir -p "$PROJECT_DIR/shared/data/runner-config"
+cat > "$RUNNER_CONFIG" << RUNNEREOF
+concurrent = 4
+check_interval = 0
+shutdown_request_timeout = 0s
+
+[session_server]
+  session_timeout = 1800
+
+[[runners]]
+  name = "academic-runner"
+  url = "http://$GITLAB_HOST"
+  token = "$RUNNER_TOKEN"
+  executor = "docker"
+  [runners.custom_build_dir]
+  [runners.cache]
+  [runners.docker]
+    image = "python:3.10"
+    privileged = false
+    disable_entrypoint_overrides = false
+    pull_policy = "if-not-present"
+    shm_size = 0
+RUNNEREOF
+
+print_success "config.toml записан"
+print_success "Runner создан (ID: $RUNNER_ID, Token: $RUNNER_TOKEN)"
 
 # ============================================
 # ФИНАЛЬНЫЙ ОТЧЁТ
@@ -536,31 +750,64 @@ print_header "УСТАНОВКА ЗАВЕРШЕНА"
 echo ""
 echo -e "${GREEN}Доступы:${NC}"
 echo ""
-echo -e "  ${BOLD}GitLab:${NC}       $GITLAB_EXTERNAL_URL"
-echo -e "    Root:       root / $GITLAB_ROOT_PASSWORD"
-echo -e "    Runner SSH: $RUNNER_SSH_PRIV"
+echo -e "  ${BOLD}С других ПК (через VPN/лабсеть):${NC}"
 echo ""
-echo -e "  ${BOLD}JupyterHub:${NC}   http://localhost:$JUPYTERHUB_PORT"
-echo -e "    Admin:      admin / $GITLAB_ROOT_PASSWORD (через GitLab OAuth)"
+echo -e "  ${BOLD}Keycloak:${NC}      http://$EXTERNAL_IP:$KEYCLOAK_PORT/auth/realms/istp"
+echo -e "  ${BOLD}GitLab:${NC}        http://$EXTERNAL_IP"
+echo -e "    Root:        root / $GITLAB_ROOT_PASSWORD"
+echo -e "    Lecturer:    lecturer_01 / $LECTURER_01_PASSWORD (смените!)"
+echo -e "    Lecturer:    lecturer_02 / $LECTURER_02_PASSWORD (смените!)"
+echo -e "    Git clone:   git clone http://$EXTERNAL_IP/students/project.git"
+echo -e "    Git SSH:     git@gitlab.$GITLAB_HOST:students/project.git"
+echo -e "    Runner SSH:  $RUNNER_SSH_PRIV"
 echo ""
-echo -e "  ${BOLD}Nextcloud:${NC}    http://localhost:$NEXTCLOUD_PORT"
-echo -e "    Admin:      $NC_ADMIN_USER / $NC_ADMIN_PASSWORD"
+echo -e "  ${BOLD}JupyterHub:${NC}    http://$EXTERNAL_IP:$JUPYTERHUB_PORT"
+echo -e "    Вход через:    Keycloak (кнопка на странице входа)"
 echo ""
-echo -e "  ${BOLD}Dashboard:${NC}    http://localhost:$DASHBOARD_PORT"
-echo -e "    Admin:      admin (через Keycloak OIDC)"
- echo ""
- echo -e "  ${BOLD}Keycloak:${NC}     http://localhost:$KEYCLOAK_PORT"
- echo -e "    Admin:      admin / $KC_ADMIN_PASSWORD"
+echo -e "  ${BOLD}Nextcloud:${NC}     http://$EXTERNAL_IP:$NEXTCLOUD_PORT"
+echo -e "    Admin:       $NC_ADMIN_USER / $NC_ADMIN_PASSWORD"
 echo ""
+echo -e "  ${BOLD}Dashboard:${NC}     http://$EXTERNAL_IP:$DASHBOARD_PORT"
+echo -e "    Admin:       admin / $DASHBOARD_PASSWORD (Basic Auth)"
+echo ""
+
+echo -e "  ${BOLD}С этого сервера:${NC}"
+echo ""
+echo -e "  ${BOLD}Keycloak:${NC}      http://localhost:$KEYCLOAK_PORT/auth/realms/istp"
+echo -e "  ${BOLD}GitLab:${NC}        http://localhost (или http://$PRIMARY_LOCAL_IP)"
+echo -e "  ${BOLD}JupyterHub:${NC}    http://localhost:$JUPYTERHUB_PORT"
+echo -e "  ${BOLD}Nextcloud:${NC}     http://localhost:$NEXTCLOUD_PORT"
+echo -e "  ${BOLD}Dashboard:${NC}     http://localhost:$DASHBOARD_PORT"
+echo ""
+
+if [[ "${USE_DNAT}" == "true" ]]; then
+    echo -e "  ${BOLD}Через VPN IP ($EXTERNAL_IP):${NC}"
+    echo -e "  DNAT настроен — $EXTERNAL_IP перенаправляется на localhost"
+    echo -e "  Скрипт persistency: shared/scripts/setup-dnat.sh"
+    echo -e ""
+fi
 
 echo -e "${YELLOW}Следующие шаги:${NC}"
 echo ""
-echo "  1. Добавьте SSH-ключ студентам в GitLab:"
-echo "     Settings → SSH Keys → добавить публичный ключ ($RUNNER_SSH_PUB)"
+echo "  1. Студенты регистрируются: GitLab → Sign in → Keycloak → Register"
+echo "     Или напрямую: http://$EXTERNAL_IP:$KEYCLOAK_PORT/auth/realms/istp/login-actions/registration"
 echo ""
-echo "  2. Зарегистрируйте SSH-ключ для GitLab Runner:"
-echo "     Settings → Repository → Deploy Keys → добавить $RUNNER_SSH_PUB"
+echo "  2. Git clone/push/pull с студентовких ПК:"
+echo "     git clone http://$EXTERNAL_IP/students/project.git"
+echo "     git remote add origin http://$EXTERNAL_IP/students/project.git"
 echo ""
-echo "  3. Инструкция по настройке студентов: docs/Pr_1.md"
+echo "  3. SSH доступ к GitLab:"
+echo "     ssh-keygen -t ed25519 -C student@pc"
+echo "     # добавить публичный ключ в GitLab → Settings → SSH Keys"
+echo "     git clone git@gitlab.$GITLAB_HOST:students/project.git"
+echo ""
+echo "  4. Инструкция по настройке студентов: docs/Pr_1.md"
+echo ""
+echo -e "${YELLOW}Архитектура:${NC}"
+echo "  - Keycloak: единый Identity Provider для всех сервисов"
+echo "  - Self-registration: студенты регистрируются через Keycloak"
+echo "  - GitLab: OIDC авторизация через Keycloak"
+echo "  - JupyterHub: OIDC авторизация через Keycloak"
+echo "  - Nextcloud: OIDC авторизация через Keycloak"
 echo ""
 echo -e "${GREEN}Все сервисы запущены!${NC}\n"
