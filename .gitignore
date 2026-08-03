@@ -45,6 +45,10 @@ onlyoffice-config/
 opencode.json
 .opencode.json.swp
 
+# --- Data files (large archives, datasets) ---
+data/
+data.zip*
+
 # --- Session & temp files ---
 session-*.md
 
