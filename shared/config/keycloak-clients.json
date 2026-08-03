@@ -1,0 +1,39 @@
+{
+  "jupyterhub": {
+    "client_id": "jupyterhub",
+    "client_secret": "PLACEHOLDER",
+    "redirect_uri": "http://localhost:8000/hub/oauth_callback"
+  },
+  "admin-dashboard": {
+    "client_id": "admin-dashboard",
+    "client_secret": "PLACEHOLDER",
+    "redirect_uri": "http://localhost:9000/callback"
+  },
+  "nextcloud": {
+    "client_id": "nextcloud",
+    "client_secret": "PLACEHOLDER",
+    "redirect_uri": "http://localhost:8080/*"
+  },
+  "gitlab": {
+    "client_id": "gitlab",
+    "client_secret": "PLACEHOLDER",
+    "redirect_uri": "http://localhost/users/auth/openid_connect/callback"
+  },
+  "registry": {
+    "client_id": "registry",
+    "client_secret": "PLACEHOLDER",
+    "redirect_uri": "http://localhost:5050/*"
+  },
+  "precreated_users": {
+    "lecturer_01": {
+      "username": "lecturer_01",
+      "email": "lecturer01@istp.local",
+      "password": "PLACEHOLDER"
+    },
+    "lecturer_02": {
+      "username": "lecturer_02",
+      "email": "lecturer02@istp.local",
+      "password": "PLACEHOLDER"
+    }
+  }
+}

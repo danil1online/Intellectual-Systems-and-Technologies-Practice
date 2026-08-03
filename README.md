@@ -46,10 +46,10 @@ Docker Compose-развёртывание полного учебного кла
 │  │              Keycloak (Identity Provider)                │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                               │
-│  ┌──────────┐  ┌──────────┐  ┌┴──────────┐  ┌────────────┐  │
-│  │ GitLab   │  │   LLM    │  │OnlyOffice │  │  Admin     │  │
-│  │ Runner   │  │  (opt.)  │  │  (internal)│  │  Dashboard│  │
-│  └──────────┘  └──────────┘  └───────────┘  └────────────┘  │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
+│  │ GitLab   │  │   LLM    │  │  Admin       │  │
+│  │ Runner   │  │  (opt.)  │  │  Dashboard   │  │
+│  └──────────┘  └──────────┘  └──────────────┘  │
 │  ┌──────────┐                                                │
 │  │ Registry │  :5050 (Docker images для CI/CD)               │
 │  └──────────┘                                                │
@@ -72,7 +72,6 @@ Docker Compose-развёртывание полного учебного кла
 | **Единый вход** | Регистрация в Keycloak → автоматический доступ ко всем сервисам |
 | **ИИ-Ментор** | Команда `%%ask_mentor` в ячейках JupyterLab |
 | **Классификация запросов** | LAZY (штраф) / SMART (поощрение) |
-| **Онлайн-редактор** | OnlyOffice в браузере для создания отчётов |
 | **Файловое хранилище** | Nextcloud с общим доступом к материалам курса |
 | **SSH-ключи** | Генерация при первом входе, добавление в GitLab |
 | **Git-репозиторий** | Личный репозиторий для каждого студента |
@@ -102,7 +101,7 @@ Docker Compose-развёртывание полного учебного кла
 │   ├── setup.sh                 # Интерактивный инсталлятор
   │   ├── init_keycloak.sh         # Создание OIDC-клиентов
    │   ├── init_gitlab.sh           # Инициализация GitLab
-   │   ├── init_nextcloud.sh        # Настройка Nextcloud + OnlyOffice
+   │   ├── init_nextcloud.sh        # Настройка OIDC для Nextcloud
    │   └── healthcheck.sh           # Проверка здоровья сервисов
 │
 ├── jupyterhub/
@@ -135,8 +134,9 @@ Docker Compose-развёртывание полного учебного кла
 │   └── static/                  # CSS/JS (по желанию)
 │
 ├── nextcloud/
-│   └── config/
-│       └── config.php           # OnlyOffice + OIDC настройки
+│   └── docker-entrypoint-hooks.d/
+│       └── post-installation/
+│           └── init_oidc.sh     # Настройка OIDC при запуске Nextcloud
 │
 ├── docs/
 │   ├── Pr_1.md                  # Инструкция по SSH и регистрации
@@ -199,12 +199,6 @@ RAM: ~500 MB на спавн
 ```
 Image: nextcloud:apache
 RAM: ~300 MB
-```
-
-#### OnlyOffice Document Server
-```
-Image: onlyoffice/documentserver:latest
-RAM: ~1 GB
 ```
 
 #### LLM (опционально)
@@ -333,7 +327,7 @@ cat shared/data/runner-keys/runner_ed25519.pub
   → Если OpenAI + локальная: второй путь к .gguf
 
 ШАГ 5/8: Генерация паролей
-   → Keycloak admin, GitLab root, Nextcloud admin, OnlyOffice JWT
+    → Keycloak admin, GitLab root, Nextcloud admin, Dashboards
 
 ШАГ 6/8: SSH-ключ для GitLab Runner
   → Генерация ED25519 ключа
@@ -347,7 +341,7 @@ cat shared/data/runner-keys/runner_ed25519.pub
    → Healthcheck Keycloak, GitLab, Nextcloud
    → Инициализация Keycloak (OIDC-клиенты)
    → Инициализация GitLab (группа, админ)
-   → Инициализация Nextcloud (OnlyOffice)
+   → Инициализация Nextcloud (OIDC)
    → Регистрация GitLab Runner
 ```
 
@@ -361,7 +355,7 @@ cp .env.example .env
 nano .env
 
 # 3. Поднимите сервисы
-docker compose up -d keycloak gitlab nextcloud onlyoffice admin-dashboard
+docker compose up -d keycloak gitlab nextcloud admin-dashboard
 # Для локальной LLM:
 docker compose up -d llm
 
@@ -439,20 +433,14 @@ Spawner: SimpleSpawner
 - **pre_spawn_start hook** — копирование шаблонов `.ipynb` при первом входе
 - **SSH-генерация** — Ed25519 ключ при первом входе
 
-### 4. Nextcloud + OnlyOffice
+### 4. Nextcloud
 
 ```yaml
 Nextcloud:  nextcloud:apache
-OnlyOffice: onlyoffice/documentserver:latest
 Port: 8080 (Nextcloud)
 ```
 
-**Роль:** Файловое хранилище + онлайн-редактор документов.
-
-**OnlyOffice интеграция:**
-- Создание DOCX в браузере
-- Экспорт в PDF
-- Коллаборативное редактирование
+**Роль:** Файловое хранилище документов с общим доступом к материалам курса.
 
 **OIDC авторизация:** через Keycloak
 
@@ -501,7 +489,16 @@ ai_review:
     expire_in: 1 week
 ```
 
-### 7. Admin Dashboard
+### 7. Docker Registry
+
+```yaml
+Image: registry:2
+Port: 5050 (external)
+```
+
+**Роль:** Standalone Docker Registry для хранения образов. Отдельный сервис, не встроенный в GitLab.
+
+### 8. Admin Dashboard
 
 ```yaml
 Build: ./dashboard (Flask)
@@ -695,23 +692,23 @@ ai_review:
 
 При создании группы `students` автоматически создаётся шаблонный проект `academic-template`, который студенты форкают.
 
-### Docker Container Registry
+### Docker Registry
 
-Система включает локальный Docker Registry на порту `5050` для хранения образов, используемых в CI/CD.
+Система включает standalone Docker Registry на порту `5050` для хранения образов. Отдельный сервис, не встроенный в GitLab.
 
 ```bash
 # Авторизация в registry
-docker login http://<gitlab-ip>:5050
+docker login http://<server-ip>:5050
 
-# Push образа (пример из CI/CD пайплайна)
-docker tag my-app <gitlab-ip>:5050/students/my-app:latest
-docker push <gitlab-ip>:5050/students/my-app:latest
+# Push образа
+docker tag my-app <server-ip>:5050/my-app:latest
+docker push <server-ip>:5050/my-app:latest
 
-# Pull образа (runner использует для запуска задач)
-docker pull <gitlab-ip>:5050/students/my-app:latest
+# Pull образа
+docker pull <server-ip>:5050/my-app:latest
 ```
 
-Registry доступен по адресу `http://<gitlab-ip>:5050` (порт настраивается через `REGISTRY_PORT` в `.env`).
+Registry доступен по адресу `http://<server-ip>:5050` (порт настраивается через `REGISTRY_PORT` в `.env`).
 
 ---
 
@@ -863,7 +860,6 @@ grep -c '"SMART"' shared/logs/grading_log.json
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `REGISTRY_PORT` | Порт Docker Registry | `5050` |
 | `NC_ADMIN_PASSWORD` | Пароль Nextcloud admin | auto-generated |
-| `ONLYOFFICE_JWT_SECRET` | JWT для OnlyOffice | auto-generated |
 | `JH_API_TOKEN` | JupyterHub API token | auto-generated |
 | `GITLAB_HOST` | IP/домен GitLab | `10.8.1.3` (или другой) |
 | `HOST_DOMAIN` | Домен хоста | `10.8.1.3` |

@@ -1,0 +1,19 @@
+{
+  "appenders": {
+    "console": {
+      "type": "console",
+      "layout": {
+        "type": "patternWithTokens",
+        "pattern": "[%d] [%p] [%X{TENANT}] [%X{DOCID}] [%X{USERID}]%x{usid} %c - %.10000m"
+      }
+    }
+  },
+  "categories": {
+    "default": {
+      "appenders": [
+        "console"
+      ],
+      "level": "warn"
+    }
+  }
+}

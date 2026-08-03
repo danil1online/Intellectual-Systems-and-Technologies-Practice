@@ -29,10 +29,6 @@ shared/data/shared-packages/
 # Логи
 shared/logs/
 
-# --- OnlyOffice (удалён из проекта) ---
-onlyoffice/
-onlyoffice-config/
-
 # --- Jupyter checkpoints ---
 .ipynb_checkpoints/
 

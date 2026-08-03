@@ -36,6 +36,7 @@
 | **JupyterHub** | `http://<server-ip>:8000` | JupyterLab, терминал, Python-среда |
 | **Nextcloud** | `http://<server-ip>:8080` | Облачное хранилище, файлы Markdown |
 | **Dashboard** | `http://<server-ip>:9000` | Панель преподавателя |
+| **Docker Registry** | `http://<server-ip>:5050` | Хранение Docker-образов (standalone) |
 
 ## Типы работ
 
