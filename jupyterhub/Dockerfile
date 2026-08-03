@@ -41,7 +41,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgeos-dev libproj-dev \
     texlive-latex-recommended \
     texlive-fonts-recommended \
-    texlive-fonts-extra \
     texlive-xetex \
     texlive-luatex \
     cm-super \

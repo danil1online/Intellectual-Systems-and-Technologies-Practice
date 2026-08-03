@@ -1,19 +1,53 @@
-# Environment & secrets
-.env
+# ============================================
+# МУЛЬТИСИСТЕМНЫЙ УЧЕБНЫЙ КОМПЛЕКС
+# .gitignore
+# ============================================
 
-# Jupyter checkpoints
+# --- Environment & secrets ---
+# Шаблон env-файлов — ОСТАВЛЯЕМ в репозитории
+# .env.example
+#
+# Реальные файлы с секретами — ИГНОРИРУЕМ
+.env
+.env.jupyterhub
+
+# --- Docker volumes & runtime data ---
+# Данные GitLab (бД, репозитории, секреты, логи)
+shared/data/gitlab-data/
+shared/data/gitlab-config/
+shared/data/gitlab-logs/
+# Данные Nextcloud (файлы пользователей)
+shared/data/nextcloud-data/
+# Конфигурация Runner (генерируется при установке)
+shared/data/runner-config/
+# LLM модели (большие файлы, скачиваются отдельно)
+shared/data/llm-models/
+# OIDC секреты
+shared/data/oidc/
+# Pip-кэш и Python-пакеты
+shared/data/shared-packages/
+# Логи
+shared/logs/
+
+# --- OnlyOffice (удалён из проекта) ---
+onlyoffice/
+onlyoffice-config/
+
+# --- Jupyter checkpoints ---
 .ipynb_checkpoints/
 
-# Docker volumes / runtime data
-shared/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE
+# --- IDE & editors ---
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+opencode.json
+.opencode.json.swp
+
+# --- Session & temp files ---
+session-*.md
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
