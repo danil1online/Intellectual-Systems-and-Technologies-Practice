@@ -716,7 +716,7 @@ done
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_step "Ожидание запуска LLM контейнера..."
     for i in $(seq 1 30); do
-        if docker logs llm 2>&1 | grep -q "llama server"; then
+        if docker logs llm 2>&1 | grep -q "llama_server"; then
             print_success "LLM контейнер запущен"
             break
         fi
