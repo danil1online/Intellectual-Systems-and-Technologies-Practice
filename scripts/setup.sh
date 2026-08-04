@@ -316,6 +316,7 @@ else
     LLM_MENTOR_TYPE="local"
     LLM_MENTOR_BASE_URL="http://llm:8080/v1"
     LLM_MENTOR_API_KEY="local-api-key"
+    LLM_MENTOR_MODEL="model.gguf"
     LLM_USE_LOCAL="true"
 fi
 
@@ -346,6 +347,7 @@ else
         print_warn "Будет использоваться та же модель ($GGUF_PATH) через один LLM-контейнер."
         LLM_CI_BASE_URL="http://llm:8080/v1"
         LLM_CI_API_KEY="local-api-key"
+        LLM_CI_MODEL="model.gguf"
     else
         print_step "Локальная модель для CI/CD:"
         print_warn "Скачайте модель заранее и укажите путь."
@@ -362,6 +364,7 @@ else
 
         LLM_CI_BASE_URL="http://llm:8080/v1"
         LLM_CI_API_KEY="local-api-key"
+        LLM_CI_MODEL="model.gguf"
     fi
 
     LLM_CI_TYPE="local"
