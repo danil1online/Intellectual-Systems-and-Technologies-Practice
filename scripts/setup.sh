@@ -807,6 +807,7 @@ RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null)
 
 if [[ -z "$RUNNER_TOKEN" || "$RUNNER_TOKEN" == "null" ]]; then
     print_error "Не удалось получить токен Runner"
+    print_error "Ответ GitLab API: $RUNNER_RESPONSE"
     exit 1
 fi
 
