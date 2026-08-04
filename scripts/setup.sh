@@ -656,87 +656,6 @@ EOF
     print_success "Создан .env.jupyterhub"
 fi
 
-# ============================================
-# Регистрация GitLab Runner (до docker compose up — чтобы избежать overlayfs конфликта)
-# ============================================
-print_step "Регистрация GitLab Runner..."
-
-print_step "Ожидание готовности GitLab для регистрации Runner..."
-for i in $(seq 1 90); do
-    if docker exec gitlab curl -sf http://localhost:80 > /dev/null 2>&1; then
-        print_success "GitLab готов для Runner ($i попыток)"
-        break
-    fi
-    sleep 10
-done
-
-print_step "Получение root Personal Access Token..."
-ROOT_TOKEN=$(timeout 60 docker exec gitlab gitlab-rails runner '
-  user = User.find_by_username("root")
-  token = user.personal_access_tokens.where(name: "runner-setup-token").first
-  if token
-    puts token.token
-  else
-    token = user.personal_access_tokens.create!(
-      name: "runner-setup-token",
-      scopes: ["api", "admin_mode"],
-      expires_at: Date.today + 365.days
-    )
-    puts token.token
-  end
-' 2>&1 | tr -d '[:space:]' | grep "glpat-" | head -1)
-
-if [[ -z "$ROOT_TOKEN" ]]; then
-    print_error "Не удалось получить root PAT"
-    exit 1
-fi
-print_success "Root PAT получен"
-
-print_step "Создание Runner в GitLab через API..."
-RUNNER_RESPONSE=$(curl -s --request POST --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-  --header "Content-Type: application/json" \
-  --data '{"name": "academic-runner", "runner_type": "group_type"}' \
-  "http://localhost/api/v4/runners" 2>&1 | tee -a /tmp/runner_register.log)
-
-RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | jq -r '.token' 2>/dev/null)
-RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null)
-
-if [[ -z "$RUNNER_TOKEN" || "$RUNNER_TOKEN" == "null" ]]; then
-    print_error "Не удалось получить токен Runner"
-    exit 1
-fi
-
-echo "Runner ID: $RUNNER_ID"
-echo "Runner Token: $RUNNER_TOKEN"
-
-RUNNER_CONFIG="$PROJECT_DIR/shared/data/runner-config/config.toml"
-mkdir -p "$PROJECT_DIR/shared/data/runner-config"
-cat > "$RUNNER_CONFIG" << RUNNEREOF
-concurrent = 4
-check_interval = 0
-shutdown_request_timeout = 0s
-
-[session_server]
-  session_timeout = 1800
-
-[[runners]]
-  name = "academic-runner"
-  url = "http://$GITLAB_HOST"
-  token = "$RUNNER_TOKEN"
-  executor = "docker"
-  [runners.custom_build_dir]
-  [runners.cache]
-  [runners.docker]
-    image = "python:3.10"
-    privileged = false
-    disable_entrypoint_overrides = false
-    pull_policy = "if-not-present"
-    shm_size = 0
-RUNNEREOF
-
-print_success "config.toml записан"
-print_success "Runner создан (ID: $RUNNER_ID, Token: $RUNNER_TOKEN)"
-
 LLM_PROFILES=""
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     LLM_PROFILES="--profile local-llm"
@@ -840,6 +759,87 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 docker compose up -d jupyterhub
+
+# ============================================
+# Регистрация GitLab Runner
+# ============================================
+print_step "Регистрация GitLab Runner..."
+
+print_step "Ожидание готовности GitLab для регистрации Runner..."
+for i in $(seq 1 90); do
+    if docker exec gitlab curl -sf http://localhost:80 > /dev/null 2>&1; then
+        print_success "GitLab готов для Runner ($i попыток)"
+        break
+    fi
+    sleep 10
+done
+
+print_step "Получение root Personal Access Token..."
+ROOT_TOKEN=$(timeout 60 docker exec gitlab gitlab-rails runner '
+  user = User.find_by_username("root")
+  token = user.personal_access_tokens.where(name: "runner-setup-token").first
+  if token
+    puts token.token
+  else
+    token = user.personal_access_tokens.create!(
+      name: "runner-setup-token",
+      scopes: ["api", "admin_mode"],
+      expires_at: Date.today + 365.days
+    )
+    puts token.token
+  end
+' 2>&1 | tr -d '[:space:]' | grep "glpat-" | head -1)
+
+if [[ -z "$ROOT_TOKEN" ]]; then
+    print_error "Не удалось получить root PAT"
+    exit 1
+fi
+print_success "Root PAT получен"
+
+print_step "Создание Runner в GitLab через API..."
+RUNNER_RESPONSE=$(curl -s --request POST --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{"name": "academic-runner", "runner_type": "group_type"}' \
+  "http://localhost/api/v4/runners" 2>&1)
+
+RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | jq -r '.token' 2>/dev/null)
+RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null)
+
+if [[ -z "$RUNNER_TOKEN" || "$RUNNER_TOKEN" == "null" ]]; then
+    print_error "Не удалось получить токен Runner"
+    exit 1
+fi
+
+echo "Runner ID: $RUNNER_ID"
+echo "Runner Token: $RUNNER_TOKEN"
+
+RUNNER_CONFIG="$PROJECT_DIR/shared/data/runner-config/config.toml"
+mkdir -p "$PROJECT_DIR/shared/data/runner-config"
+cat > "$RUNNER_CONFIG" << RUNNEREOF
+concurrent = 4
+check_interval = 0
+shutdown_request_timeout = 0s
+
+[session_server]
+  session_timeout = 1800
+
+[[runners]]
+  name = "academic-runner"
+  url = "http://$GITLAB_HOST"
+  token = "$RUNNER_TOKEN"
+  executor = "docker"
+  [runners.custom_build_dir]
+  [runners.cache]
+  [runners.docker]
+    image = "python:3.10"
+    privileged = false
+    disable_entrypoint_overrides = false
+    pull_policy = "if-not-present"
+    shm_size = 0
+RUNNEREOF
+
+print_success "config.toml записан"
+print_success "Runner создан (ID: $RUNNER_ID, Token: $RUNNER_TOKEN)"
 
 # ============================================
 # ФИНАЛЬНЫЙ ОТЧЁТ
