@@ -278,16 +278,20 @@ else
         print_success "Модель уже в хранилище (${MODEL_SIZE})"
     fi
     
-    # Копирование модели в Docker volume
+    # Копирование модели в Docker volume (через docker compose для правильного префикса)
     print_step "Запись модели в Docker volume..."
-    if docker volume inspect llm-models >/dev/null 2>&1; then
-        print_step "Volume llm-models уже существует, проверяем содержимое..."
-        if docker run --rm -v llm-models:/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+    VOLUME_NAME=$(docker compose config --format json 2>/dev/null | jq -r '.project_name // "istp"' 2>/dev/null || basename "$PROJECT_DIR")
+    FULL_VOLUME_NAME="${VOLUME_NAME}_llm-models"
+    
+    # Используем docker compose для работы с volumes (автоматически добавляет префикс)
+    if docker compose volume inspect llm-models >/dev/null 2>&1; then
+        print_step "Volume $FULL_VOLUME_NAME уже существует, проверяем содержимое..."
+        if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
             print_success "Модель уже в Docker volume"
         else
             print_step "Копирование модели в Docker volume..."
-            docker run --rm -v llm-models:/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
-            if docker run --rm -v llm-models:/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+            docker run --rm -v "$FULL_VOLUME_NAME":/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
+            if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
                 print_success "Модель записана в Docker volume"
                 print_warn "Оригинал в $GGUF_PATH можно удалить"
             else
@@ -296,11 +300,11 @@ else
             fi
         fi
     else
-        print_step "Создание Docker volume llm-models..."
-        docker volume create llm-models
+        print_step "Создание Docker volume $FULL_VOLUME_NAME..."
+        docker compose volume create llm-models
         print_step "Копирование модели в Docker volume..."
-        docker run --rm -v llm-models:/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
-        if docker run --rm -v llm-models:/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+        docker run --rm -v "$FULL_VOLUME_NAME":/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
+        if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
             print_success "Модель записана в Docker volume"
         else
             print_error "Не удалось записать модель в Docker volume"
@@ -589,10 +593,10 @@ if [ -d "$PROJECT_DIR/shared/data/nextcloud-data" ]; then
     print_success "Nextcloud data очищен"
 fi
 
-# Удаляем Docker тома
+# Удаляем Docker тома (через docker compose для правильного префикса)
 print_step "Удаление Docker томов..."
-for vol in keycloak-data kc-postgres-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged; do
-    docker volume rm "$vol" 2>/dev/null && print_success "Том $vol удалён" || true
+for vol in keycloak-data kc-postgres-data jupyterhub-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged llm-models; do
+    docker compose volume rm "$vol" 2>/dev/null && print_success "Том $vol удалён" || true
 done
 
 print_step "Очистка завершена"
