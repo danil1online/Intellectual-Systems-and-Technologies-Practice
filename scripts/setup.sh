@@ -816,7 +816,12 @@ echo "Runner ID: $RUNNER_ID"
 echo "Runner Token: $RUNNER_TOKEN"
 
 RUNNER_CONFIG="$PROJECT_DIR/shared/data/runner-config/config.toml"
-mkdir -p "$PROJECT_DIR/shared/data/runner-config"
+
+# Создаем папку и выдаем права текущему пользователю через Docker
+docker run --rm \
+  -v "$PROJECT_DIR/shared/data:/data" \
+  alpine sh -c "mkdir -p /data/runner-config && chown -R $(id -u):$(id -g) /data/runner-config"
+
 cat > "$RUNNER_CONFIG" << RUNNEREOF
 concurrent = 4
 check_interval = 0
