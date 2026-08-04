@@ -1,71 +1,93 @@
 #!/bin/bash
 # ============================================
-# Инициализация Nextcloud: настройка OIDC Login плагина
-# Выполняется синхронно перед запуском Apache
+# Проверка настройки OIDC в Nextcloud
+# OIDC настраивается автоматически хуком
+# init_oidc.sh при старте контейнера.
+# Этот скрипт только проверяет результат.
 # ============================================
 
-set -e
+set -uo pipefail
 
-echo "Waiting for Nextcloud files to be available..."
+CONTAINER="nextcloud"
+ERRORS=0
 
-WAIT_COUNT=0
-MAX_WAIT=180
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-  if [ -f /var/www/html/occ ]; then
-    echo "✓ Nextcloud files available after ${WAIT_COUNT} seconds"
-    break
-  fi
-  sleep 5
-  WAIT_COUNT=$((WAIT_COUNT + 5))
-done
+echo "=== Nextcloud: проверка OIDC ==="
 
-if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
-  echo "ERROR: Nextcloud files did not appear in time"
-  exit 1
+# Проверка, что контейнер работает
+STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "not_found")
+if [[ "$STATUS" != "running" ]]; then
+    echo "✗ Контейнер $CONTAINER не запущен (статус: $STATUS)"
+    exit 1
 fi
+echo "✓ Контейнер $CONTAINER запущен"
 
-echo "Waiting for Nextcloud installation to complete..."
+# Функция проверки OIDC-параметра
+check_oidc() {
+    local NAME="$1"
+    local EXPECTED="$2"
+    local ACTUAL
 
-WAIT_COUNT=0
-MAX_WAIT=180
-while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-  if php /var/www/html/occ status --no-warnings 2>/dev/null | grep -q "installed: true"; then
-    echo "✓ Nextcloud is ready after ${WAIT_COUNT} seconds"
-    break
-  fi
-  sleep 5
-  WAIT_COUNT=$((WAIT_COUNT + 5))
-done
+    ACTUAL=$(docker exec "$CONTAINER" php occ config:system:get "$NAME" 2>/dev/null)
+    if [[ -z "$ACTUAL" ]]; then
+        echo "✗ oidc_login: $NAME не настроен"
+        ERRORS=$((ERRORS + 1))
+        return
+    fi
+    if [[ "$ACTUAL" == "$EXPECTED" ]]; then
+        echo "✓ oidc_login $NAME настроен"
+    else
+        echo "⚠ oidc_login $NAME: ожидалось '$EXPECTED', установлено '$ACTUAL'"
+        ERRORS=$((ERRORS + 1))
+    fi
+}
 
-if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
-  echo "ERROR: Nextcloud did not start in time"
-  exit 1
+# Функция проверки trusted_domains
+check_trusted_domain() {
+    local DOMAIN="$1"
+    local ACTUAL
+
+    ACTUAL=$(docker exec "$CONTAINER" php occ config:system:get trusted_domains 2>/dev/null | grep -q "$DOMAIN" && echo "$DOMAIN" || echo "")
+    if [[ -z "$ACTUAL" ]]; then
+        echo "✗ trusted_domains: '$DOMAIN' отсутствует"
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "✓ trusted_domains: '$DOMAIN' присутствует"
+    fi
+}
+
+# Проверка основных OIDC-параметров
+echo ""
+echo "--- OIDC ---"
+check_oidc "oidc_login_provider_url" "http://${HOST_IP}:${KEYCLOAK_PORT}/auth/realms/istp"
+check_oidc "oidc_login_well_known_url" "http://${HOST_IP}:${KEYCLOAK_PORT}/auth/realms/istp/.well-known/openid-configuration"
+check_oidc "oidc_login_client_id" "nextcloud"
+check_oidc "oidc_login_auto_create_users" "1"
+check_oidc "oidc_login_id_attribute" "preferred_username"
+check_oidc "oidc_login_auto_redirect" ""
+
+# Проверка trusted_domains
+echo ""
+echo "--- trusted_domains ---"
+check_trusted_domain "$HOST_IP:$NEXTCLOUD_PORT"
+check_trusted_domain "localhost:$NEXTCLOUD_PORT"
+check_trusted_domain "$LOCAL_IP:$NEXTCLOUD_PORT"
+
+# Проверка overwrite
+echo ""
+echo "--- overwrite ---"
+check_oidc "overwritehost" "$HOST_IP:$NEXTCLOUD_PORT"
+check_oidc "overwrite.cli.url" "http://$HOST_IP:$NEXTCLOUD_PORT"
+check_oidc "overwriteprotocol" "http"
+
+# Финальный вывод
+echo ""
+if [[ $ERRORS -eq 0 ]]; then
+    echo "✓ Nextcloud OIDC настроен корректно"
+    exit 0
+else
+    echo "⚠ Обнаружено $ERRORS проблем(а) с настройкой OIDC"
+    echo ""
+    echo "  Если Nextcloud только запущен, подождите 1-2 минуты."
+    echo "  Логи: docker logs $CONTAINER"
+    exit 1
 fi
-
-echo "Activating and configuring OIDC Login plugin..."
-
-# Enable oidc_login app
-php /var/www/html/occ app:enable oidc_login 2>/dev/null || true
-
-# Configure OIDC settings
-php /var/www/html/occ config:system:set oidc_login_provider_url --value="http://${HOST_IP}:${KEYCLOAK_PORT}/auth/realms/istp" 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_well_known_url --value="http://${HOST_IP}:${KEYCLOAK_PORT}/auth/realms/istp/.well-known/openid-configuration" 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_client_id --value="nextcloud" 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_client_secret --value="${OIDC_NEXTCLOUD_SECRET}" 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_button_text --value="Войти через Keycloak" 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_auto_redirect --value="false" --type=boolean 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_auto_create_users --value="true" --type=boolean 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_id_attribute --value="preferred_username" 2>/dev/null || true
-
-echo "OIDC Login configuration completed for Nextcloud."
-
-echo "=== Nextcloud: настройка trusted_domains ==="
-php /var/www/html/occ config:system:set trusted_domains 1 --value="$HOST_IP:$NEXTCLOUD_PORT" 2>/dev/null || true
-php /var/www/html/occ config:system:set trusted_domains 2 --value="localhost:$NEXTCLOUD_PORT" 2>/dev/null || true
-php /var/www/html/occ config:system:set trusted_domains 3 --value="$LOCAL_IP:$NEXTCLOUD_PORT" 2>/dev/null || true
-
-php /var/www/html/occ config:system:set overwritehost --value="$HOST_IP:$NEXTCLOUD_PORT" 2>/dev/null || true
-php /var/www/html/occ config:system:set overwrite.cli.url --value="http://$HOST_IP:$NEXTCLOUD_PORT" 2>/dev/null || true
-
-echo "✓ Trusted domains настроены."
-exit 0

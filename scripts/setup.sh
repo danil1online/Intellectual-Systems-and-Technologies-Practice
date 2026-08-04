@@ -640,7 +640,7 @@ fi
 print_step "Инициализация GitLab (группы, runner)..."
 bash "$SCRIPT_DIR/init_gitlab.sh"
 
-print_step "Инициализация Nextcloud (OIDC)..."
+print_step "Проверка OIDC в Nextcloud..."
 bash "$SCRIPT_DIR/init_nextcloud.sh"
 
 print_step "Запуск JupyterHub..."

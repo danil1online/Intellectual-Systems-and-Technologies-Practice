@@ -13,8 +13,8 @@ COPY app.py /app/app.py
 COPY routes.py /app/routes.py
 COPY models.py /app/models.py
 COPY templates/ /app/templates/
-COPY static/ /app/static/
-
+#COPY static/ /app/static/
+RUN mkdir -p /app/static/
 RUN mkdir -p /app/logs
 
 EXPOSE 5000
