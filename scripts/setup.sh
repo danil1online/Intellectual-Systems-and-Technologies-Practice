@@ -777,27 +777,28 @@ done
 print_step "Получение root PAT (Rails runner может занять минуту)..."
 ROOT_TOKEN=$(timeout 120 docker exec gitlab gitlab-rails runner '
   user = User.find_by_username("root")
-  token = user.personal_access_tokens.where(name: "runner-setup-token-v2").first
-  if token
-    puts token.token
-  else
-    token = user.personal_access_tokens.create!(
-      name: "runner-setup-token-v2",
-      scopes: ["api", "admin_mode", "create_runner"],
-      expires_at: Date.today + 365.days
-    )
-    puts token.token
-  end
-' 2>&1 | grep -o "glpat-[a-zA-Z0-9_-]*" | head -1)
+  user.personal_access_tokens.where(name: "runner-setup-token-v3").destroy_all
+  token = user.personal_access_tokens.create!(
+    name: "runner-setup-token-v3",
+    scopes: ["api", "admin_mode", "create_runner"],
+    expires_at: Date.today + 365.days
+  )
+  token.save!
+  STDOUT.puts "TOKEN_START:" + token.token + ":TOKEN_END"
+' 2>&1)
+ROOT_TOKEN=$(echo "$ROOT_TOKEN" | sed -n 's/.*TOKEN_START:\(.*\):TOKEN_END.*/\1/p')
 
 if [[ -z "$ROOT_TOKEN" ]]; then
-    print_error "Не удалось получить root PAT"
+    print_error "Не удалось получить root PAT. Вывод Rails:"
+    echo "$ROOT_TOKEN"
     exit 1
 fi
-print_success "Root PAT получен"
+print_success "Root PAT успешно получен"
 
 print_step "Создание Runner в GitLab через API..."
-RUNNER_RESPONSE=$(curl -s --request POST --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+RUNNER_RESPONSE=$(curl -s --request POST \
+  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "X-GitLab-Admin-Mode: true" \
   --header "Content-Type: application/json" \
   --data '{"description": "academic-runner", "runner_type": "instance_type"}' \
   "http://localhost/api/v4/user/runners" 2>&1)
