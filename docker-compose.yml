@@ -247,7 +247,6 @@ services:
             - driver: nvidia
               capabilities: [gpu]
     environment:
-      LLM_MODEL_NAME: "Qwen3.5-0.8B-Q4_K_M.gguf"
       NGPU_LAYERS: "99"
       CONTEXT_SIZE: "65536"
       LLM_HOST: "0.0.0.0"
@@ -258,17 +257,17 @@ services:
       - "8080"
     networks:
       - internal
-    command: ["/app/llama-server", "-m", "/models/Qwen3.5-0.8B-Q4_K_M.gguf", "-ngl", "99", "-c", "65536", "--host", "0.0.0.0", "--port", "8080", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
+    command: ["/app/llama-server", "-m", "/models/model.gguf", "-ngl", "99", "-c", "65536", "--host", "0.0.0.0", "--port", "8080", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
     profiles:
       - local-llm
     depends_on:
       - keycloak
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/v1/models')\""]
-      interval: 30s
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/models || exit 1"]
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 600s
+      start_period: 300s
 
   # --- DOCKER REGISTRY ---
   registry:

@@ -115,7 +115,7 @@ Docker Compose-развёртывание полного учебного кла
 │       └── generate_ssh_keys.py # SSH-генерация при первом входе
 │
 ├── llm/
-│   ├── Dockerfile               # nvidia/cuda + llama.cpp
+│   ├── Dockerfile               # ghcr.io/ggml-org/llama.cpp:server-cuda12
 │   └── start-server.sh          # Запуск llama-server
 │
 ├── runner/
@@ -241,13 +241,13 @@ sudo ./scripts/setup.sh
 ```
 
 Скрипт задаст:
-1. Порт JupyterHub (по умолчанию: `8000`)
-2. Порт Admin Dashboard (по умолчанию: `9000`)
-3. Порт Nextcloud (по умолчанию: `8080`)
-4. Адрес GitLab (http://<IP_или_домен>)
-5. LLM для ментора: OpenAI API / локальный контейнер
-6. LLM для CI/CD: OpenAI API / локальный контейнер
-7. Путь к `.gguf` модели (если локальный режим)
+1. Внешний адрес сервера (IP или домен)
+2. Порт JupyterHub (по умолчанию: `8000`)
+3. Порт Admin Dashboard (по умолчанию: `9000`)
+4. Порт Nextcloud (по умолчанию: `8080`)
+5. LLM для ментора: OpenAI API / локальный контейнер (+ имя модели)
+6. LLM для CI/CD: OpenAI API / локальный контейнер (+ имя модели)
+7. Путь к `.gguf` модели (если локальный режим, будет переименована в model.gguf)
 8. SSH-ключ для GitLab Runner
 
 ### 4. Доступы
@@ -285,8 +285,6 @@ Dashboard:    http://<IP>:9000
 > **Важно:** Все пароли генерируются при запуске `setup.sh` и хранятся в файле `.env`.
 > Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|KC_ADMIN_PASSWORD|NC_ADMIN_PASSWORD|LECTURER_"`
 >
-> **Пароль Keycloak admin по умолчанию:** `Keycloak123!` (если не переопределён в `.env`)
->
 > **⚠️ Лекторы:** пароли lecturer_01/lecturer_02 нужно сменить после первого входа!
 
 ### 6. Добавление SSH-ключа для GitLab Runner
@@ -308,36 +306,52 @@ cat shared/data/runner-keys/runner_ed25519.pub
 Скрипт `scripts/setup.sh` выполняет последовательно:
 
 ```
-ШАГ 1/8: Настройка портов
+ШАГ 0/11: Проверка портов и автоопределение сетевых параметров
+  → Определение локального IP, VPN IP, подсети, шлюза
+
+ШАГ 1/11: Внешний адрес сервера
+  → http://<IP_или_домен>
+  → Рекомендуется VPN IP при наличии VPN (amnezia WireGuard)
+
+ШАГ 2/11: Порты сервисов
   → JupyterHub (по умолчанию 8000)
   → Dashboard (по умолчанию 9000)
   → Nextcloud (по умолчанию 8080)
 
-ШАГ 2/8: Адрес GitLab
-  → http://<IP_или_домен>
-
-ШАГ 3/8: LLM для ИИ-Ментора
+ШАГ 3/11: LLM для ИИ-Ментора
   → Выбор: OpenAI API / Локальный контейнер
-  → Если OpenAI: endpoint IP:port + API ключ
+  → Если OpenAI: endpoint IP:port + API ключ + имя модели
   → Если локальный: путь к .gguf (2 попытки, иначе выход)
+  → Модель будет переименована в model.gguf перед записью в volume
 
-ШАГ 4/8: LLM для CI/CD
+ШАГ 4/11: LLM для CI/CD
   → Выбор: OpenAI API / Локальный
   → Если обе локальные: предупреждение, одна модель
-  → Если OpenAI + локальная: второй путь к .gguf
+  → Если OpenAI: endpoint IP:port + API ключ + имя модели
 
-ШАГ 5/8: Генерация паролей
-    → Keycloak admin, GitLab root, Nextcloud admin, Dashboards
-
-ШАГ 6/8: SSH-ключ для GitLab Runner
+ШАГ 5/11: SSH-ключ для GitLab Runner
   → Генерация ED25519 ключа
   → Сохранение в shared/data/runner-keys/
 
-ШАГ 7/8: Генерация .env
+ШАГ 6/11: Генерация паролей
+    → Keycloak admin, GitLab root, Nextcloud admin, Dashboards
+
+ШАГ 7/11: Настройка iptables DNAT
+  → Перенаправление запросов с внешнего IP на localhost (для доступа с самого сервера)
+
+ШАГ 8/11: Генерация .env
   → Запись всех конфигураций в .env файл
 
-ШАГ 8/8: Запуск сервисов
+ШАГ 9/11: Очистка и запуск
+  → Очистка предыдущих данных сервисов
+  → Удаление Docker томов (кроме llm-models)
+
+ШАГ 10/11: Предзагрузка Docker-образов
+  → Загрузка всех образов (GPU-образ может занять 5-10 минут)
+
+ШАГ 11/11: Запуск сервисов
    → docker compose up -d
+   → Проверка модели в Docker volume
    → Healthcheck Keycloak, GitLab, Nextcloud
    → Инициализация Keycloak (OIDC-клиенты)
    → Инициализация GitLab (группа, админ)
@@ -357,7 +371,7 @@ nano .env
 # 3. Поднимите сервисы
 docker compose up -d keycloak gitlab nextcloud admin-dashboard
 # Для локальной LLM:
-docker compose up -d llm
+docker compose --profile local-llm up -d llm
 
 # 4. Дождитесь готовности
 sleep 300
@@ -449,7 +463,7 @@ Port: 8080 (Nextcloud)
 ```yaml
 Build: ./llm (ghcr.io/ggml-org/llama.cpp:server-cuda12)
 Port: 8080 (internal only)
-Model: Qwen3.5-0.8B-Q4_K_M.gguf
+Model: model.gguf (универсальное имя, переименовывается из оригинала)
 Args: -ngl 99 -c 65536
 ```
 
@@ -854,7 +868,7 @@ grep -c '"SMART"' shared/logs/grading_log.json
 | `LLM_MENTOR_BASE_URL` | Endpoint LLM ментора | `http://llm:8080/v1` |
 | `LLM_CI_TYPE` | Тип LLM для CI/CD | `local` |
 | `LLM_CI_BASE_URL` | Endpoint LLM CI/CD | `http://llm:8080/v1` |
-| `GGUF_PATH` | Путь к модели | `/models/Qwen3.5-0.8B-Q4_K_M.gguf` |
+| `GGUF_PATH` | Путь к модели | `/models/model.gguf` |
 | `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
 | `KC_ADMIN_PASSWORD` | Пароль Keycloak admin | `Keycloak123!` |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
@@ -872,6 +886,16 @@ docker compose up -d
 
 # С локальной LLM
 docker compose --profile local-llm up -d
+
+# Остановить все сервисы (включая LLM)
+docker compose --profile local-llm down -v
+
+# Остановить только LLM
+docker compose --profile local-llm down llm
+
+# Ручная очистка (если docker compose down не остановил llm)
+docker stop llm && docker rm llm
+docker compose down
 ```
 
 ---
@@ -947,14 +971,24 @@ head -5 shared/logs/grading_log.json
 ### Full restart
 
 ```bash
-# Остановить всё
-docker compose down -v
+# Остановить всё (включая LLM в профиле local-llm)
+docker compose --profile local-llm down -v
 
 # Очистить volumes (⚠️ удалит все данные!)
 docker volume prune -f
 
 # Перезапустить
 sudo ./scripts/setup.sh
+```
+
+### Остановка LLM
+
+```bash
+# LLM находится в профиле local-llm, обычный down не стопит его
+docker compose --profile local-llm down llm
+
+# Ручная остановка
+docker stop llm && docker rm llm
 ```
 
 ### Health check

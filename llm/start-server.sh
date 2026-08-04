@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-MODEL_PATH="${GGUF_MODEL_PATH:-/models/Qwen3.5-0.8B-Q4_K_M.gguf}"
+MODEL_PATH="/models/model.gguf"
 NGPU_LAYERS="${NGPU_LAYERS:-99}"
 CONTEXT_SIZE="${CONTEXT_SIZE:-32768}"
 HOST="${LLM_HOST:-0.0.0.0}"

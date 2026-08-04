@@ -56,7 +56,7 @@ def ask_mentor(line, cell):
     # Определяем LLM endpoint
     api_key = os.environ.get("LLM_MENTOR_API_KEY", "local-api-key")
     api_base = os.environ.get("LLM_MENTOR_BASE_URL", "http://llm:8080/v1")
-    model = os.environ.get("LLM_MENTOR_MODEL", "Qwen3.5-0.8B")
+    model = os.environ.get("LLM_MENTOR_MODEL", "gpt-4o")
 
     # Если используется OpenAI API — отправляем через proxy
     try:

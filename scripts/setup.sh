@@ -226,11 +226,13 @@ if [[ "$LLM_MENTOR_TYPE" == "1" ]]; then
     MENTOR_BASE=$(ask "Endpoint (IP:port, без /v1/)" "http://192.168.2.75:8080")
     LLM_MENTOR_BASE_URL="${MENTOR_BASE}/v1"
     LLM_MENTOR_API_KEY=$(ask "OpenAI API Key")
+    LLM_MENTOR_MODEL=$(ask "Имя модели для API" "gpt-4o")
     LLM_MENTOR_TYPE="openai"
-    print_success "Ментор: OpenAI API → $LLM_MENTOR_BASE_URL"
+    print_success "Ментор: OpenAI API → $LLM_MENTOR_BASE_URL (модель: $LLM_MENTOR_MODEL)"
 else
     print_step "Локальная модель для ментора:"
-    print_warn "Скачайте модель Qwen3.5-0.8B-Q4_K_M.gguf заранее и укажите путь."
+    print_warn "Скачайте модель *.gguf заранее и укажите путь, например, /home/user1/Downloads/Qwen3.5-0.8B-Q4_K_M.gguf (установлен по умолчанию)."
+    print_warn "Модель будет переименована в model.gguf перед записью в volume."
     GGUF_PATH=""
 
     for attempt in 1 2; do
@@ -247,7 +249,7 @@ else
                 print_error "Вторая попытка не удалась. Модель не найдена."
                 echo ""
                 echo "Невозможно продолжить без модели."
-                echo "Скачайте Qwen3.5-0.8B-Q4_K_M.gguf с HuggingFace:"
+                echo "Скачайте любую .gguf модель, например:"
                 echo "  https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
                 echo "И запустите setup.sh заново."
                 exit 1
@@ -259,11 +261,11 @@ else
     
     print_step "Копирование модели в хранилище системы..."
     mkdir -p "$PROJECT_DIR/shared/data/llm-models"
-    MODEL_FILE="Qwen3.5-0.8B-Q4_K_M.gguf"
-    MODEL_DEST="$PROJECT_DIR/shared/data/llm-models/$MODEL_FILE"
+    MODEL_FILE="model.gguf"
+    MODEL_DEST="$PROJECT_DIR/shared/data/llm-models/model.gguf"
     
     if [[ ! -f "$MODEL_DEST" ]]; then
-        print_step "Копирование $GGUF_PATH -> shared/data/llm-models/ ..."
+        print_step "Копирование $GGUF_PATH -> $MODEL_DEST ..."
         cp "$GGUF_PATH" "$MODEL_DEST"
         
         if [[ -f "$MODEL_DEST" ]]; then
@@ -336,7 +338,8 @@ if [[ "$LLM_CI_TYPE" == "1" ]]; then
     CI_BASE=$(ask "Endpoint (IP:port, без /v1/)" "http://192.168.2.75:8080")
     LLM_CI_BASE_URL="${CI_BASE}/v1"
     LLM_CI_API_KEY=$(ask "OpenAI API Key")
-    print_success "CI/CD LLM: OpenAI API → $LLM_CI_BASE_URL"
+    LLM_CI_MODEL=$(ask "Имя модели для API" "gpt-4o")
+    print_success "CI/CD LLM: OpenAI API → $LLM_CI_BASE_URL (модель: $LLM_CI_MODEL)"
 else
     if [[ "$LLM_MENTOR_TYPE" == "local" ]]; then
         print_warn "Вы выбрали локальную модель и для ментора, и для CI/CD."
@@ -525,9 +528,11 @@ REGISTRY_PORT=5050
 LLM_MENTOR_TYPE=$LLM_MENTOR_TYPE
 LLM_MENTOR_BASE_URL=$LLM_MENTOR_BASE_URL
 LLM_MENTOR_API_KEY=$LLM_MENTOR_API_KEY
+LLM_MENTOR_MODEL=$LLM_MENTOR_MODEL
 LLM_CI_TYPE=$LLM_CI_TYPE
 LLM_CI_BASE_URL=$LLM_CI_BASE_URL
 LLM_CI_API_KEY=$LLM_CI_API_KEY
+LLM_CI_MODEL=$LLM_CI_MODEL
 LLM_USE_LOCAL=$LLM_USE_LOCAL
 
 # --- Keycloak ---

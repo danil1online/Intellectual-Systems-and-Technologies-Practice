@@ -22,7 +22,7 @@ from pathlib import Path
 # Конфигурация LLM
 LLM_BASE_URL = os.environ.get("LLM_CI_BASE_URL", "http://llm:8080/v1")
 LLM_API_KEY = os.environ.get("LLM_CI_API_KEY", "local-api-key")
-LLM_MODEL = os.environ.get("LLM_CI_MODEL", "Qwen3.5-0.8B")
+LLM_MODEL = os.environ.get("LLM_CI_MODEL", "gpt-4o")
 
 
 def load_notebook(filepath):

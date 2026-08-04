@@ -94,10 +94,12 @@ c.Spawner.environment = {
     "LLM_MENTOR_TYPE": os.environ.get("LLM_MENTOR_TYPE", "local"),
     "LLM_MENTOR_BASE_URL": os.environ.get("LLM_MENTOR_BASE_URL", "http://llm:8080/v1"),
     "LLM_MENTOR_API_KEY": os.environ.get("LLM_MENTOR_API_KEY", "local-api-key"),
+    "LLM_MENTOR_MODEL": os.environ.get("LLM_MENTOR_MODEL", "gpt-4o"),
     "LLM_CI_TYPE": os.environ.get("LLM_CI_TYPE", "local"),
     "LLM_CI_BASE_URL": os.environ.get("LLM_CI_BASE_URL", "http://llm:8080/v1"),
     "LLM_CI_API_KEY": os.environ.get("LLM_CI_API_KEY", "local-api-key"),
-    "GGUF_PATH": os.environ.get("GGUF_PATH", "/models/Qwen3.5-0.8B-Q4_K_M.gguf"),
+    "LLM_CI_MODEL": os.environ.get("LLM_CI_MODEL", "gpt-4o"),
+    "GGUF_PATH": os.environ.get("GGUF_PATH", "/models/model.gguf"),
     "PIP_CACHE_DIR": "/shared/pip-cache",
 }
 

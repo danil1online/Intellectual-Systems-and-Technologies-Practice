@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-MODEL_NAME="${LLM_MODEL_NAME:-Qwen3.5-0.8B-Q4_K_M.gguf}"
+MODEL_NAME="model.gguf"
 SOURCE_PATH="${LLM_SOURCE_PATH:-/source}"
 MODEL_DIR="/models"
 
