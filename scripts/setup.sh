@@ -610,6 +610,12 @@ done
 
 print_step "Очистка завершена"
 
+# Создаём директории для bind-mount (docker compose не создаёт их автоматически)
+mkdir -p "$PROJECT_DIR/shared/data/logs"
+mkdir -p "$PROJECT_DIR/shared/data/cache_huggingface"
+mkdir -p "$PROJECT_DIR/shared/data/shared-pip-cache"
+print_success "Bind-mount директории созданы"
+
 # Предварительная загрузка Docker-образов (уменьшает время build)
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_header "ШАГ 10/11: Предзагрузка Docker-образов"
