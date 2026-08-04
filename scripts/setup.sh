@@ -376,32 +376,7 @@ RUNNER_SSH_PUB=$(cat "$PROJECT_DIR/shared/data/runner-keys/runner_ed25519.pub")
 RUNNER_SSH_PRIV="$PROJECT_DIR/shared/data/runner-keys/runner_ed25519"
 
 print_success "SSH-ключ сгенерирован: $RUNNER_SSH_PRIV"
-
-echo ""
-echo -e "  ${BOLD}ШАГ 1: Добавьте этот ключ в GitLab${NC}"
-echo ""
-echo -e "  ${CYAN}Через веб-интерфейс:${NC}"
-echo -e "    1. Откройте GitLab: http://${EXTERNAL_IP}"
-echo -e "    2. Войдите как root (пароль см. ШАГ 6/11)"
-echo -e "    3. Перейдите: Settings → Repository → Deploy Keys"
-echo -e "    4. Нажмите 'Add new key'"
-echo -e "    5. Название: 'academic-runner'"
-echo -e "    6. Вставьте публичный ключ ниже → отметьте 'Write to files'"
-echo -e "    7. Нажмите 'Add key'"
-echo ""
-echo -e "  ${CYAN}Через API (то же самое):${NC}"
-echo -e "    curl --request POST \"http://${EXTERNAL_IP}/api/v4/projects/101/deploy_keys\" \\"
-echo -e "      --header \"PRIVATE-TOKEN: <root_token>\" \\"
-echo -e "      --header \"Content-Type: application/json\" \\"
-echo -e "      --data '{\"title\":\"academic-runner\",\"can_push\":true}'"
-echo ""
-echo -e "  ${BOLD}Публичный ключ:${NC}"
-echo ""
-echo "  $RUNNER_SSH_PUB"
-echo ""
-echo -e "  ${CYAN}Или скопируйте для вставки:${NC}"
-echo "  cat $RUNNER_SSH_PRIV.pub"
-echo ""
+print_step "Ключ будет автоматически добавлен в GitLab при инициализации..."
 
 # ============================================
 # ШАГ 6/11: Генерация паролей
@@ -649,13 +624,26 @@ fi
 
 print_step "Запуск docker-compose..."
 
+# Создаём .env.jupyterhub, если не существует
+JUPYTERHUB_ENV="$PROJECT_DIR/.env.jupyterhub"
+if [ ! -f "$JUPYTERHUB_ENV" ]; then
+    JUPYTERHUB_COOKIE_SECRET=$(openssl rand -hex 32)
+    cat > "$JUPYTERHUB_ENV" << EOF
+JUPYTERHUB_COOKIE_SECRET=$JUPYTERHUB_COOKIE_SECRET
+COOKIE_SAMESITE=None
+COOKIE_SECURE=false
+EOF
+    chmod 600 "$JUPYTERHUB_ENV"
+    print_success "Создан .env.jupyterhub"
+fi
+
 LLM_PROFILES=""
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     LLM_PROFILES="--profile local-llm"
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard
+    docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard llm
 else
     docker compose up -d keycloak gitlab nextcloud admin-dashboard
 fi
