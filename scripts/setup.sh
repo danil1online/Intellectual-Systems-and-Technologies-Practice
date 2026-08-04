@@ -93,7 +93,7 @@ generate_password() {
 # ============================================
 # АВТООПРЕДЕЛЕНИЕ СЕТЕВЫХ ПАРАМЕТРОВ
 # ============================================
-print_header "ШАГ 0/10: Проверка портов и автоопределение сетевых параметров"
+print_header "ШАГ 0/11: Проверка портов и автоопределение сетевых параметров"
 
 # Проверка занятых портов
 REQUIRED_PORTS="80 2222 8000 8080 9000 9200 5050"
@@ -146,9 +146,9 @@ print_step "Подсеть: ${SUBNET:-авто}"
 print_step "Шлюз: ${DEFAULT_GW:-авто}"
 
 # ============================================
-# ШАГ 1/10: Внешний адрес сервера
+# ШАГ 1/11: Внешний адрес сервера
 # ============================================
-print_header "ШАГ 1/10: Внешний адрес сервера"
+print_header "ШАГ 1/11: Внешний адрес сервера"
 
 echo ""
 echo -e "  ${BOLD}Внимание!${NC}"
@@ -195,9 +195,9 @@ print_warn "Для доступа с самого сервера использ�
 print_warn "Доступ через $EXTERNAL_IP с самого сервера потребует DNAT (настроим)"
 
 # ============================================
-# ШАГ 2/10: Порты сервисов
+# ШАГ 2/11: Порты сервисов
 # ============================================
-print_header "ШАГ 2/10: Порты сервисов"
+print_header "ШАГ 2/11: Порты сервисов"
 
 print_step "Порт для JupyterHub (для доступа студентов к JupyterLab)"
 JUPYTERHUB_PORT=$(ask "Введите порт" "8000")
@@ -211,9 +211,9 @@ NEXTCLOUD_PORT=$(ask "Введите порт" "8080")
 print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_PORT, Nextcloud=$NEXTCLOUD_PORT"
 
 # ============================================
-# ШАГ 3/10: LLM для ИИ-Ментора
+# ШАГ 3/11: LLM для ИИ-Ментора
 # ============================================
-print_header "ШАГ 3/10: Настройка LLM для ИИ-Ментора"
+print_header "ШАГ 3/11: Настройка LLM для ИИ-Ментора"
 
 LLM_MENTOR_TYPE=$(ask_choice \
     "Как запустить LLM для ИИ-Ментора?" \
@@ -315,9 +315,9 @@ else
 fi
 
 # ============================================
-# ШАГ 4/10: LLM для CI/CD
+# ШАГ 4/11: LLM для CI/CD
 # ============================================
-print_header "ШАГ 4/10: Настройка LLM для CI/CD"
+print_header "ШАГ 4/11: Настройка LLM для CI/CD"
 
 LLM_CI_TYPE=$(ask_choice \
     "Как запустить LLM для CI/CD?" \
@@ -362,28 +362,9 @@ else
 fi
 
 # ============================================
-# ШАГ 5/10: Генерация паролей
+# ШАГ 5/11: SSH-ключ для GitLab Runner
 # ============================================
-print_header "ШАГ 5/10: Генерация паролей"
-
-KC_ADMIN_PASSWORD=$(generate_password)
-GITLAB_ROOT_PASSWORD=$(generate_password)
-NC_ADMIN_PASSWORD=$(generate_password)
-JH_API_TOKEN=$(generate_password)
-LECTURER_01_PASSWORD=$(generate_password)
-LECTURER_02_PASSWORD=$(generate_password)
-DASHBOARD_PASSWORD=$(generate_password)
-
-print_success "Keycloak admin: $(echo $KC_ADMIN_PASSWORD | cut -c1-8)... "
-print_success "GitLab root: $(echo $GITLAB_ROOT_PASSWORD | cut -c1-8)... "
-print_success "Nextcloud admin: $(echo $NC_ADMIN_PASSWORD | cut -c1-8)... "
-print_warn "Lecturer 01: $(echo $LECTURER_01_PASSWORD | cut -c1-8)... (смените пароль после первого входа!)"
-print_warn "Lecturer 02: $(echo $LECTURER_02_PASSWORD | cut -c1-8)... (смените пароль после первого входа!)"
-
-# ============================================
-# ШАГ 6/10: SSH-ключ для GitLab Runner
-# ============================================
-print_header "ШАГ 6/10: SSH-ключ для GitLab Runner"
+print_header "ШАГ 5/11: SSH-ключ для GitLab Runner"
 
 print_step "Генерация SSH-ключа для GitLab Runner..."
 mkdir -p "$PROJECT_DIR/shared/data/runner-keys"
@@ -395,13 +376,89 @@ RUNNER_SSH_PUB=$(cat "$PROJECT_DIR/shared/data/runner-keys/runner_ed25519.pub")
 RUNNER_SSH_PRIV="$PROJECT_DIR/shared/data/runner-keys/runner_ed25519"
 
 print_success "SSH-ключ сгенерирован: $RUNNER_SSH_PRIV"
-print_warn "Запишите публичный ключ для добавления в GitLab (после установки):"
+
+echo ""
+echo -e "  ${BOLD}ШАГ 1: Добавьте этот ключ в GitLab${NC}"
+echo ""
+echo -e "  ${CYAN}Через веб-интерфейс:${NC}"
+echo -e "    1. Откройте GitLab: http://${EXTERNAL_IP}"
+echo -e "    2. Войдите как root (пароль см. ШАГ 6/11)"
+echo -e "    3. Перейдите: Settings → Repository → Deploy Keys"
+echo -e "    4. Нажмите 'Add new key'"
+echo -e "    5. Название: 'academic-runner'"
+echo -e "    6. Вставьте публичный ключ ниже → отметьте 'Write to files'"
+echo -e "    7. Нажмите 'Add key'"
+echo ""
+echo -e "  ${CYAN}Через API (то же самое):${NC}"
+echo -e "    curl --request POST \"http://${EXTERNAL_IP}/api/v4/projects/101/deploy_keys\" \\"
+echo -e "      --header \"PRIVATE-TOKEN: <root_token>\" \\"
+echo -e "      --header \"Content-Type: application/json\" \\"
+echo -e "      --data '{\"title\":\"academic-runner\",\"can_push\":true}'"
+echo ""
+echo -e "  ${BOLD}Публичный ключ:${NC}"
+echo ""
 echo "  $RUNNER_SSH_PUB"
+echo ""
+echo -e "  ${CYAN}Или скопируйте для вставки:${NC}"
+echo "  cat $RUNNER_SSH_PRIV.pub"
+echo ""
 
 # ============================================
-# ШАГ 7/10: Настройка iptables DNAT
+# ШАГ 6/11: Генерация паролей
 # ============================================
-print_header "ШАГ 7/10: Настройка iptables DNAT"
+print_header "ШАГ 6/11: Генерация паролей"
+
+KC_ADMIN_PASSWORD=$(generate_password)
+GITLAB_ROOT_PASSWORD=$(generate_password)
+NC_ADMIN_PASSWORD=$(generate_password)
+JH_API_TOKEN=$(generate_password)
+LECTURER_01_PASSWORD=$(generate_password)
+LECTURER_02_PASSWORD=$(generate_password)
+DASHBOARD_PASSWORD=$(generate_password)
+
+# Сохраняем все пароли в файл
+mkdir -p "$PROJECT_DIR/shared/data"
+PASS_FILE="$PROJECT_DIR/shared/data/credentials.env"
+cat > "$PASS_FILE" << 'PASSEOF'
+# ============================================
+# СЕРВИСЫ — ЛОГИНЫ И ПАРОЛИ
+# Этот файл сгенерирован автоматически.
+# ХРАНИТЕ ЕГО В БЕЗОПАСНОМ МЕСТЕ.
+# ============================================
+PASSEOF
+cat >> "$PASS_FILE" << PASSEOF
+
+# --- Keycloak ---
+KC_ADMIN_PASSWORD=$KC_ADMIN_PASSWORD
+
+# --- GitLab ---
+GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD
+
+# --- Nextcloud ---
+NC_ADMIN_PASSWORD=$NC_ADMIN_PASSWORD
+NC_ADMIN_USER=admin
+
+# --- JupyterHub ---
+JH_API_TOKEN=$JH_API_TOKEN
+
+# --- Admin Dashboard ---
+DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
+
+# --- Лекторы (обязательно смените пароли при первом входе!) ---
+LECTURER_01_PASSWORD=$LECTURER_01_PASSWORD
+LECTURER_02_PASSWORD=$LECTURER_02_PASSWORD
+PASSEOF
+chmod 600 "$PASS_FILE"
+
+print_step "Все пароли сохранены в:"
+echo "  $PASS_FILE"
+print_step "Для быстрого просмотра:"
+echo "  cat $PASS_FILE | grep PASSWORD"
+
+# ============================================
+# ШАГ 7/11: Настройка iptables DNAT
+# ============================================
+print_header "ШАГ 7/11: Настройка iptables DNAT"
 
 echo ""
 echo -e "  ${BOLD}Зачем это нужно:${NC}"
@@ -450,9 +507,9 @@ fi
 print_success "Локальный IP для iptables: $PRIMARY_LOCAL_IP"
 
 # ============================================
-# ШАГ 8/10: Запись .env
+# ШАГ 8/11: Запись .env
 # ============================================
-print_header "ШАГ 8/10: Генерация конфигурации"
+print_header "ШАГ 8/11: Генерация конфигурации"
 
 # Генерируем OIDC секреты
 OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
@@ -531,9 +588,9 @@ chmod 600 "$PROJECT_DIR/.env"
 print_success "Конфигурация записана в .env"
 
 # ============================================
-# ШАГ 9/10: Очистка и запуск сервисов
+# ШАГ 9/11: Очистка и запуск сервисов
 # ============================================
-print_header "ШАГ 9/10: Очистка и запуск"
+print_header "ШАГ 9/11: Очистка и запуск"
 
 print_step "Очистка предыдущих данных сервисов..."
 cd "$PROJECT_DIR"
@@ -566,7 +623,7 @@ done
 print_step "Очистка завершена"
 
 # Запуск
-print_header "ШАГ 10/10: Запуск сервисов"
+print_header "ШАГ 11/11: Запуск сервисов"
 
 print_step "Запуск docker-compose..."
 
@@ -750,25 +807,25 @@ print_header "УСТАНОВКА ЗАВЕРШЕНА"
 echo ""
 echo -e "${GREEN}Доступы:${NC}"
 echo ""
+echo -e "  ${YELLOW}Все пароли в файле:${NC}"
+echo "  $PASS_FILE"
+echo ""
+echo -e "  ${YELLOW}Быстрый просмотр:${NC}"
+echo "  cat $PASS_FILE | grep PASSWORD"
+echo ""
 echo -e "  ${BOLD}С других ПК (через VPN/лабсеть):${NC}"
 echo ""
 echo -e "  ${BOLD}Keycloak:${NC}      http://$EXTERNAL_IP:$KEYCLOAK_PORT/auth/realms/istp"
 echo -e "  ${BOLD}GitLab:${NC}        http://$EXTERNAL_IP"
-echo -e "    Root:        root / $GITLAB_ROOT_PASSWORD"
-echo -e "    Lecturer:    lecturer_01 / $LECTURER_01_PASSWORD (смените!)"
-echo -e "    Lecturer:    lecturer_02 / $LECTURER_02_PASSWORD (смените!)"
 echo -e "    Git clone:   git clone http://$EXTERNAL_IP/students/project.git"
 echo -e "    Git SSH:     git@gitlab.$GITLAB_HOST:students/project.git"
-echo -e "    Runner SSH:  $RUNNER_SSH_PRIV"
+echo -e "    Runner key:  cat $RUNNER_SSH_PRIV.pub"
 echo ""
 echo -e "  ${BOLD}JupyterHub:${NC}    http://$EXTERNAL_IP:$JUPYTERHUB_PORT"
 echo -e "    Вход через:    Keycloak (кнопка на странице входа)"
 echo ""
 echo -e "  ${BOLD}Nextcloud:${NC}     http://$EXTERNAL_IP:$NEXTCLOUD_PORT"
-echo -e "    Admin:       $NC_ADMIN_USER / $NC_ADMIN_PASSWORD"
-echo ""
 echo -e "  ${BOLD}Dashboard:${NC}     http://$EXTERNAL_IP:$DASHBOARD_PORT"
-echo -e "    Admin:       admin / $DASHBOARD_PASSWORD (Basic Auth)"
 echo ""
 
 echo -e "  ${BOLD}С этого сервера:${NC}"

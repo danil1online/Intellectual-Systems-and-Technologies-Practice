@@ -8,6 +8,27 @@
 
 set -uo pipefail
 
+# Загружаем переменные из .env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Ищем .env в проекте или в текущей директории
+if [ -f "$PROJECT_DIR/.env" ]; then
+    ENV_FILE="$PROJECT_DIR/.env"
+elif [ -f "./.env" ]; then
+    ENV_FILE="./.env"
+else
+    echo "⚠ .env не найден — используем переменные окружения"
+    ENV_FILE=""
+fi
+
+if [ -n "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+    print_step "Загружены переменные из: $ENV_FILE"
+fi
+
 CONTAINER="nextcloud"
 ERRORS=0
 
