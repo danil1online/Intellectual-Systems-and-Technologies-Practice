@@ -278,13 +278,12 @@ else
         print_success "Модель уже в хранилище (${MODEL_SIZE})"
     fi
     
-    # Копирование модели в Docker volume (через docker compose для правильного префикса)
+    # Копирование модели в Docker volume (с правильным префиксом)
     print_step "Запись модели в Docker volume..."
-    VOLUME_NAME=$(docker compose config --format json 2>/dev/null | jq -r '.project_name // "istp"' 2>/dev/null || basename "$PROJECT_DIR")
-    FULL_VOLUME_NAME="${VOLUME_NAME}_llm-models"
+    PROJECT_PREFIX=$(basename "$PROJECT_DIR")
+    FULL_VOLUME_NAME="${PROJECT_PREFIX}_llm-models"
     
-    # Используем docker compose для работы с volumes (автоматически добавляет префикс)
-    if docker compose volume inspect llm-models >/dev/null 2>&1; then
+    if docker volume inspect "$FULL_VOLUME_NAME" >/dev/null 2>&1; then
         print_step "Volume $FULL_VOLUME_NAME уже существует, проверяем содержимое..."
         if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
             print_success "Модель уже в Docker volume"
@@ -301,7 +300,7 @@ else
         fi
     else
         print_step "Создание Docker volume $FULL_VOLUME_NAME..."
-        docker compose volume create llm-models
+        docker volume create "$FULL_VOLUME_NAME"
         print_step "Копирование модели в Docker volume..."
         docker run --rm -v "$FULL_VOLUME_NAME":/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
         if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
@@ -593,10 +592,12 @@ if [ -d "$PROJECT_DIR/shared/data/nextcloud-data" ]; then
     print_success "Nextcloud data очищен"
 fi
 
-# Удаляем Docker тома (через docker compose для правильного префикса)
+# Удаляем Docker тома (с правильным префиксом)
 print_step "Удаление Docker томов..."
+PROJECT_PREFIX=$(basename "$PROJECT_DIR")
 for vol in keycloak-data kc-postgres-data jupyterhub-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged llm-models; do
-    docker compose volume rm "$vol" 2>/dev/null && print_success "Том $vol удалён" || true
+    FULL_VOL_NAME="${PROJECT_PREFIX}_${vol}"
+    docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
 done
 
 print_step "Очистка завершена"
