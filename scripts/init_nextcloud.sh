@@ -93,9 +93,9 @@ echo "--- OIDC ---"
 check_oidc "oidc_login_provider_url" "http://${HOST_IP}:${KEYCLOAK_PORT}/auth/realms/istp"
 check_oidc "oidc_login_well_known_url" "http://${HOST_IP}:${KEYCLOAK_PORT}/auth/realms/istp/.well-known/openid-configuration"
 check_oidc "oidc_login_client_id" "nextcloud"
-check_oidc "oidc_login_auto_create_users" "1"
+check_oidc "oidc_login_auto_create_users" "true"
 check_oidc "oidc_login_id_attribute" "preferred_username"
-check_oidc "oidc_login_auto_redirect" ""
+check_oidc "oidc_login_auto_redirect" "false"
 
 # Проверка trusted_domains
 echo ""
