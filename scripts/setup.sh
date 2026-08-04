@@ -774,9 +774,21 @@ for i in $(seq 1 90); do
     sleep 10
 done
 
-print_step "Получение root PAT..."
-ROOT_TOKEN=$(curl -s --request POST "http://localhost/api/v4/session" \
-  --form "login=root" --form "password=$GITLAB_ROOT_PASSWORD" | jq -r '.private_token')
+print_step "Получение root PAT (Rails runner может занять минуту)..."
+ROOT_TOKEN=$(timeout 120 docker exec gitlab gitlab-rails runner '
+  user = User.find_by_username("root")
+  token = user.personal_access_tokens.where(name: "runner-setup-token-v2").first
+  if token
+    puts token.token
+  else
+    token = user.personal_access_tokens.create!(
+      name: "runner-setup-token-v2",
+      scopes: ["api", "admin_mode", "create_runner"],
+      expires_at: Date.today + 365.days
+    )
+    puts token.token
+  end
+' 2>&1 | grep -o "glpat-[a-zA-Z0-9_-]*" | head -1)
 
 if [[ -z "$ROOT_TOKEN" ]]; then
     print_error "Не удалось получить root PAT"
