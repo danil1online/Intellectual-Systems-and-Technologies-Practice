@@ -662,9 +662,9 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard llm
+    docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard llm gitlab-runner
 else
-    docker compose up -d keycloak gitlab nextcloud admin-dashboard
+    docker compose up -d keycloak gitlab nextcloud admin-dashboard gitlab-runner
 fi
 
 # Проверка модели в Docker volume для LLM
@@ -774,8 +774,8 @@ for i in $(seq 1 90); do
     sleep 10
 done
 
-print_step "Получение root Personal Access Token..."
-ROOT_TOKEN=$(timeout 60 docker exec gitlab gitlab-rails runner '
+print_step "Получение root PAT (Rails runner может занять минуту)..."
+ROOT_TOKEN=$(timeout 120 docker exec gitlab gitlab-rails runner '
   user = User.find_by_username("root")
   token = user.personal_access_tokens.where(name: "runner-setup-token").first
   if token
@@ -788,7 +788,7 @@ ROOT_TOKEN=$(timeout 60 docker exec gitlab gitlab-rails runner '
     )
     puts token.token
   end
-' 2>&1 | tr -d '[:space:]' | grep "glpat-" | head -1)
+' 2>&1 | grep -o "glpat-[a-zA-Z0-9_-]*" | head -1)
 
 if [[ -z "$ROOT_TOKEN" ]]; then
     print_error "Не удалось получить root PAT"
