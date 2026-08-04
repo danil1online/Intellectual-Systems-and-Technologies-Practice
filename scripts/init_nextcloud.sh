@@ -8,18 +8,22 @@
 
 set -uo pipefail
 
-# Загружаем переменные из .env
+# --- Функции вывода (дублируем setup.sh) ---
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+print_step() { echo -e "[\033[0;34m$(date '+%H:%M:%S')\033[0m] $1"; }
+
+# --- Загрузка переменных из .env ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Ищем .env в проекте или в текущей директории
+ENV_FILE=""
 if [ -f "$PROJECT_DIR/.env" ]; then
     ENV_FILE="$PROJECT_DIR/.env"
 elif [ -f "./.env" ]; then
     ENV_FILE="./.env"
-else
-    echo "⚠ .env не найден — используем переменные окружения"
-    ENV_FILE=""
 fi
 
 if [ -n "$ENV_FILE" ]; then
@@ -29,9 +33,16 @@ if [ -n "$ENV_FILE" ]; then
     print_step "Загружены переменные из: $ENV_FILE"
 fi
 
+# Fallback: если HOST_IP не определён в .env, берём GITLAB_HOST
+if [ -z "${HOST_IP:-}" ] && [ -n "${GITLAB_HOST:-}" ]; then
+    HOST_IP="$GITLAB_HOST"
+    print_step "HOST_IP взят из GITLAB_HOST: $HOST_IP"
+fi
+
 CONTAINER="nextcloud"
 ERRORS=0
 
+echo ""
 echo "=== Nextcloud: проверка OIDC ==="
 
 # Проверка, что контейнер работает

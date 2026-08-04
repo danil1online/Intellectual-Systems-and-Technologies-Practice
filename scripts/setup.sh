@@ -622,8 +622,30 @@ done
 
 print_step "Очистка завершена"
 
-# Запуск
-print_header "ШАГ 11/11: Запуск сервисов"
+# Предварительная загрузка Docker-образов (уменьшает время build)
+if [[ "$LLM_USE_LOCAL" == "true" ]]; then
+    print_header "ШАГ 10/11: Предзагрузка Docker-образов"
+    
+    print_step "Загрузка базовых образов..."
+    docker pull quay.io/keycloak/keycloak:26.1 2>/dev/null || true
+    docker pull postgres:17-alpine 2>/dev/null || true
+    docker pull gitlab/gitlab-ce:latest 2>/dev/null || true
+    docker pull gitlab/gitlab-runner:latest 2>/dev/null || true
+    docker pull nextcloud:apache 2>/dev/null || true
+    docker pull registry:2 2>/dev/null || true
+    docker pull python:3.10-slim 2>/dev/null || true
+    
+    print_step "Загрузка LLM образа (может занять 5-10 минут)..."
+    print_step "Если образ уже есть — пропустит."
+    docker pull ghcr.io/ggml-org/llama.cpp:server-cuda12 2>/dev/null || true
+    
+    print_success "Все образы загружены"
+    echo ""
+    
+    print_header "ШАГ 11/11: Запуск сервисов"
+else
+    print_header "ШАГ 10/10: Запуск сервисов"
+fi
 
 print_step "Запуск docker-compose..."
 
