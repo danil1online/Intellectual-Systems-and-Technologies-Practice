@@ -100,6 +100,7 @@ c.Spawner.environment = {
     "LLM_CI_API_KEY": os.environ.get("LLM_CI_API_KEY", "local-api-key"),
     "LLM_CI_MODEL": os.environ.get("LLM_CI_MODEL", "gpt-4o"),
     "GGUF_PATH": os.environ.get("GGUF_PATH", "/models/model.gguf"),
+    "HF_HOME": "/hf-cache",
     "PIP_CACHE_DIR": "/shared/pip-cache",
 }
 

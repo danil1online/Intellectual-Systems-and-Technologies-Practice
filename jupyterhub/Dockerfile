@@ -60,7 +60,7 @@ COPY startup/ /app/startup/
 COPY startup-hooks/ /app/startup-hooks/
 
 # Создание директорий
-RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/data/cache_huggingface /shared/pip-cache
+RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/pip-cache
 
 # Добавление shared packages в PYTHONPATH
 RUN echo "/usr/local/lib/python3.10/shared-packages" > /usr/local/lib/python3.10/site-packages/shared-packages.pth

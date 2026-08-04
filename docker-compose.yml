@@ -173,7 +173,7 @@ services:
     volumes:
       - ./shared/data/logs:/app/logs
       - ./shared/data/docs:/app/docs:ro
-      - ./shared/data/cache_huggingface:/shared/data/cache_huggingface:rw
+      - ./shared/data/cache_huggingface:/hf-cache:rw
       - ./shared/data/shared-data:/shared/data:ro
       - ./shared/data/shared-packages/site-packages:/usr/local/lib/python3.10/shared-packages:ro
       - ./shared/data/shared-pip-cache:/shared/pip-cache
