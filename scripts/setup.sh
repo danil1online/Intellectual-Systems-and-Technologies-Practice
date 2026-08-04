@@ -595,7 +595,7 @@ fi
 # Удаляем Docker тома (с правильным префиксом)
 print_step "Удаление Docker томов..."
 PROJECT_PREFIX=$(basename "$PROJECT_DIR")
-for vol in keycloak-data kc-postgres-data jupyterhub-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged llm-models; do
+for vol in keycloak-data kc-postgres-data jupyterhub-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged; do
     FULL_VOL_NAME="${PROJECT_PREFIX}_${vol}"
     docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
 done
@@ -651,6 +651,19 @@ if [[ -n "$LLM_PROFILES" ]]; then
     docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard llm
 else
     docker compose up -d keycloak gitlab nextcloud admin-dashboard
+fi
+
+# Проверка модели в Docker volume для LLM
+if [[ "$LLM_USE_LOCAL" == "true" ]]; then
+    print_step "Проверка модели в Docker volume..."
+    FULL_VOLUME_NAME="${PROJECT_PREFIX}_llm-models"
+    if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+        print_success "Модель $MODEL_FILE найдена в Docker volume"
+    else
+        print_error "Модель $MODEL_FILE НЕ найдена в Docker volume $FULL_VOLUME_NAME!"
+        print_error "LLM контейнер не запустится. Запустите ШАГ 3/11 повторно."
+        exit 1
+    fi
 fi
 
 print_step "Ожидание запуска Keycloak..."
