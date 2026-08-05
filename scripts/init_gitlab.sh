@@ -158,8 +158,27 @@ create_gitkeep() {
 }
 
 echo "Создание директорий..."
-echo "  → .gitkeep"
-create_gitkeep "" "."
+
+# Корневой .gitkeep (отдельный запрос, без ведущего слэша)
+HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
+  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitkeep" \
+  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data "{
+    \"branch\": \"main\",
+    \"encoding\": \"base64\",
+    \"content\": \"\",
+    \"commit_message\": \"Add .gitkeep\"
+  }" -o ./.glab_response)
+
+if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+    echo "  ✓ .gitkeep"
+elif [[ "$HTTP_CODE" == "409" ]]; then
+    echo "  ✓ .gitkeep уже существует"
+else
+    echo "  ✗ Не удалось создать .gitkeep (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+fi
+
 echo "  → docs/.gitkeep"
 create_gitkeep "docs" "docs/.gitkeep"
 echo "  → notebooks/.gitkeep"
@@ -218,34 +237,46 @@ else
     echo "✗ Не удалось создать README.md (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
 
-# 4. Копируем docs/ через GitLab API
+# 4. Копируем docs/ через GitLab API (batch через Commits API)
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
+
+ACTIONS="["
+FIRST=true
 for filepath in "$DOCS_DIR"/*.md; do
     [ -f "$filepath" ] || continue
     filename=$(basename "$filepath")
     file_content=$(base64 -w 0 < "$filepath")
-    encoded_path=$(printf '%s' "docs/$filename" | jq -sRr '@uri')
 
-    HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
-      "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$encoded_path" \
-      --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-      --header "Content-Type: application/json" \
-      --data "{
-        \"branch\": \"main\",
-        \"encoding\": \"base64\",
-        \"content\": \"$file_content\",
-        \"commit_message\": \"Add docs/$filename\"
-      }" -o ./.glab_response)
-
-    if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
-        echo "  ✓ docs/$filename"
-    elif [[ "$HTTP_CODE" == "409" ]]; then
-        echo "  ✓ docs/$filename уже существует"
+    if [ "$FIRST" = true ]; then
+        FIRST=false
     else
-        echo "  ⚠ Не удалось добавить docs/$filename (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+        ACTIONS+=","
     fi
+
+    ACTIONS+="{\"action\":\"create\",\"file_path\":\"docs/$filename\",\"content\":\"$file_content\",\"encoding\":\"base64\"}"
 done
+ACTIONS+="]"
+
+HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 120 --request POST \
+  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/commits" \
+  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data "{
+    \"actions\": $ACTIONS,
+    \"branch\": \"main\",
+    \"commit_message\": \"Add docs/\"
+  }" -o ./.glab_response)
+
+if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+    echo "  ✓ docs/ (все файлы закоммичены)"
+    for filepath in "$DOCS_DIR"/*.md; do
+        [ -f "$filepath" ] || continue
+        echo "    ✓ docs/$(basename "$filepath")"
+    done
+else
+    echo "  ⚠ Ошибка при добавлении docs/ (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+fi
 
 echo "✓ Структура проекта инициализирована"
 
