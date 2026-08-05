@@ -237,55 +237,71 @@ else
     echo "✗ Не удалось создать README.md (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
 
-# 4. Копируем docs/ через GitLab API (batch через Commits API)
+# 4. Копируем docs/ через GitLab API (батчи по 5 файлов)
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 
-PAYLOAD_FILE=$(mktemp)
-
-ACTIONS="["
-FIRST=true
+BATCH_SIZE=5
+declare -a FILES=()
 for filepath in "$DOCS_DIR"/*.md; do
     [ -f "$filepath" ] || continue
-    filename=$(basename "$filepath")
-    file_content=$(base64 -w 0 < "$filepath")
-
-    if [ "$FIRST" = true ]; then
-        FIRST=false
-    else
-        ACTIONS+=","
-    fi
-
-    ACTIONS+="{\"action\":\"create\",\"file_path\":\"docs/$filename\",\"content\":\"$file_content\",\"encoding\":\"base64\"}"
+    FILES+=("$filepath")
 done
-ACTIONS+="]"
 
-# Записываем payload в файл, чтобы избежать "Argument list too long"
-cat > "$PAYLOAD_FILE" << PAYEOF
+TOTAL=${#FILES[@]}
+if [ "$TOTAL" -eq 0 ]; then
+    echo "  ✓ docs/ пуст"
+else
+    BATCH_NUM=0
+    for (( i=0; i<TOTAL; i+=BATCH_SIZE )); do
+        BATCH_NUM=$((BATCH_NUM + 1))
+        END=$((i + BATCH_SIZE))
+        [ "$END" -gt "$TOTAL" ] && END=$TOTAL
+
+        # Формируем actions через jq
+        ACTIONS="[]"
+        for (( j=i; j<END; j++ )); do
+            FILEPATH="${FILES[$j]}"
+            FILENAME=$(basename "$FILEPATH")
+            FILE_CONTENT=$(base64 -w 0 < "$FILEPATH")
+            ACTIONS=$(echo "$ACTIONS" | jq -c \
+                --arg path "docs/$FILENAME" \
+                --arg content "$FILE_CONTENT" \
+                '. + [{"action":"create","file_path":$path,"content":$content,"encoding":"base64"}]')
+        done
+
+        PAYLOAD_FILE=$(mktemp)
+        cat > "$PAYLOAD_FILE" << PAYEOF
 {
   "actions": $ACTIONS,
   "branch": "main",
-  "commit_message": "Add docs/"
+  "commit_message": "Add docs/ (batch $BATCH_NUM/$(( (TOTAL + BATCH_SIZE - 1) / BATCH_SIZE )))"
 }
 PAYEOF
 
-HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 120 --request POST \
-  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/commits" \
-  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-  --header "Content-Type: application/json" \
-  --data @"$PAYLOAD_FILE" -o ./.glab_response)
+        HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 120 --request POST \
+          "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/commits" \
+          --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+          --header "Content-Type: application/json" \
+          --data @"$PAYLOAD_FILE" -o ./.glab_response)
 
-if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
-    echo "  ✓ docs/ (все файлы закоммичены)"
-    for filepath in "$DOCS_DIR"/*.md; do
-        [ -f "$filepath" ] || continue
-        echo "    ✓ docs/$(basename "$filepath")"
+        if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+            for (( j=i; j<END; j++ )); do
+                echo "  ✓ docs/$(basename "${FILES[$j]}")"
+            done
+        else
+            echo "  ⚠ Ошибка batch $BATCH_NUM (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+        fi
+
+        rm -f "$PAYLOAD_FILE"
+
+        # Пауза между батчами, чтобы избежать Gitaly lock conflict
+        if [ "$END" -lt "$TOTAL" ]; then
+            sleep 3
+        fi
     done
-else
-    echo "  ⚠ Ошибка при добавлении docs/ (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+    echo "  ✓ docs/ ($TOTAL файлов)"
 fi
-
-rm -f "$PAYLOAD_FILE"
 
 echo "✓ Структура проекта инициализирована"
 
