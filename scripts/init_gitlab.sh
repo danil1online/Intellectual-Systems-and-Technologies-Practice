@@ -89,9 +89,8 @@ TEMPLATE_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/pro
      \"name\": \"project\",
      \"path\": \"project\",
      \"namespace_id\": $GROUP_ID,
-     \"visibility\": \"public\",
-     \"initialize_with_readme\": true
-   }")
+     \"visibility\": \"public\"
+    }")
 
 TEMPLATE_ID=$(echo "$TEMPLATE_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
 echo "✓ Шаблон проекта: ID=$TEMPLATE_ID"
@@ -118,6 +117,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
   --header "Content-Type: application/json" \
   --data "{
     \"branch\": \"main\",
+    \"encoding\": \"base64\",
     \"content\": \"$GITIGNORE_CONTENT\",
     \"commit_message\": \"Add .gitignore\"
   }" -o ./.glab_response)
@@ -130,7 +130,44 @@ else
     echo "✗ Не удалось создать .gitignore (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
 
-# 2. Создаём README.md
+# 2. Создаём .gitkeep для пустых директорий
+create_gitkeep() {
+    local FILE_PATH="$1"
+    local FILE_NAME="$2"
+    local ENCODED_PATH=$(printf '%s' "$FILE_PATH" | jq -sRr '@uri')
+    local EMPTY_BASE64=$(printf '%s' "" | base64 -w 0)
+
+    HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
+      "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$ENCODED_PATH" \
+      --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+      --header "Content-Type: application/json" \
+      --data "{
+        \"branch\": \"main\",
+        \"encoding\": \"base64\",
+        \"content\": \"$EMPTY_BASE64\",
+        \"commit_message\": \"Add $FILE_PATH/.gitkeep\"
+      }" -o ./.glab_response)
+
+    if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+        echo "  ✓ $FILE_PATH/.gitkeep"
+    elif [[ "$HTTP_CODE" == "409" ]]; then
+        echo "  ✓ $FILE_PATH/.gitkeep уже существует"
+    else
+        echo "  ✗ Не удалось создать $FILE_PATH/.gitkeep (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+    fi
+}
+
+echo "Создание директорий..."
+echo "  → .gitkeep"
+create_gitkeep "" "."
+echo "  → docs/.gitkeep"
+create_gitkeep "docs" "docs/.gitkeep"
+echo "  → notebooks/.gitkeep"
+create_gitkeep "notebooks" "notebooks/.gitkeep"
+echo "  → reports/.gitkeep"
+create_gitkeep "reports" "reports/.gitkeep"
+
+# 3. Создаём README.md
 README_CONTENT=$(base64 -w 0 << 'READMEEOF'
 # Academic Project — Шаблон
 
@@ -168,6 +205,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
   --header "Content-Type: application/json" \
   --data "{
     \"branch\": \"main\",
+    \"encoding\": \"base64\",
     \"content\": \"$README_CONTENT\",
     \"commit_message\": \"Add README.md\"
   }" -o ./.glab_response)
@@ -180,7 +218,7 @@ else
     echo "✗ Не удалось создать README.md (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
 
-# 3. Копируем docs/ через GitLab API
+# 4. Копируем docs/ через GitLab API
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 for filepath in "$DOCS_DIR"/*.md; do
@@ -195,6 +233,7 @@ for filepath in "$DOCS_DIR"/*.md; do
       --header "Content-Type: application/json" \
       --data "{
         \"branch\": \"main\",
+        \"encoding\": \"base64\",
         \"content\": \"$file_content\",
         \"commit_message\": \"Add docs/$filename\"
       }" -o ./.glab_response)
