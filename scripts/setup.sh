@@ -851,6 +851,17 @@ print_success "Runner создан (ID: $RUNNER_ID, Token: $RUNNER_TOKEN)"
 # ============================================
 # ФИНАЛЬНЫЙ ОТЧЁТ
 # ============================================
+
+# Обеспечиваем наличие переменных по умолчанию (защита от unbound variable)
+KEYCLOAK_PORT="${KEYCLOAK_PORT:-9200}"
+JUPYTERHUB_PORT="${JUPYTERHUB_PORT:-8000}"
+NEXTCLOUD_PORT="${NEXTCLOUD_PORT:-8080}"
+DASHBOARD_PORT="${DASHBOARD_PORT:-9000}"
+EXTERNAL_IP="${EXTERNAL_IP:-localhost}"
+GITLAB_HOST="${GITLAB_HOST:-localhost}"
+PRIMARY_LOCAL_IP="${PRIMARY_LOCAL_IP:-localhost}"
+USE_DNAT="${USE_DNAT:-false}"
+
 print_header "УСТАНОВКА ЗАВЕРШЕНА"
 
 echo ""
