@@ -164,16 +164,31 @@ curl -s --max-time 30 --request POST \
     \"message\": \"Add README.md\"
   }" > /dev/null 2>&1
 
-# 3. Копируем docs/ через git внутри контейнера
+# 3. Копируем docs/ через GitLab API
 echo "Копирование docs/..."
-docker exec gitlab sh -c '
-  cd /tmp && rm -rf project && git clone http://localhost/students/project.git
-  cp /shared/docs/*.md project/docs/ 2>/dev/null
-  cd project
-  git add .
-  git commit -m "Add docs/"
-  git push origin main
-' > /dev/null 2>&1
+DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
+for filepath in "$DOCS_DIR"/*.md; do
+    [ -f "$filepath" ] || continue
+    filename=$(basename "$filepath")
+    file_content=$(base64 -w 0 < "$filepath")
+    encoded_path=$(echo "docs/$filename" | base64)
+
+    curl -s --max-time 30 --request POST \
+      "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$encoded_path" \
+      --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+      --header "Content-Type: application/json" \
+      --data "{
+        \"branch\": \"main\",
+        \"content\": \"$file_content\",
+        \"message\": \"Add docs/$filename\"
+      }" > /dev/null 2>&1
+
+    if [ $? -eq 0 ]; then
+        echo "  ✓ docs/$filename"
+    else
+        echo "  ⚠ Не удалось добавить docs/$filename"
+    fi
+done
 
 echo "✓ Структура проекта инициализирована"
 
