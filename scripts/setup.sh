@@ -662,9 +662,9 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard llm gitlab-runner
+    docker compose $LLM_PROFILES up -d keycloak gitlab nextcloud admin-dashboard llm gitlab-runner keycloak-init
 else
-    docker compose up -d keycloak gitlab nextcloud admin-dashboard gitlab-runner
+    docker compose up -d keycloak gitlab nextcloud admin-dashboard gitlab-runner keycloak-init
 fi
 
 # Проверка модели в Docker volume для LLM
