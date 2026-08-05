@@ -99,7 +99,6 @@ Docker Compose-развёртывание полного учебного кла
 │
 ├── scripts/
 │   ├── setup.sh                 # Интерактивный инсталлятор
-  │   ├── init_keycloak.sh         # Создание OIDC-клиентов
    │   ├── init_gitlab.sh           # Инициализация GitLab
    │   ├── init_nextcloud.sh        # Настройка OIDC для Nextcloud
    │   └── healthcheck.sh           # Проверка здоровья сервисов
@@ -280,7 +279,7 @@ Dashboard:    http://<IP>:9000
 | **Keycloak (admin)** | `admin` | см. `.env` → `KC_ADMIN_PASSWORD` | `http://<IP>:9200/auth` |
 | **Nextcloud (admin)** | `admin` | см. `.env` → `NC_ADMIN_PASSWORD` | `http://<IP>:8080` |
 | **JupyterHub** | любой (через Keycloak) | тот же, что в Keycloak | `http://<IP>:<JUPYTERHUB_PORT>` |
-| **Dashboard** | lecturer_01 (через Keycloak OIDC) | см. `.env` → `LECTURER_01_PASSWORD` | `http://<IP>:<DASHBOARD_PORT>` |
+| **Dashboard** | admin (Basic auth) | см. `.env` → `DASHBOARD_PASSWORD` | `http://<IP>:<DASHBOARD_PORT>` |
 
 > **Важно:** Все пароли генерируются при запуске `setup.sh` и хранятся в файле `.env`.
 > Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|KC_ADMIN_PASSWORD|NC_ADMIN_PASSWORD|LECTURER_"`
@@ -378,7 +377,7 @@ sleep 300
 docker compose up -d jupyterhub
 
 # 5. Инициализация
-bash scripts/init_keycloak.sh
+docker compose up keycloak-init
 bash scripts/init_gitlab.sh
 bash scripts/init_nextcloud.sh
 
@@ -707,7 +706,7 @@ ai_review:
 
 ### Шаблон проекта
 
-При создании группы `students` автоматически создаётся шаблонный проект `project`, который студенты форкают.
+При создании группы `students` автоматически создаётся шаблонный проект `project` со структурой: `docs/`, `notebooks/`, `reports/`.
 
 ### Docker Registry
 
@@ -780,20 +779,33 @@ curl -O http://<IP>:9000/api/export?date_from=2025-09-01
 
 ```
 Шаг 1. Регистрация
-  └→ Открыть GitLab → Sign in → Keycloak → Register → student_<группа>_<номер>
+  └→ Открыть JupyterHub: http://<IP>:8000
+  └→ Нажать "Keycloak" → Register → student_<группа>_<номер>
+  └→ Войти с теми же данными
 
-Шаг 2. SSH-ключ
-  └→ JupyterLab Terminal → ssh-keygen
-  └→ GitLab Settings → SSH Keys → добавить ключ
+Шаг 2. Пароль для Git-клиента
+  └→ После входа в GitLab через Keycloak:
+  └→ GitLab → Settings (иконка профиля) → Password
+  └→ Установить пароль (не обязательно тот же, что в Keycloak)
+  └→ Теперь git clone/push/pull по HTTP работает
 
-Шаг 3. Практическая 1 (Git)
+Шаг 3. Клонирование проекта
+  └→ Терминал JupyterLab: git clone http://<IP>/students/project.git
+  └→ Или: git clone https://oauth2:<PAT>@<IP>/students/project.git
+
+Шаг 4. SSH-ключ (опционально)
+  └→ JupyterLab Terminal → ssh-keygen -t ed25519 -C student@pc
+  └→ GitLab → Settings → SSH Keys → добавить ключ
+  └→ Использовать: git clone git@gitlab.<IP>:students/project.git
+
+Шаг 5. Практическая 1 (Git)
   └→ Терминал JupyterLab + GitLab UI
   └→ Отчёт: PDF → репозиторий Reports (вручную)
 
-Шаг 4. Практическая 2+ (ipynb)
-  ├── ИИ-Ментор: %%ask_mentor в ячейках
-  ├── Отчёт: ipynb → скачать → PDF → репозиторий Reports (вручную)
-  └── CI/CD: Runner проверяет ipynb автоматически
+Шаг 6. Практическая 2+ (ipynb)
+   ├── ИИ-Ментор: %%ask_mentor в ячейках
+   ├── Отчёт: ipynb → скачать → PDF → репозиторий Reports (вручную)
+   └── CI/CD: Runner проверяет ipynb автоматически
 ```
 
 ### Пример работы с ИИ-Ментором
@@ -879,7 +891,8 @@ grep -c '"SMART"' shared/logs/grading_log.json
 | `NC_ADMIN_PASSWORD` | Пароль Nextcloud admin | auto-generated |
 | `JH_API_TOKEN` | JupyterHub API token | auto-generated |
 | `GITLAB_HOST` | IP/домен GitLab | `10.8.1.3` (или другой) |
-| `HOST_DOMAIN` | Домен хоста | `10.8.1.3` |
+| `GITLAB_URL` | URL GitLab для Dashboard API | `http://gitlab:80` |
+| `GITLAB_ADMIN_TOKEN` | PAT для доступа к GitLab API | `glpat-placeholder` |
 
 ### docker-compose profile
 

@@ -42,14 +42,6 @@ fi
 
 echo "Admin authenticated successfully"
 
-if [ -z "$ADMIN_TOKEN" ]; then
-  echo "ERROR: Cannot authenticate as admin"
-  echo "Response: $TOKEN_RESPONSE"
-  exit 1
-fi
-
-echo "Admin authenticated successfully"
-
 # Создаём realm istp
 echo "Creating realm istp..."
 REALM_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" "$KEYCLOAK_URL/admin/realms/istp" \
@@ -75,7 +67,7 @@ if [ "$REALM_EXISTS" != "200" ]; then
         "parRequestUriLifespan": "60",
         "cibaInterval": "5",
         "realmReusableOtpCode": "false",
-        "frontendUrl": "http://${GITLAB_HOST}:${KEYCLOAK_PORT:-9200}/auth"
+        "frontendUrl": "http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth"
       }
     }' > /dev/null
   echo "Realm istp created"
@@ -85,7 +77,7 @@ else
   curl -s -X PUT "$KEYCLOAK_URL/admin/realms/istp" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"attributes\":{\"frontendUrl\":\"http://${GITLAB_HOST}:${KEYCLOAK_PORT:-9200}/auth\"}}" > /dev/null
+    -d "{\"attributes\":{\"frontendUrl\":\"http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth\"}}" > /dev/null
   echo "  Realm frontendUrl updated"
 fi
 

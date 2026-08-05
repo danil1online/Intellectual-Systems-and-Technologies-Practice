@@ -83,17 +83,99 @@ echo ""
 echo "=== GitLab: создание шаблона проекта для студентов ==="
 
 TEMPLATE_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/projects" \
-  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-  --header "Content-Type: application/json" \
-  --data "{
-    \"name\": \"project\",
-    \"path\": \"project\",
-    \"namespace_id\": $GROUP_ID,
-    \"visibility\": \"public\"
-  }")
+   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+   --header "Content-Type: application/json" \
+   --data "{
+     \"name\": \"project\",
+     \"path\": \"project\",
+     \"namespace_id\": $GROUP_ID,
+     \"visibility\": \"public\",
+     \"initialize_with_readme\": true
+   }")
 
 TEMPLATE_ID=$(echo "$TEMPLATE_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
 echo "✓ Шаблон проекта: ID=$TEMPLATE_ID"
+
+echo ""
+echo "=== GitLab: инициализация структуры проекта ==="
+
+# 1. Создаём .gitignore
+GITIGNORE_CONTENT=$(base64 -w 0 << 'GITIGNOREEOF'
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+*.egg-info/
+dist/
+build/
+.DS_Store
+GITIGNOREEOF
+)
+
+curl -s --max-time 30 --request POST \
+  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$(echo '.gitignore' | base64)" \
+  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data "{
+    \"branch\": \"main\",
+    \"content\": \"$GITIGNORE_CONTENT\",
+    \"message\": \"Add .gitignore\"
+  }" > /dev/null 2>&1
+
+# 2. Создаём README.md
+README_CONTENT=$(base64 -w 0 << 'READMEEOF'
+# Academic Project — Шаблон
+
+## Структура проекта
+
+| Папка/Файл | Назначение |
+|---|---|
+| `docs/` | Методические указания и инструкции |
+| `notebooks/` | Практические работы (`.ipynb`) |
+| `reports/` | Ваши отчёты (`.md`) |
+
+## Начало работы
+
+### Клонирование (HTTP)
+```bash
+git clone http://10.8.1.3/students/project.git
+```
+
+### SSH
+```bash
+git clone git@gitlab.10.8.1.3:students/project.git
+```
+
+## Полезные ссылки
+
+- **JupyterHub:** http://10.8.1.3:8000 — ИИ-ментор (`%%ask_mentor`)
+- **Методички:** файлы в `docs/`
+- **Dashboard:** http://10.8.1.3:9000 — панель преподавателя
+READMEEOF
+)
+
+curl -s --max-time 30 --request POST \
+  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$(echo 'README.md' | base64)" \
+  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data "{
+    \"branch\": \"main\",
+    \"content\": \"$README_CONTENT\",
+    \"message\": \"Add README.md\"
+  }" > /dev/null 2>&1
+
+# 3. Копируем docs/ через git внутри контейнера
+echo "Копирование docs/..."
+docker exec gitlab sh -c '
+  cd /tmp && rm -rf project && git clone http://localhost/students/project.git
+  cp /shared/docs/*.md project/docs/ 2>/dev/null
+  cd project
+  git add .
+  git commit -m "Add docs/"
+  git push origin main
+' > /dev/null 2>&1
+
+echo "✓ Структура проекта инициализирована"
 
 echo ""
 echo "=== GitLab: настройка SSH deploy key для runner ==="

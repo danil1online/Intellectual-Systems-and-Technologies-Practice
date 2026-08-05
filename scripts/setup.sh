@@ -904,6 +904,14 @@ if [[ "${USE_DNAT}" == "true" ]]; then
     echo -e ""
 fi
 
+echo -e ""
+echo -e "${BOLD}⚠️ Важно для доступа к GitLab по HTTP:${NC}"
+echo -e "  После первого входа в GitLab через Keycloak:"
+echo -e "  1. GitLab → Settings (иконка профиля) → Password"
+echo -e "  2. Установить пароль для Git-клиента (не обязательно тот же, что в Keycloak)"
+echo -e "  ${GREEN}✓${NC} После этого git clone/push/pull по HTTP будет работать"
+echo ""
+
 echo -e "${YELLOW}Следующие шаги:${NC}"
 echo ""
 echo "  1. Студенты регистрируются: GitLab → Sign in → Keycloak → Register"

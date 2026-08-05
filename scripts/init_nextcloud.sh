@@ -8,13 +8,6 @@
 
 set -uo pipefail
 
-# --- Функции вывода (дублируем setup.sh) ---
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-print_step() { echo -e "[\033[0;34m$(date '+%H:%M:%S')\033[0m] $1"; }
-
 # --- Загрузка переменных из .env ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

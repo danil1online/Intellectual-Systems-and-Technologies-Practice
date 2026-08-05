@@ -102,17 +102,18 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... student_pia_01@academic
 
 ## 5. Доступ к методическим материалам
 
-Все методические материалы (`.md` файлы) доступны в репозитории GitLab:
+Все методические материалы (`.md` файлы) доступны в вашем проекте в GitLab:
 
 **Способ 1: Через веб-интерфейс GitLab**
 1. Откройте **GitLab**: `http://<server-ip>:80`
-2. Найдите репозиторий `methodical_docs` (в группе `methodical` или в вашем профиле)
-3. Откройте любой файл `.md` — он отобразится в отформатированном виде
+2. Откройте проект `students/project`
+3. Перейдите в папку `docs/` — там все методички
+4. Откройте любой файл `.md` — он отобразится в отформатированном виде
 
 **Способ 2: Через терминал JupyterLab**
 ```bash
-git clone http://<server-ip>/methodical/methodical_docs.git
-cd methodical_docs
+git clone http://<server-ip>/students/project.git
+cd project/docs
 ls -la
 ```
 
