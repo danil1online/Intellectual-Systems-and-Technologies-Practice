@@ -528,6 +528,9 @@ Refresh: auto 5 seconds
 | `GET /api/stats` | LAZY/SMART ratio по студентам |
 | `GET /api/summary` | Общая сводка |
 | `GET /api/export` | CSV экспорт |
+| `GET /api/gitlab/groups` | Группы GitLab |
+| `GET /api/gitlab/projects` | Проекты GitLab |
+| `GET /api/gitlab/stats` | Сводка GitLab |
 
 **Фильтры:**
 - По студенту (`?student=student_pia_01`)
@@ -704,7 +707,7 @@ ai_review:
 
 ### Шаблон проекта
 
-При создании группы `students` автоматически создаётся шаблонный проект `academic-template`, который студенты форкают.
+При создании группы `students` автоматически создаётся шаблонный проект `project`, который студенты форкают.
 
 ### Docker Registry
 

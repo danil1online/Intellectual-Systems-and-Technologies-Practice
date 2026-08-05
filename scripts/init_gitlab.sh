@@ -61,7 +61,7 @@ GROUP_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/groups
   --data '{
     "name": "students",
     "path": "students",
-    "visibility": "private"
+    "visibility": "public"
   }')
 
 GROUP_ID=$(echo "$GROUP_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
@@ -86,10 +86,10 @@ TEMPLATE_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/pro
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data "{
-    \"name\": \"academic-template\",
-    \"path\": \"academic-template\",
+    \"name\": \"project\",
+    \"path\": \"project\",
     \"namespace_id\": $GROUP_ID,
-    \"visibility\": \"private\"
+    \"visibility\": \"public\"
   }")
 
 TEMPLATE_ID=$(echo "$TEMPLATE_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")

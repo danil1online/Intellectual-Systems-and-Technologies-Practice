@@ -305,6 +305,8 @@ services:
       FLASK_ENV: production
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
+      GITLAB_URL: "http://gitlab:80"
+      GITLAB_ADMIN_TOKEN: ${GITLAB_ADMIN_TOKEN:-}
     volumes:
       - ./shared/data/logs:/app/logs:ro
     networks:

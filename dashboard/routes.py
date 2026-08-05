@@ -6,6 +6,7 @@ import os
 import json
 import datetime
 import base64
+import requests
 from flask import Blueprint, jsonify, request, render_template, Response, abort
 
 api_bp = Blueprint("api", __name__)
@@ -44,6 +45,20 @@ def auth_required(f):
     return decorated_function
 
 LOG_FILE = os.environ.get("LOG_FILE", "/app/logs/grading_log.json")
+GITLAB_URL = os.environ.get("GITLAB_URL", "http://localhost")
+GITLAB_TOKEN = os.environ.get("GITLAB_ADMIN_TOKEN", "")
+
+
+def gitlab_api_request(endpoint):
+    """Запрос к GitLab API."""
+    if not GITLAB_TOKEN:
+        return []
+    headers = {"PRIVATE-TOKEN": GITLAB_TOKEN}
+    try:
+        resp = requests.get(f"{GITLAB_URL}/api/v4/{endpoint}", headers=headers, timeout=10)
+        return resp.json() if resp.status_code == 200 else []
+    except Exception:
+        return []
 
 
 def read_logs():
@@ -205,6 +220,34 @@ def get_summary():
         "penalties": penalties,
         "unique_students": unique_students,
         "daily": daily,
+    })
+
+
+@api_bp.route("/api/gitlab/groups")
+@auth_required
+def get_gitlab_groups():
+    """Получить список групп GitLab."""
+    return jsonify(gitlab_api_request("groups?per_page=100"))
+
+
+@api_bp.route("/api/gitlab/projects")
+@auth_required
+def get_gitlab_projects():
+    """Получить список проектов GitLab."""
+    return jsonify(gitlab_api_request("projects?per_page=100"))
+
+
+@api_bp.route("/api/gitlab/stats")
+@auth_required
+def get_gitlab_stats():
+    """Сводка по GitLab."""
+    groups = gitlab_api_request("groups?per_page=100")
+    projects = gitlab_api_request("projects?per_page=100")
+    users = gitlab_api_request("users?per_page=100")
+    return jsonify({
+        "total_groups": len(groups),
+        "total_projects": len(projects),
+        "total_users": len(users),
     })
 
 

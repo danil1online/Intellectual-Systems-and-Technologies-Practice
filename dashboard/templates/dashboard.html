@@ -160,6 +160,14 @@
                 <div class="label">Студентов</div>
                 <div class="value" id="total-students">—</div>
             </div>
+            <div class="stat-card">
+                <div class="label">Групп GitLab</div>
+                <div class="value" id="total-groups">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Проектов</div>
+                <div class="value" id="total-projects">—</div>
+            </div>
         </div>
 
         <!-- Filters -->
@@ -203,6 +211,24 @@
                 <tbody id="logs-tbody">
                     <tr><td colspan="6" style="text-align:center;color:#999">Загрузка...</td></tr>
                 </tbody>
+            </table>
+        </div>
+
+        <!-- GitLab Groups -->
+        <div class="table-container" style="margin-top:24px">
+            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">Группы GitLab</h3>
+            <table>
+                <thead><tr><th>Название</th><th>Путь</th><th>Видимость</th><th>Проектов</th></tr></thead>
+                <tbody id="gitlab-groups-tbody"><tr><td colspan="4" style="text-align:center;color:#999">Загрузка...</td></tr></tbody>
+            </table>
+        </div>
+
+        <!-- GitLab Projects -->
+        <div class="table-container" style="margin-top:24px">
+            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">Проекты GitLab</h3>
+            <table>
+                <thead><tr><th>Имя</th><th>Группа</th><th>Видимость</th><th>Последний коммит</th></tr></thead>
+                <tbody id="gitlab-projects-tbody"><tr><td colspan="4" style="text-align:center;color:#999">Загрузка...</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -302,6 +328,33 @@
         function refresh() {
             loadLogs();
             loadStats();
+            loadGitLabData();
+        }
+
+        async function loadGitLabData() {
+            try {
+                const groupsRes = await fetch('/api/gitlab/groups');
+                const groups = await groupsRes.json();
+                const groupsTbody = document.getElementById('gitlab-groups-tbody');
+                if (groups && groups.length > 0) {
+                    groupsTbody.innerHTML = groups.map(g =>
+                        `<tr><td><strong>${g.name}</strong></td><td>${g.full_path}</td><td>${g.visibility}</td><td>${g.projects_count || '—'}</td></tr>`
+                    ).join('');
+                    document.getElementById('total-groups').textContent = groups.length;
+                }
+            } catch(e) { console.log('GitLab groups error:', e); }
+
+            try {
+                const projectsRes = await fetch('/api/gitlab/projects');
+                const projects = await projectsRes.json();
+                const projectsTbody = document.getElementById('gitlab-projects-tbody');
+                if (projects && projects.length > 0) {
+                    projectsTbody.innerHTML = projects.slice(0, 20).map(p =>
+                        `<tr><td><strong>${p.name}</strong></td><td>${p.namespace?.full_path || '-'}</td><td>${p.visibility}</td><td>${p.last_activity_at || '-'}</td></tr>`
+                    ).join('');
+                    document.getElementById('total-projects').textContent = projects.length;
+                }
+            } catch(e) { console.log('GitLab projects error:', e); }
         }
 
         refresh();
