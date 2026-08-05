@@ -112,15 +112,23 @@ build/
 GITIGNOREEOF
 )
 
-curl -s --max-time 30 --request POST \
-  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$(echo '.gitignore' | base64)" \
+HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
+  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitignore" \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data "{
     \"branch\": \"main\",
     \"content\": \"$GITIGNORE_CONTENT\",
     \"message\": \"Add .gitignore\"
-  }" > /dev/null 2>&1
+  }" -o ./.glab_response)
+
+if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+    echo "✓ .gitignore создан"
+elif [[ "$HTTP_CODE" == "409" ]]; then
+    echo "✓ .gitignore уже существует"
+else
+    echo "✗ Не удалось создать .gitignore (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+fi
 
 # 2. Создаём README.md
 README_CONTENT=$(base64 -w 0 << 'READMEEOF'
@@ -154,15 +162,23 @@ git clone git@gitlab.10.8.1.3:students/project.git
 READMEEOF
 )
 
-curl -s --max-time 30 --request POST \
-  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$(echo 'README.md' | base64)" \
+HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
+  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/README.md" \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data "{
     \"branch\": \"main\",
     \"content\": \"$README_CONTENT\",
     \"message\": \"Add README.md\"
-  }" > /dev/null 2>&1
+  }" -o ./.glab_response)
+
+if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+    echo "✓ README.md создан"
+elif [[ "$HTTP_CODE" == "409" ]]; then
+    echo "✓ README.md уже существует"
+else
+    echo "✗ Не удалось создать README.md (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+fi
 
 # 3. Копируем docs/ через GitLab API
 echo "Копирование docs/..."
@@ -171,9 +187,9 @@ for filepath in "$DOCS_DIR"/*.md; do
     [ -f "$filepath" ] || continue
     filename=$(basename "$filepath")
     file_content=$(base64 -w 0 < "$filepath")
-    encoded_path=$(echo "docs/$filename" | base64)
+    encoded_path=$(printf '%s' "docs/$filename" | jq -sR @uri)
 
-    curl -s --max-time 30 --request POST \
+    HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
       "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$encoded_path" \
       --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
       --header "Content-Type: application/json" \
@@ -181,12 +197,14 @@ for filepath in "$DOCS_DIR"/*.md; do
         \"branch\": \"main\",
         \"content\": \"$file_content\",
         \"message\": \"Add docs/$filename\"
-      }" > /dev/null 2>&1
+      }" -o ./.glab_response)
 
-    if [ $? -eq 0 ]; then
+    if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
         echo "  ✓ docs/$filename"
+    elif [[ "$HTTP_CODE" == "409" ]]; then
+        echo "  ✓ docs/$filename уже существует"
     else
-        echo "  ⚠ Не удалось добавить docs/$filename"
+        echo "  ⚠ Не удалось добавить docs/$filename (HTTP $HTTP_CODE): $(cat ./.glab_response)"
     fi
 done
 
