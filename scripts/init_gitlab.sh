@@ -119,7 +119,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
   --data "{
     \"branch\": \"main\",
     \"content\": \"$GITIGNORE_CONTENT\",
-    \"message\": \"Add .gitignore\"
+    \"commit_message\": \"Add .gitignore\"
   }" -o ./.glab_response)
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
@@ -169,7 +169,7 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
   --data "{
     \"branch\": \"main\",
     \"content\": \"$README_CONTENT\",
-    \"message\": \"Add README.md\"
+    \"commit_message\": \"Add README.md\"
   }" -o ./.glab_response)
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
@@ -187,7 +187,7 @@ for filepath in "$DOCS_DIR"/*.md; do
     [ -f "$filepath" ] || continue
     filename=$(basename "$filepath")
     file_content=$(base64 -w 0 < "$filepath")
-    encoded_path=$(printf '%s' "docs/$filename" | jq -sR @uri)
+    encoded_path=$(printf '%s' "docs/$filename" | jq -sRr '@uri')
 
     HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
       "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$encoded_path" \
@@ -196,7 +196,7 @@ for filepath in "$DOCS_DIR"/*.md; do
       --data "{
         \"branch\": \"main\",
         \"content\": \"$file_content\",
-        \"message\": \"Add docs/$filename\"
+        \"commit_message\": \"Add docs/$filename\"
       }" -o ./.glab_response)
 
     if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
