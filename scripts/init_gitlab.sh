@@ -271,13 +271,11 @@ else
         done
 
         PAYLOAD_FILE=$(mktemp)
-        cat > "$PAYLOAD_FILE" << PAYEOF
-{
-  "actions": $ACTIONS,
-  "branch": "main",
-  "commit_message": "Add docs/ (batch $BATCH_NUM/$(( (TOTAL + BATCH_SIZE - 1) / BATCH_SIZE )))"
-}
-PAYEOF
+        jq -n \
+          --argjson actions "$ACTIONS" \
+          --arg msg "Add docs/ (batch $BATCH_NUM/$(( (TOTAL + BATCH_SIZE - 1) / BATCH_SIZE )))" \
+          '{actions:$actions,branch:"main",commit_message:$msg}' \
+          > "$PAYLOAD_FILE"
 
         HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 120 --request POST \
           "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/commits" \
