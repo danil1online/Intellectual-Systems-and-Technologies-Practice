@@ -241,6 +241,8 @@ fi
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 
+PAYLOAD_FILE=$(mktemp)
+
 ACTIONS="["
 FIRST=true
 for filepath in "$DOCS_DIR"/*.md; do
@@ -258,15 +260,20 @@ for filepath in "$DOCS_DIR"/*.md; do
 done
 ACTIONS+="]"
 
+# Записываем payload в файл, чтобы избежать "Argument list too long"
+cat > "$PAYLOAD_FILE" << PAYEOF
+{
+  "actions": $ACTIONS,
+  "branch": "main",
+  "commit_message": "Add docs/"
+}
+PAYEOF
+
 HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 120 --request POST \
   "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/commits" \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
-  --data "{
-    \"actions\": $ACTIONS,
-    \"branch\": \"main\",
-    \"commit_message\": \"Add docs/\"
-  }" -o ./.glab_response)
+  --data @"$PAYLOAD_FILE" -o ./.glab_response)
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "  ✓ docs/ (все файлы закоммичены)"
@@ -277,6 +284,8 @@ if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
 else
     echo "  ⚠ Ошибка при добавлении docs/ (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
+
+rm -f "$PAYLOAD_FILE"
 
 echo "✓ Структура проекта инициализирована"
 
