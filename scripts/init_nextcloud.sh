@@ -8,6 +8,11 @@
 
 set -uo pipefail
 
+# --- Вспомогательные функции ---
+print_step() {
+    echo "  → $1"
+}
+
 # --- Загрузка переменных из .env ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

@@ -237,69 +237,37 @@ else
     echo "✗ Не удалось создать README.md (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
 
-# 4. Копируем docs/ через GitLab API (батчи по 5 файлов)
+# 4. Копируем docs/ через GitLab API (индивидуальные POST)
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 
-BATCH_SIZE=5
-declare -a FILES=()
 for filepath in "$DOCS_DIR"/*.md; do
     [ -f "$filepath" ] || continue
-    FILES+=("$filepath")
+    filename=$(basename "$filepath")
+    file_content=$(base64 -w 0 < "$filepath")
+    encoded_path=$(printf '%s' "docs/$filename" | jq -sRr '@uri')
+
+    HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 60 --request POST \
+      "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$encoded_path" \
+      --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+      --header "Content-Type: application/json" \
+      --data "{
+        \"branch\": \"main\",
+        \"encoding\": \"base64\",
+        \"content\": \"$file_content\",
+        \"commit_message\": \"Add docs/$filename\"
+      }" -o ./.glab_response)
+
+    if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+        echo "  ✓ docs/$filename"
+    elif [[ "$HTTP_CODE" == "409" ]]; then
+        echo "  ✓ docs/$filename уже существует"
+    else
+        echo "  ⚠ Не удалось добавить docs/$filename (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+    fi
+
+    sleep 2
 done
-
-TOTAL=${#FILES[@]}
-if [ "$TOTAL" -eq 0 ]; then
-    echo "  ✓ docs/ пуст"
-else
-    BATCH_NUM=0
-    for (( i=0; i<TOTAL; i+=BATCH_SIZE )); do
-        BATCH_NUM=$((BATCH_NUM + 1))
-        END=$((i + BATCH_SIZE))
-        [ "$END" -gt "$TOTAL" ] && END=$TOTAL
-
-        # Формируем actions через jq
-        ACTIONS="[]"
-        for (( j=i; j<END; j++ )); do
-            FILEPATH="${FILES[$j]}"
-            FILENAME=$(basename "$FILEPATH")
-            FILE_CONTENT=$(base64 -w 0 < "$FILEPATH")
-            ACTIONS=$(echo "$ACTIONS" | jq -c \
-                --arg path "docs/$FILENAME" \
-                --arg content "$FILE_CONTENT" \
-                '. + [{"action":"create","file_path":$path,"content":$content,"encoding":"base64"}]')
-        done
-
-        PAYLOAD_FILE=$(mktemp)
-        jq -n \
-          --argjson actions "$ACTIONS" \
-          --arg msg "Add docs/ (batch $BATCH_NUM/$(( (TOTAL + BATCH_SIZE - 1) / BATCH_SIZE )))" \
-          '{actions:$actions,branch:"main",commit_message:$msg}' \
-          > "$PAYLOAD_FILE"
-
-        HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 120 --request POST \
-          "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/commits" \
-          --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-          --header "Content-Type: application/json" \
-          --data @"$PAYLOAD_FILE" -o ./.glab_response)
-
-        if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
-            for (( j=i; j<END; j++ )); do
-                echo "  ✓ docs/$(basename "${FILES[$j]}")"
-            done
-        else
-            echo "  ⚠ Ошибка batch $BATCH_NUM (HTTP $HTTP_CODE): $(cat ./.glab_response)"
-        fi
-
-        rm -f "$PAYLOAD_FILE"
-
-        # Пауза между батчами, чтобы избежать Gitaly lock conflict
-        if [ "$END" -lt "$TOTAL" ]; then
-            sleep 3
-        fi
-    done
-    echo "  ✓ docs/ ($TOTAL файлов)"
-fi
 
 echo "✓ Структура проекта инициализирована"
 
