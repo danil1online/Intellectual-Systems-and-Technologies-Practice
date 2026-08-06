@@ -254,7 +254,7 @@ TMP_DIR=$(mktemp -d)
 echo "  → Клонируем..."
 
 # Клонируем с токеном
-if git clone https://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git "$TMP_DIR" 2>&1; then
+if git clone http://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git "$TMP_DIR" 2>&1; then
     echo "  ✓ Клонируем"
     # Копируем docs
     cp "$DOCS_DIR"/*.md "$TMP_DIR/docs/"
@@ -265,7 +265,7 @@ if git clone https://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git "$TMP_
     git add docs/
     if git commit -m "Add docs/" 2>&1; then
         echo "  → Push..."
-        if git push https://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git main 2>&1; then
+        if git push http://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git main 2>&1; then
             echo "  ✓ docs/ добавлены"
         else
             echo "  ⚠ Push не удался"
