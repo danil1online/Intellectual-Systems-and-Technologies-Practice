@@ -58,6 +58,7 @@ COPY jupyter_ai_config.json /etc/jupyter/jupyter_ai_config.json
 COPY persona_mentor.py /app/persona_mentor.py
 COPY startup/ /app/startup/
 COPY startup-hooks/ /app/startup-hooks/
+COPY startup/00_mentor.pth /usr/local/lib/python3.10/site-packages/00_mentor.pth
 
 # Создание директорий
 RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/pip-cache
