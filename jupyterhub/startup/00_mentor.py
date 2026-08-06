@@ -10,6 +10,7 @@
 
 from IPython.core.magic import register_cell_magic
 import json
+import re
 import requests
 import os
 from datetime import datetime
@@ -32,6 +33,22 @@ SMART (умный запрос / вайб-кодинг):
 Отвечай СТРОГО в формате JSON (без markdown, без объяснений):
 {"category": "LAZY" или "SMART", "penalty": true или false, "reason": "короткое объяснение", "assistant_response": "ответ студенту"}
 """
+
+# ============================================
+# Локальная эвристика для классификации (fallback)
+# ============================================
+
+def classify_query(text):
+    """Определяет LAZY/SMART без обращения к LLM."""
+    has_code = bool(re.search(r'\b(def |class |import |for |while |if |return )', text))
+    has_error = bool(re.search(r'\b(Error|Traceback|TypeError|IndexError|KeyError|ошибк)', text, re.IGNORECASE))
+    has_lazy = bool(re.search(r'\b(реши за меня|напиши полностью|дай готовое|сделай за меня|решение|ответ)', text, re.IGNORECASE))
+
+    if has_lazy:
+        return 'LAZY', True, 'Запрос содержит просьбу дать готовое решение.'
+    if has_code or has_error:
+        return 'SMART', False, 'Студент приложил код и задал конкретный вопрос.'
+    return 'SMART', False, 'Запрос содержит технический вопрос по программированию.'
 
 
 @register_cell_magic
@@ -82,27 +99,41 @@ def ask_mentor(line, cell):
         result = response.json()
         message = result["choices"][0]["message"]
 
-        # Берём content, если пустой — reasoning_content (мыслящие модели)
-        ai_content = message.get("content", "").strip()
-        reasoning = message.get("reasoning_content", "").strip()
+        # Извлекаем контент из обоих полей (OpenAI API совместимость)
+        ai_content = message.get("content", "") or ""
+        reasoning = message.get("reasoning_content", "") or ""
 
-        if not ai_content and reasoning:
-            ai_content = reasoning
-
-        # Парсим JSON ответ от модели
-        # Модель может обернуть в markdown code block — убираем
-        if ai_content.startswith("```"):
-            ai_content = ai_content.split("\n", 1)[-1]
-            if ai_content.endswith("```"):
-                ai_content = ai_content.rsplit("\n", 1)[0]
-
-        ai_json = json.loads(ai_content)
+        # Если content пустой, берём reasoning (для мыслящих моделей)
+        target_text = ai_content.strip()
+        if not target_text and reasoning:
+            target_text = reasoning
 
         # Показываем рассуждения ментора
         if reasoning:
             print("🧠 Ментор думает:")
             print(reasoning[:2000])
             print()
+
+        # Убираем markdown code blocks если есть
+        if target_text.startswith("```"):
+            target_text = target_text.split("\n", 1)[-1]
+            if target_text.endswith("```"):
+                target_text = target_text.rsplit("\n", 1)[0]
+
+        # Regex: ищем JSON-объект в любом месте текста
+        json_match = re.search(r'(\{[\s\S]*\})', target_text)
+        if json_match:
+            clean_json = json_match.group(1).strip()
+            ai_json = json.loads(clean_json)
+        else:
+            # Fallback: локальная эвристика + сырой текст из reasoning
+            category, penalty, reason = classify_query(prompt_text)
+            ai_json = {
+                "category": category,
+                "penalty": penalty,
+                "reason": reason,
+                "assistant_response": target_text if target_text else "Не удалось получить структурированный ответ. Обратитесь к преподавателю.",
+            }
 
         # Формируем лог
         student = os.environ.get("JUPYTERHUB_USER", "local_user")
@@ -136,7 +167,7 @@ def ask_mentor(line, cell):
 
     except json.JSONDecodeError as e:
         print(f"⚠️ Ошибка парсинга ответа ИИ: {e}")
-        print(f"Сырой ответ: {ai_content if 'ai_content' in dir() else 'N/A'}")
+        print(f"Сырой ответ: {target_text if 'target_text' in dir() else 'N/A'}")
     except requests.exceptions.ConnectionError:
         print("❌ Ошибка связи с ИИ-ментором. Проверьте подключение к LLM-серверу.")
         print(f"  Endpoint: {api_base}")
