@@ -58,7 +58,6 @@ def ask_mentor(line, cell):
     api_base = os.environ.get("LLM_MENTOR_BASE_URL", "http://llm:8080/v1")
     model = os.environ.get("LLM_MENTOR_MODEL", "gpt-4o")
 
-    # Если используется OpenAI API — отправляем через proxy
     try:
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -81,7 +80,14 @@ def ask_mentor(line, cell):
         response.raise_for_status()
 
         result = response.json()
-        ai_content = result["choices"][0]["message"]["content"].strip()
+        message = result["choices"][0]["message"]
+
+        # Берём content, если пустой — reasoning_content (мыслящие модели)
+        ai_content = message.get("content", "").strip()
+        reasoning = message.get("reasoning_content", "").strip()
+
+        if not ai_content and reasoning:
+            ai_content = reasoning
 
         # Парсим JSON ответ от модели
         # Модель может обернуть в markdown code block — убираем
@@ -91,6 +97,12 @@ def ask_mentor(line, cell):
                 ai_content = ai_content.rsplit("\n", 1)[0]
 
         ai_json = json.loads(ai_content)
+
+        # Показываем рассуждения ментора
+        if reasoning:
+            print("🧠 Ментор думает:")
+            print(reasoning[:2000])
+            print()
 
         # Формируем лог
         student = os.environ.get("JUPYTERHUB_USER", "local_user")
@@ -132,4 +144,3 @@ def ask_mentor(line, cell):
         print("⏰ Таймаут ответа ИИ-ментора. Попробуйте ещё раз.")
     except Exception as e:
         print(f"❌ Ошибка связи с ИИ-ментором: {type(e).__name__}: {e}")
-
