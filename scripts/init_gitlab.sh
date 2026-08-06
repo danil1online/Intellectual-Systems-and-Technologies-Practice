@@ -50,7 +50,7 @@ if [[ -z "$ROOT_TOKEN" ]]; then
     ROOT_TOKEN="placeholder"
 fi
 
-echo "✓ Root token получен"
+echo "✓ Root token получен: $ROOT_TOKEN"
 
 echo ""
 echo "=== GitLab: создание группы students ==="
@@ -237,37 +237,37 @@ else
     echo "✗ Не удалось создать README.md (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
 
-# 4. Копируем docs/ через GitLab API (индивидуальные POST)
+# 4. Копируем docs/ через git clone + push
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 
-for filepath in "$DOCS_DIR"/*.md; do
-    [ -f "$filepath" ] || continue
-    filename=$(basename "$filepath")
-    file_content=$(base64 -w 0 < "$filepath")
-    encoded_path=$(printf '%s' "docs/$filename" | jq -sRr '@uri')
+# Извлекаем хост из GITLAB_EXTERNAL_URL (убираем http://)
+GITLAB_HOST="${GITLAB_EXTERNAL_URL#*://}"
 
-    HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 60 --request POST \
-      "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$encoded_path" \
-      --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-      --header "Content-Type: application/json" \
-      --data "{
-        \"branch\": \"main\",
-        \"encoding\": \"base64\",
-        \"content\": \"$file_content\",
-        \"commit_message\": \"Add docs/$filename\"
-      }" -o ./.glab_response)
+# Сохраняем учётные данные (один раз)
+git config --global credential.helper store 2>/dev/null || true
 
-    if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
-        echo "  ✓ docs/$filename"
-    elif [[ "$HTTP_CODE" == "409" ]]; then
-        echo "  ✓ docs/$filename уже существует"
-    else
-        echo "  ⚠ Не удалось добавить docs/$filename (HTTP $HTTP_CODE): $(cat ./.glab_response)"
-    fi
+TMP_DIR=$(mktemp -d)
 
-    sleep 2
-done
+# Клонируем с токеном
+git clone https://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git "$TMP_DIR" 2>/dev/null
+if [[ $? -ne 0 ]]; then
+    echo "  ⚠ Клонирование не удалось"
+    cd "$OLDPWD" 2>/dev/null || true
+    rm -rf "$TMP_DIR"
+else
+    # Копируем docs
+    cp "$DOCS_DIR"/*.md "$TMP_DIR/docs/"
+
+    # Commit + push
+    cd "$TMP_DIR"
+    git add docs/
+    git commit -m "Add docs/" 2>/dev/null || echo "  ✓ docs/ уже добавлены"
+    git push https://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git main 2>&1
+
+    cd "$OLDPWD"
+    rm -rf "$TMP_DIR"
+fi
 
 echo "✓ Структура проекта инициализирована"
 
