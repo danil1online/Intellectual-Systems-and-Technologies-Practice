@@ -142,9 +142,9 @@ def my_pre_spawn_hook(spawner):
             pass
 
     # Копируем startup-файл ментора в site-packages (для JupyterLab kernel)
-    site_packages = subprocess.check_output(
+  site_packages = subprocess.check_output(
         ["python3", "-c", "import site; print(site.getsitepackages()[0])"],
-        text=True, strip=True
+        text=True
     ).strip()
 
     mentor_dst = f"{site_packages}/00_mentor.py"
