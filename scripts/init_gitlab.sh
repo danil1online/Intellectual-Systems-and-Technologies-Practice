@@ -241,37 +241,21 @@ fi
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 
-# Извлекаем хост из GITLAB_EXTERNAL_URL (убираем http://)
-GITLAB_HOST="${GITLAB_EXTERNAL_URL#*://}"
-
-echo "  → GITLAB_HOST=$GITLAB_HOST"
-echo "  → TMP_DIR=$(mktemp -d)"
-
 # Сохраняем учётные данные (один раз)
 git config --global credential.helper store 2>/dev/null || true
 
 TMP_DIR=$(mktemp -d)
-echo "  → Клонируем..."
 
-# Клонируем с токеном
-if git clone http://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git "$TMP_DIR" 2>&1; then
-    echo "  ✓ Клонируем"
+# Клонируем с токеном (localhost, т.к. скрипт выполняется на хосте GitLab)
+if git clone http://oauth2:$ROOT_TOKEN@localhost/students/project.git "$TMP_DIR" 2>&1; then
     # Копируем docs
     cp "$DOCS_DIR"/*.md "$TMP_DIR/docs/"
-    echo "  → Копируем docs/..."
 
     # Commit + push
     cd "$TMP_DIR"
     git add docs/
     if git commit -m "Add docs/" 2>&1; then
-        echo "  → Push..."
-        if git push http://oauth2:$ROOT_TOKEN@$GITLAB_HOST/students/project.git main 2>&1; then
-            echo "  ✓ docs/ добавлены"
-        else
-            echo "  ⚠ Push не удался"
-        fi
-    else
-        echo "  ✓ docs/ уже добавлены"
+        git push http://oauth2:$ROOT_TOKEN@localhost/students/project.git main 2>&1
     fi
 
     cd "$OLDPWD"
