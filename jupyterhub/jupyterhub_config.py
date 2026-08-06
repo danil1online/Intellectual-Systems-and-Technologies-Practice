@@ -147,7 +147,7 @@ def my_pre_spawn_hook(spawner):
 
     mentor_startup = "/app/startup/00_mentor.py"
     dst_startup = f"{startup_dir}/00_mentor.py"
-    if os.path.exists(mentor_startup) and not os.path.exists(dst_startup):
+    if os.path.exists(mentor_startup):
         shutil.copy2(mentor_startup, dst_startup)
 
     # Генерируем SSH-ключи для Git
