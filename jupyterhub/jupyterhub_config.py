@@ -141,15 +141,14 @@ def my_pre_spawn_hook(spawner):
         except FileExistsError:
             pass
 
-    # Копируем startup-файл ментора в site-packages (для JupyterLab kernel)
-    site_packages = subprocess.check_output(
-        ["python3", "-c", "import site; print(site.getsitepackages()[0])"],
-        text=True
-    ).strip()
+    # Копируем startup-файл ментора в IPython startup directory
+    startup_dir = f"{user_home}/.ipython/profile_default/startup"
+    os.makedirs(startup_dir, exist_ok=True)
 
-    mentor_dst = f"{site_packages}/00_mentor.py"
-    if os.path.exists("/app/startup/00_mentor.py"):
-        shutil.copy2("/app/startup/00_mentor.py", mentor_dst)
+    mentor_src = "/app/startup/00_mentor.py"
+    mentor_dst = f"{startup_dir}/00_mentor.py"
+    if os.path.exists(mentor_src):
+        shutil.copy2(mentor_src, mentor_dst)
 
     # Генерируем SSH-ключи для Git
     ssh_dir = f"{user_home}/.ssh"
