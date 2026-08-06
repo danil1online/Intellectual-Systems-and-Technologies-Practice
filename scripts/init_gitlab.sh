@@ -134,7 +134,7 @@ fi
 create_gitkeep() {
     local FILE_PATH="$1"
     local FILE_NAME="$2"
-    local ENCODED_PATH=$(printf '%s' "$FILE_PATH" | jq -sRr '@uri')
+    local ENCODED_PATH=$(printf '%s/.gitkeep' "$FILE_PATH" | jq -sRr '@uri')
     local EMPTY_BASE64=$(printf '%s' "" | base64 -w 0)
 
     HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
