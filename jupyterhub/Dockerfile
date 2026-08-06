@@ -58,6 +58,12 @@ COPY jupyter_ai_config.json /etc/jupyter/jupyter_ai_config.json
 COPY persona_mentor.py /app/persona_mentor.py
 COPY startup/ /app/startup/
 COPY startup-hooks/ /app/startup-hooks/
+# Копирование магических команд в системный каталог автозагрузки IPython
+RUN mkdir -p /usr/local/etc/ipython/profile_default/startup && \
+    cp /app/startup/00_mentor.py /usr/local/etc/ipython/profile_default/startup/00_mentor.py
+
+# Указываем IPython использовать системный профиль
+ENV IPYTHONDIR=/usr/local/etc/ipython
 
 # Создание директорий
 RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/pip-cache
