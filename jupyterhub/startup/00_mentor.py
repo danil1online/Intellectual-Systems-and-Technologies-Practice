@@ -106,7 +106,7 @@ def ask_mentor(line, cell):
         }
 
         # Запись лога
-        log_dir = "/app/logs"
+        log_dir = "/shared/data/logs"
         log_file = os.path.join(log_dir, "grading_log.json")
         os.makedirs(log_dir, exist_ok=True)
 

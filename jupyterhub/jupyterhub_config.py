@@ -141,14 +141,15 @@ def my_pre_spawn_hook(spawner):
         except FileExistsError:
             pass
 
-    # Копируем startup-файл ментора в IPython startup directory
-    startup_dir = f"{user_home}/.ipython/profile_default/startup"
-    os.makedirs(startup_dir, exist_ok=True)
+    # Глобальная директория автозагрузки IPython для всей системы
+    global_startup_dir = "/usr/local/etc/ipython/profile_default/startup"
+    os.makedirs(global_startup_dir, exist_ok=True)
 
     mentor_src = "/app/startup/00_mentor.py"
-    mentor_dst = f"{startup_dir}/00_mentor.py"
+    mentor_dst = f"{global_startup_dir}/00_mentor.py"
     if os.path.exists(mentor_src):
         shutil.copy2(mentor_src, mentor_dst)
+        os.chmod(mentor_dst, 0o644)
 
     # Генерируем SSH-ключи для Git
     ssh_dir = f"{user_home}/.ssh"
