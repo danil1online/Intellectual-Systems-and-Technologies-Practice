@@ -19,6 +19,24 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# ============================================
+# Утилиты
+# ============================================
+
+# Сравнение файлов по SHA256-хешу
+# Возвращает 0 (true) если файлы идентичны
+files_identical() {
+    local hash1 hash2
+    hash1=$(sha256sum "$1" 2>/dev/null | cut -d' ' -f1)
+    hash2=$(sha256sum "$2" 2>/dev/null | cut -d' ' -f1)
+    [[ -n "$hash1" && -n "$hash2" && "$hash1" == "$hash2" ]]
+}
+
+# Получить SHA256 хеш файла
+file_hash() {
+    sha256sum "$1" 2>/dev/null | cut -d' ' -f1
+}
+
 print_header() {
     echo -e "\n${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${NC}  ${BOLD}$1${NC}"
@@ -231,12 +249,12 @@ if [[ "$LLM_MENTOR_TYPE" == "1" ]]; then
     print_success "Ментор: OpenAI API → $LLM_MENTOR_BASE_URL (модель: $LLM_MENTOR_MODEL)"
 else
     print_step "Локальная модель для ментора:"
-    print_warn "Скачайте модель *.gguf заранее и укажите путь, например, /home/user1/Downloads/Qwen3.5-0.8B-Q4_K_M.gguf (установлен по умолчанию)."
+    print_warn "Скачайте модель *.gguf заранее и укажите путь (установлен по умолчанию)."
     print_warn "Модель будет переименована в model.gguf перед записью в volume."
     GGUF_PATH=""
 
     for attempt in 1 2; do
-        GGUF_PATH=$(ask "Путь к .gguf файлу" "/home/user1/Downloads/Qwen3.5-0.8B-Q4_K_M.gguf")
+        GGUF_PATH=$(ask "Путь к .gguf файлу" "/home/user1/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_S.gguf")
 
         if [[ -f "$GGUF_PATH" ]]; then
             print_success "Модель найдена: $GGUF_PATH"
@@ -264,7 +282,10 @@ else
     MODEL_FILE="model.gguf"
     MODEL_DEST="$PROJECT_DIR/shared/data/llm-models/model.gguf"
     
-    if [[ ! -f "$MODEL_DEST" ]]; then
+    if [[ -f "$MODEL_DEST" ]] && files_identical "$GGUF_PATH" "$MODEL_DEST"; then
+        MODEL_SIZE=$(du -h "$MODEL_DEST" | cut -f1)
+        print_success "Модель уже в хранилище (совпадает, ${MODEL_SIZE})"
+    else
         print_step "Копирование $GGUF_PATH -> $MODEL_DEST ..."
         cp "$GGUF_PATH" "$MODEL_DEST"
         
@@ -275,9 +296,6 @@ else
             print_error "Не удалось скопировать модель!"
             exit 1
         fi
-    else
-        MODEL_SIZE=$(du -h "$MODEL_DEST" | cut -f1)
-        print_success "Модель уже в хранилище (${MODEL_SIZE})"
     fi
     
     # Копирование модели в Docker volume (с правильным префиксом)
@@ -285,14 +303,17 @@ else
     PROJECT_PREFIX=$(basename "$PROJECT_DIR")
     FULL_VOLUME_NAME="${PROJECT_PREFIX}_llm-models"
     
+    SOURCE_HASH=$(file_hash "$MODEL_DEST")
+    
     if docker volume inspect "$FULL_VOLUME_NAME" >/dev/null 2>&1; then
         print_step "Volume $FULL_VOLUME_NAME уже существует, проверяем содержимое..."
-        if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
-            print_success "Модель уже в Docker volume"
+        VOLUME_HASH=$(docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "sha256sum /models/$MODEL_FILE | cut -d' ' -f1" 2>/dev/null)
+        if [[ -n "$VOLUME_HASH" && "$VOLUME_HASH" == "$SOURCE_HASH" ]]; then
+            print_success "Модель в Docker volume (совпадает)"
         else
-            print_step "Копирование модели в Docker volume..."
+            print_step "Модель в Docker volume отличается — перезаписываю..."
             docker run --rm -v "$FULL_VOLUME_NAME":/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
-            if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+            if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "sha256sum /models/$MODEL_FILE | cut -d' ' -f1" 2>/dev/null | grep -q "$SOURCE_HASH"; then
                 print_success "Модель записана в Docker volume"
                 print_warn "Оригинал в $GGUF_PATH можно удалить"
             else
@@ -305,7 +326,7 @@ else
         docker volume create "$FULL_VOLUME_NAME"
         print_step "Копирование модели в Docker volume..."
         docker run --rm -v "$FULL_VOLUME_NAME":/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
-        if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
+        if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "sha256sum /models/$MODEL_FILE | cut -d' ' -f1" 2>/dev/null | grep -q "$SOURCE_HASH"; then
             print_success "Модель записана в Docker volume"
         else
             print_error "Не удалось записать модель в Docker volume"
@@ -329,7 +350,7 @@ LLM_CI_TYPE=$(ask_choice \
     "Как запустить LLM для CI/CD?" \
     "1" "OpenAI API (уже существующий внешний сервис)" \
     "2" "Локальный контейнер (загрузит свою модель)" \
-    "1")
+    "2")
 
 LLM_CI_BASE_URL=""
 LLM_CI_API_KEY=""
@@ -351,7 +372,7 @@ else
     else
         print_step "Локальная модель для CI/CD:"
         print_warn "Скачайте модель заранее и укажите путь."
-        GGUF_PATH_CI=$(ask "Путь к .gguf файлу" "/home/user1/Downloads/Qwen3.5-0.8B-Q4_K_M.gguf")
+        GGUF_PATH_CI=$(ask "Путь к .gguf файлу" "/home/user1/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_S.gguf")
 
         if [[ -f "$GGUF_PATH_CI" ]]; then
             print_success "Модель найдена: $GGUF_PATH_CI"
