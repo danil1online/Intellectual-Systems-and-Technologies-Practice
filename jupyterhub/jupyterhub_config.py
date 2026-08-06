@@ -169,7 +169,6 @@ def my_pre_spawn_hook(spawner):
         uid = pw.pw_uid
         gid = pw.pw_gid
         os.chown(user_home, uid, gid)
-        os.chown(startup_dir, uid, gid, follow_symlinks=False)
         os.chown(ssh_dir, uid, gid)
         if os.path.exists(priv_key_path):
             os.chown(priv_key_path, uid, gid)
