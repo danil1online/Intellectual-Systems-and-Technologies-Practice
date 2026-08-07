@@ -5,7 +5,7 @@
   LAZY — просит готовое решение без усилий (штраф)
   SMART — размышляет, показывает свой код (поощрение)
 
-Логирование: /shared/logs/grading_log.json (JSON Lines)
+Логирование: /app/logs/grading_log.json (JSON Lines)
 """
 
 from IPython.core.magic import register_cell_magic
@@ -106,7 +106,7 @@ def ask_mentor(line, cell):
         }
 
         # Запись лога
-        log_dir = "/shared/data/logs"
+        log_dir = "/app/logs"
         log_file = os.path.join(log_dir, "grading_log.json")
         os.makedirs(log_dir, exist_ok=True)
 
