@@ -106,7 +106,8 @@ def ask_mentor(line, cell):
         }
 
         # Запись лога
-        log_dir = "/app/logs"
+        student = os.environ.get("JUPYTERHUB_USER", "unknown")
+        log_dir = f"/home/{student}/.logs"
         log_file = os.path.join(log_dir, "grading_log.json")
         os.makedirs(log_dir, exist_ok=True)
 

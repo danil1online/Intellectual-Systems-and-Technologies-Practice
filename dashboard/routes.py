@@ -44,7 +44,6 @@ def auth_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-LOG_FILE = os.environ.get("LOG_FILE", "/app/logs/grading_log.json")
 GITLAB_URL = os.environ.get("GITLAB_URL", "http://localhost")
 GITLAB_TOKEN = os.environ.get("GITLAB_ADMIN_TOKEN", "")
 
@@ -62,22 +61,24 @@ def gitlab_api_request(endpoint):
 
 
 def read_logs():
-    """Читать все записи из лог-файла."""
+    """Читать все записи из логов всех пользователей."""
+    import glob
     logs = []
-    if not os.path.exists(LOG_FILE):
-        return logs
-
-    try:
-        with open(LOG_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        logs.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        pass
-    except FileNotFoundError:
-        pass
+    log_files = glob.glob("/home/*/.logs/grading_log.json")
+    for log_file in sorted(log_files):
+        if not os.path.exists(log_file):
+            continue
+        try:
+            with open(log_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            logs.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            pass
+        except FileNotFoundError:
+            pass
 
     return logs
 

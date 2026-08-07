@@ -68,7 +68,24 @@ class DashboardCache:
             return [e.to_dict() for e in self._logs]
 
     def get_stats(self):
-        self.load(os.environ.get("LOG_FILE", "/app/logs/grading_log.json"))
+        import glob
+        self._logs = []
+        log_files = glob.glob("/home/*/.logs/grading_log.json")
+        for log_file in sorted(log_files):
+            if not os.path.exists(log_file):
+                continue
+            try:
+                with open(log_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            try:
+                                data = json.loads(line)
+                                self._logs.append(LogEntry(data))
+                            except json.JSONDecodeError:
+                                pass
+            except FileNotFoundError:
+                pass
         with self._lock:
             stats = {}
             for entry in self._logs:

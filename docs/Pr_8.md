@@ -108,7 +108,7 @@ from sklearn import metrics
 
 1. 🧪 **Загрузка данных из CSV-файла**
 ```python
-df = pd.read_csv('/home/jupyter/work/data/teleCust1000t.csv')
+df = pd.read_csv('/shared/data/teleCust1000t.csv')
 df['income']=df['income']*np.random.rand()
 df.head()
 ```

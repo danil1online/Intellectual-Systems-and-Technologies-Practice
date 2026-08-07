@@ -172,6 +172,7 @@ services:
       LLM_CI_API_KEY: ${LLM_CI_API_KEY}
       LLM_USE_LOCAL: ${LLM_USE_LOCAL:-false}
     volumes:
+      - user-homes:/home
       - ./shared/data/logs:/app/logs
       - ./shared/data/docs:/app/docs:ro
       - ./shared/data/cache_huggingface:/hf-cache:rw
@@ -302,14 +303,13 @@ services:
       KEYCLOAK_ISSUER: "http://keycloak:9200/auth/realms/istp"
       DASHBOARD_CLIENT_ID: ${DASH_CLIENT_ID}
       DASHBOARD_CLIENT_SECRET: ${DASH_CLIENT_SECRET}
-      LOG_FILE: /app/logs/grading_log.json
       FLASK_ENV: production
       DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
       GITLAB_URL: "http://gitlab:80"
       GITLAB_ADMIN_TOKEN: ${GITLAB_ADMIN_TOKEN:-}
     volumes:
-      - ./shared/data/logs:/app/logs:ro
+      - user-homes:/home
     networks:
       - internal
       - host-facing
@@ -333,6 +333,7 @@ volumes:
   nextcloud-data-merged:
   llm-models:
   shared-data:
+  user-homes:
 
 networks:
   internal:

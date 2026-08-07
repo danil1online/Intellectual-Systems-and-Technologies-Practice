@@ -183,7 +183,7 @@ DBSCAN особенно хорош для таких задач, где важе
 1. 🧪 **Загружаем данные из CSV-файла**
 
 ```python
-filename='/home/jupyter/work/data/weather-stations20140101-20141231.csv'
+filename='/shared/data/weather-stations20140101-20141231.csv'
 pdf = pd.read_csv(filename)
 pdf.head(5)
 ```
