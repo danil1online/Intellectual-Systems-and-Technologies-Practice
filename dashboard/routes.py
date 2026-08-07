@@ -182,8 +182,8 @@ def export_logs():
             log.get("student", ""),
             log.get("category", ""),
             log.get("penalty", False),
-            log.get("reason", ""),
-            str(log.get("prompt", ""))[:500],
+            str(log.get("reason", "")).replace("\n", " "),
+            str(log.get("prompt", "")).replace("\n", " ")[:500],
         ])
     csv_bytes = "\ufeff".encode("utf-8") + out.getvalue().encode("utf-8")
     return Response(csv_bytes, 200, {
