@@ -23,9 +23,6 @@ echo "Model file: $MODEL_FILE"
 # Проверяем наличие модели в source
 if [[ ! -f "$SOURCE_DIR/$MODEL_FILE" ]]; then
     echo "ERROR: Model not found at $SOURCE_DIR/$MODEL_FILE"
-    echo ""
-    echo "Please place the model file in: $SOURCE_DIR/"
-    echo "Or run setup.sh to download and copy the model."
     exit 1
 fi
 
@@ -42,22 +39,16 @@ VOLUME_HASH=$(docker run --rm -v llm-models:/models alpine sh -c "sha256sum /mod
 
 if [[ -n "$VOLUME_HASH" && "$VOLUME_HASH" == "$SOURCE_HASH" ]]; then
     echo "✓ Model already in Docker volume (identical)"
-    echo ""
-    echo "No action needed."
 else
     echo "Copying model to Docker volume..."
     docker run --rm \
         -v llm-models:/models \
         -v "$SOURCE_DIR":/source:ro \
         alpine sh -c "cp /source/$MODEL_FILE /models/"
-
-    # Проверяем результат
+    
     NEW_HASH=$(docker run --rm -v llm-models:/models alpine sh -c "sha256sum /models/$MODEL_FILE | cut -d' ' -f1" 2>/dev/null)
     if [[ "$NEW_HASH" == "$SOURCE_HASH" ]]; then
         echo "✓ Model successfully written to Docker volume"
-        echo ""
-        echo "The model is now independent of the original file."
-        echo "You can safely delete: $SOURCE_DIR/$MODEL_FILE (if desired)"
     else
         echo "ERROR: Failed to write model to Docker volume"
         exit 1
