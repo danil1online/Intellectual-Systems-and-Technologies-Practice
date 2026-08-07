@@ -234,7 +234,8 @@ print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_POR
 print_header "ШАГ 2.5/12: Загрузка датасетов для практических работ"
 
 DATA_ZIP_URL="https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.1/data.zip"
-DATA_VOLUME="istp0408-shared-data"
+PROJECT_PREFIX=$(basename "$PROJECT_DIR")
+DATA_VOLUME="${PROJECT_PREFIX}_shared-data"
 
 print_step "Скачивание data.zip ..."
 wget -q -O /tmp/data.zip "$DATA_ZIP_URL"
