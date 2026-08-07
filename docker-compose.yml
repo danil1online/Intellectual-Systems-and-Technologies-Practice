@@ -332,7 +332,8 @@ volumes:
   nextcloud-custom:
   nextcloud-data-merged:
   llm-models:
-  shared-data:
+ shared-data:
+    external: true
   user-homes:
 
 networks:
