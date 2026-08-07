@@ -297,7 +297,7 @@ else
     GGUF_PATH=""
 
     for attempt in 1 2; do
-        GGUF_PATH=$(ask "Путь к .gguf файлу" "/home/user1/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_S.gguf")
+        GGUF_PATH=$(ask "Путь к .gguf файлу" "/home/user1/Downloads/qwen2.5-coder-7b-instruct-q4_k_m.gguf")
 
         if [[ -f "$GGUF_PATH" ]]; then
             print_success "Модель найдена: $GGUF_PATH"
@@ -415,7 +415,7 @@ else
     else
         print_step "Локальная модель для CI/CD:"
         print_warn "Скачайте модель заранее и укажите путь."
-        GGUF_PATH_CI=$(ask "Путь к .gguf файлу" "/home/user1/.lmstudio/models/unsloth/Qwen3.5-4B-GGUF/Qwen3.5-4B-Q4_K_S.gguf")
+        GGUF_PATH_CI=$(ask "Путь к .gguf файлу" "/home/user1/Downloads/qwen2.5-coder-7b-instruct-q4_k_m.gguf")
 
         if [[ -f "$GGUF_PATH_CI" ]]; then
             print_success "Модель найдена: $GGUF_PATH_CI"

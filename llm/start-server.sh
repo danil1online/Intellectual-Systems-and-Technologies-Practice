@@ -38,5 +38,4 @@ exec /app/llama-server \
     --port "$PORT" \
     --ctx-size "$CONTEXT_SIZE" \
     --cache-type-k q8_0 \
-    --cache-type-v q8_0 \
-    --reasoning off
+    --cache-type-v q8_0
