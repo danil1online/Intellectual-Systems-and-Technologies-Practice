@@ -237,42 +237,58 @@ DATA_ZIP_URL="https://github.com/danil1online/Intellectual-Systems-and-Technolog
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
 DATA_VOLUME="${PROJECT_VOLUME_PREFIX}_shared-data"
 
-print_step "Скачивание data.zip ..."
-wget -q -O /tmp/data.zip "$DATA_ZIP_URL"
-
-if [[ -f /tmp/data.zip ]]; then
-    ZIP_SIZE=$(du -h /tmp/data.zip | cut -f1)
-    print_step "Распаковка архива (${ZIP_SIZE}) ..."
-    
-    cd /tmp
-    unzip -o data.zip > /dev/null 2>&1
-    
-    if ! docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
-        print_step "Создание Docker volume $DATA_VOLUME ..."
-        docker volume create "$DATA_VOLUME"
-    fi
-    
-    print_step "Копирование данных в Docker volume ..."
-    docker run --rm -v "$DATA_VOLUME":/data -v /tmp:/src:ro alpine sh -c "cp -r /src/cifar-10* /src/*.csv /data/"
-    
-    FILE_COUNT=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "find /data -type f | wc -l")
+# Проверяем, есть ли уже данные в volume
+if docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
+    FILE_COUNT=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "find /data -type f 2>/dev/null | wc -l")
     if [[ "$FILE_COUNT" -gt 0 ]]; then
-        DATA_SIZE=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "du -sh /data | cut -f1")
-        print_success "Датасеты загружены в Docker volume (${DATA_SIZE}, ${FILE_COUNT} файлов)"
+        DATA_SIZE=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "du -sh /data 2>/dev/null | cut -f1")
+        print_success "Датасеты уже загружены в Docker volume (${DATA_SIZE}, ${FILE_COUNT} файлов)"
+        cd - > /dev/null
     else
-        print_error "Не удалось скопировать данные в volume"
-        exit 1
+        print_step "Volume существует, но пустой — загружаю данные..."
+        DOWNLOAD_NEEDED="true"
     fi
-    
-    rm -f /tmp/data.zip
-    rm -rf /tmp/cifar-10* /tmp/*.csv
-    cd - > /dev/null
 else
-    print_error "Не удалось скачать data.zip"
-    exit 1
+    print_step "Volume не существует — создаю и загружаю данные..."
+    DOWNLOAD_NEEDED="true"
 fi
 
-# ============================================
+if [[ "${DOWNLOAD_NEEDED:-false}" == "true" ]]; then
+    print_step "Скачивание data.zip ..."
+    wget -q -O /tmp/data.zip "$DATA_ZIP_URL"
+
+    if [[ -f /tmp/data.zip ]]; then
+        ZIP_SIZE=$(du -h /tmp/data.zip | cut -f1)
+        print_step "Распаковка архива (${ZIP_SIZE}) ..."
+        
+        cd /tmp
+        unzip -o data.zip > /dev/null 2>&1
+        
+        if ! docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
+            print_step "Создание Docker volume $DATA_VOLUME ..."
+            docker volume create "$DATA_VOLUME"
+        fi
+        
+        print_step "Копирование данных в Docker volume ..."
+        docker run --rm -v "$DATA_VOLUME":/data -v /tmp:/src:ro alpine sh -c "cp -r /src/cifar-10* /src/*.csv /data/"
+        
+        FILE_COUNT=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "find /data -type f | wc -l")
+        if [[ "$FILE_COUNT" -gt 0 ]]; then
+            DATA_SIZE=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "du -sh /data | cut -f1")
+            print_success "Датасеты загружены в Docker volume (${DATA_SIZE}, ${FILE_COUNT} файлов)"
+        else
+            print_error "Не удалось скопировать данные в volume"
+            exit 1
+        fi
+        
+        rm -f /tmp/data.zip
+        rm -rf /tmp/cifar-10* /tmp/*.csv
+        cd - > /dev/null
+    else
+        print_error "Не удалось скачать data.zip"
+        exit 1
+    fi
+fi
 # ШАГ 3/11: LLM для ИИ-Ментора
 # ============================================
 print_header "ШАГ 3/11: Настройка LLM для ИИ-Ментора"
