@@ -334,6 +334,7 @@ volumes:
   llm-models:
   shared-data:
     external: true
+    name: ${PROJECT_VOLUME_PREFIX}_shared-data
   user-homes:
 
 networks:

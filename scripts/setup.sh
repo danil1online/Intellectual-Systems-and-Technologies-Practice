@@ -234,8 +234,8 @@ print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_POR
 print_header "ШАГ 2.5/12: Загрузка датасетов для практических работ"
 
 DATA_ZIP_URL="https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.1/data.zip"
-PROJECT_PREFIX=$(basename "$PROJECT_DIR")
-DATA_VOLUME="${PROJECT_PREFIX}_shared-data"
+PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
+DATA_VOLUME="${PROJECT_VOLUME_PREFIX}_shared-data"
 
 print_step "Скачивание data.zip ..."
 wget -q -O /tmp/data.zip "$DATA_ZIP_URL"
@@ -344,8 +344,8 @@ else
     
     # Копирование модели в Docker volume (с правильным префиксом)
     print_step "Запись модели в Docker volume..."
-    PROJECT_PREFIX=$(basename "$PROJECT_DIR")
-    FULL_VOLUME_NAME="${PROJECT_PREFIX}_llm-models"
+    PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
+    FULL_VOLUME_NAME="${PROJECT_VOLUME_PREFIX}_llm-models"
     
     SOURCE_HASH=$(file_hash "$MODEL_DEST")
     
@@ -570,11 +570,16 @@ OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
 # Извлекаем чистый IP из GITLAB_EXTERNAL_URL
 GITLAB_HOST=$(echo "$GITLAB_EXTERNAL_URL" | sed 's|http://||' | sed 's|:.*||')
 
+PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
+
 cat > "$PROJECT_DIR/.env" <<ENVEOF
 # ============================================
 # МУЛЬТИСИСТЕМНЫЙ УЧЕБНЫЙ КОМПЛЕКС
 # Сгенерировано $(date '+%Y-%m-%d %H:%M:%S')
 # ============================================
+
+# --- Docker volumes ---
+PROJECT_VOLUME_PREFIX=$PROJECT_VOLUME_PREFIX
 
 # --- Сетевые параметры ---
 # Внешний IP (для доступа из VPN/лабсети) — используется как GitLab external_url
@@ -667,9 +672,9 @@ fi
 
 # Удаляем Docker тома (с правильным префиксом)
 print_step "Удаление Docker томов..."
-PROJECT_PREFIX=$(basename "$PROJECT_DIR")
+PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
 for vol in keycloak-data kc-postgres-data jupyterhub-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged; do
-    FULL_VOL_NAME="${PROJECT_PREFIX}_${vol}"
+    FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
     docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
 done
 
@@ -735,7 +740,7 @@ fi
 # Проверка модели в Docker volume для LLM
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_step "Проверка модели в Docker volume..."
-    FULL_VOLUME_NAME="${PROJECT_PREFIX}_llm-models"
+    FULL_VOLUME_NAME="${PROJECT_VOLUME_PREFIX}_llm-models"
     if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
         print_success "Модель $MODEL_FILE найдена в Docker volume"
     else
