@@ -174,7 +174,7 @@ def export_logs():
         logs = [l for l in logs if l.get("timestamp", "") <= date_to]
 
     out = io.StringIO()
-    w = csv.writer(out, lineterminator="\n")
+    w = csv.writer(out, lineterminator="\n", delimiter=";")
     w.writerow(["timestamp", "student", "category", "penalty", "reason", "prompt"])
     for log in logs:
         w.writerow([
@@ -187,7 +187,7 @@ def export_logs():
         ])
     csv_bytes = "\ufeff".encode("utf-8") + out.getvalue().encode("utf-8")
     return Response(csv_bytes, 200, {
-        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Type": "text/csv; charset=utf-8; delimiter=;",
         "Content-Disposition": f'attachment; filename="grading_logs_{datetime.date.today()}.csv"',
     })
 
