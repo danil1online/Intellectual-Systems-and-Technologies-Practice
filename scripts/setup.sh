@@ -37,31 +37,6 @@ file_hash() {
     sha256sum "$1" 2>/dev/null | cut -d' ' -f1
 }
 
-# Обновить права доступа в docker-compose.yml
-update_docker_compose() {
-    local COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
-    
-    if [[ ! -f "$COMPOSE_FILE" ]]; then
-        print_error "docker-compose.yml не найден"
-        return 1
-    fi
-    
-    print_step "Обновление docker-compose.yml ..."
-    
-    # Изменяем shared-data с :ro на :rw
-    sed -i 's|./shared/data/shared-data:/shared/data:ro|./shared/data/shared-data:/shared/data:rw|g' "$COMPOSE_FILE"
-    print_success "shared-data: :ro → :rw"
-    
-    # Проверяем, есть ли уже mount для logs в jupyterhub
-    if ! grep -q '\./shared/data/logs:/shared/data/logs:rw' "$COMPOSE_FILE"; then
-        # Добавляем mount для logs после существующего mount для /app/logs
-        sed -i '/- \.\/shared\/data\/logs:\/app\/logs/a\      - ./shared/data/logs:/shared/data/logs:rw' "$COMPOSE_FILE"
-        print_success "Добавлен mount для логов: /shared/data/logs:rw"
-    fi
-    
-    print_success "docker-compose.yml обновлён"
-}
-
 print_header() {
     echo -e "\n${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
     echo -e "${CYAN}║${NC}  ${BOLD}$1${NC}"
@@ -259,33 +234,41 @@ print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_POR
 print_header "ШАГ 2.5/12: Загрузка датасетов для практических работ"
 
 DATA_ZIP_URL="https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.1/data.zip"
-DATA_DIR="$PROJECT_DIR/shared/data/shared-data"
+DATA_VOLUME="istp0408-shared-data"
 
-print_step "Создание директории $DATA_DIR ..."
-mkdir -p "$DATA_DIR"
+print_step "Скачивание data.zip ..."
+wget -q -O /tmp/data.zip "$DATA_ZIP_URL"
 
-# Проверяем, есть ли уже распакованные данные
-DATA_FILES=$(find "$DATA_DIR" -maxdepth 1 \( -type d -name "cifar*" -o -name "*.csv" \) 2>/dev/null | wc -l)
-if [[ "$DATA_FILES" -gt 2 ]]; then
-    DATA_SIZE=$(du -sh "$DATA_DIR" 2>/dev/null | cut -f1)
-    print_success "Датасеты уже загружены (${DATA_SIZE})"
-else
-    print_step "Скачивание data.zip ..."
-    wget -q -O "$DATA_DIR/data.zip" "$DATA_ZIP_URL"
+if [[ -f /tmp/data.zip ]]; then
+    ZIP_SIZE=$(du -h /tmp/data.zip | cut -f1)
+    print_step "Распаковка архива (${ZIP_SIZE}) ..."
     
-    if [[ -f "$DATA_DIR/data.zip" ]]; then
-        ZIP_SIZE=$(du -h "$DATA_DIR/data.zip" | cut -f1)
-        print_step "Распаковка архива (${ZIP_SIZE}) ..."
-        cd "$DATA_DIR"
-        unzip -o data.zip > /dev/null 2>&1
-        rm -f data.zip
-        cd - > /dev/null
-        DATA_SIZE=$(du -sh "$DATA_DIR" | cut -f1)
-        print_success "Датасеты распакованы (${DATA_SIZE})"
+    cd /tmp
+    unzip -o data.zip > /dev/null 2>&1
+    
+    if ! docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
+        print_step "Создание Docker volume $DATA_VOLUME ..."
+        docker volume create "$DATA_VOLUME"
+    fi
+    
+    print_step "Копирование данных в Docker volume ..."
+    docker run --rm -v "$DATA_VOLUME":/data -v /tmp:/src:ro alpine sh -c "cp -r /src/cifar-10* /src/*.csv /data/"
+    
+    FILE_COUNT=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "find /data -type f | wc -l")
+    if [[ "$FILE_COUNT" -gt 0 ]]; then
+        DATA_SIZE=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "du -sh /data | cut -f1")
+        print_success "Датасеты загружены в Docker volume (${DATA_SIZE}, ${FILE_COUNT} файлов)"
     else
-        print_error "Не удалось скачать data.zip"
+        print_error "Не удалось скопировать данные в volume"
         exit 1
     fi
+    
+    rm -f /tmp/data.zip
+    rm -rf /tmp/cifar-10* /tmp/*.csv
+    cd - > /dev/null
+else
+    print_error "Не удалось скачать data.zip"
+    exit 1
 fi
 
 # ============================================
@@ -690,9 +673,6 @@ for vol in keycloak-data kc-postgres-data jupyterhub-data nextcloud-data nextclo
 done
 
 print_step "Очистка завершена"
-
-# Обновить docker-compose.yml
-update_docker_compose
 
 # Создаём директории для bind-mount (docker compose не создаёт их автоматически)
 mkdir -p "$PROJECT_DIR/shared/data/logs"
