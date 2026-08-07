@@ -46,18 +46,21 @@ Docker Compose-развёртывание полного учебного кла
 │  │              Keycloak (Identity Provider)                │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
-│  │ GitLab   │  │   LLM    │  │  Admin       │  │
-│  │ Runner   │  │  (opt.)  │  │  Dashboard   │  │
-│  └──────────┘  └──────────┘  └──────────────┘  │
+│   ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
+│   │ GitLab   │  │   LLM    │  │  Admin       │  │
+│   │ Runner   │  │  (opt.)  │  │  Dashboard   │  │
+│   └──────────┘  └──────────┘  └──────────────┘  │
+│   ┌──────────┐                                    │
+│   │ Jupyter  │  User-home volumes (per-user)      │
+│   └──────────┘                                    │
 │  ┌──────────┐                                                │
 │  │ Registry │  :5050 (Docker images для CI/CD)               │
 │  └──────────┘                                                │
 │                                                              │
 │  Shared Volumes:                                             │
 │    /shared/data        → материалы преподавателя             │
-│    /shared/logs        → grading_log.json (JSON Lines)       │
 │    /shared/student-work→ репозитории студентов               │
+│    User homes          → ~/.logs/grading_log.json (per user) │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -143,7 +146,6 @@ Docker Compose-развёртывание полного учебного кла
 │
 ├── shared/                      # Volumes mount point
 │   ├── data/                    # Материалы преподавателя
-│   ├── logs/                    # grading_log.json
 │   └── student-work/            # Репозитории студентов
 │
 └── README_new.md                # Этот файл
@@ -559,7 +561,7 @@ def sort_list(arr):
                         │     ├─ LAZY (штраф)
                         │     └─ SMART (поощрение)
                         │
-                        ├→ /shared/logs/grading_log.json
+                        ├→ /home/{user}/.logs/grading_log.json
                         └→ Ответ студенту
 ```
 
@@ -813,16 +815,19 @@ curl -O http://<IP>:9000/api/export?date_from=2025-09-01
 ```python
 # SMART запрос (поощрение)
 %%ask_mentor
-Я написал функцию, но возникает ошибка KeyError.
-Вот мой код:
-df = pd.read_csv('data.csv')
-print(df['nonexistent_column'])
-# Почему возникает KeyError?
+Вот мой код сортировки:
+def bubble_sort(arr):
+    n = len(arr)
+    for i in range(n):
+        for j in range(0, n-i-1):
+            if arr[j] > arr[j+1]:
+                arr[j], arr[j+1] = arr[j+1], arr[j]
+    return arr
+# Правильно ли я реализовал сложность O(n²)?
 
 # Результат:
-# 🤖 Ментор: Отлично, что вы приложили код! KeyError означает,
-# что столбец 'nonexistent_column' не существует в датафрейме.
-# Попробуйте print(df.columns) чтобы увидеть доступные столбцы.
+# 🤖 Ментор: Отлично, что вы приложили рабочий код!
+# Да, это корректная реализация пузырьковой сортировки со сложностью O(n²).
 # ✅ Запрос классифицирован как SMART — правильное использование ИИ!
 
 # LAZY запрос (штраф)
@@ -856,15 +861,14 @@ print(df['nonexistent_column'])
 ### Просмотр логов
 
 ```bash
-# Все запросы студента
-tail -f shared/logs/grading_log.json | grep student_pia_01
+# Все запросы конкретного студента (персональный файл)
+tail -f /home/student_pia_01/.logs/grading_log.json
 
-# LAZY запросы
-grep '"LAZY"' shared/logs/grading_log.json
+# LAZY запросы конкретного студента
+grep '"LAZY"' /home/student_pia_01/.logs/grading_log.json
 
-# Счёт
-grep -c '"LAZY"' shared/logs/grading_log.json
-grep -c '"SMART"' shared/logs/grading_log.json
+# Счёт (через dashboard API)
+curl http://<IP>:9000/api/stats
 ```
 
 ---
@@ -974,14 +978,14 @@ curl http://llm:8080/v1/models
 ### Dashboard не показывает логи
 
 ```bash
-# Проверка volume
-docker exec admin-dashboard ls -la /app/logs/
+# Проверка логи студента (персональные файлы)
+ls -la /home/{user}/.logs/grading_log.json
 
-# Проверка прав
-ls -la shared/logs/
+# Проверка агрегации через dashboard
+docker exec admin-dashboard ls -la /home/*/.logs/grading_log.json
 
 # Проверка формата
-head -5 shared/logs/grading_log.json
+head -5 /home/{user}/.logs/grading_log.json
 ```
 
 ### Full restart
