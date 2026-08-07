@@ -4,7 +4,9 @@
 
 import os
 import json
+import csv
 import datetime
+import io
 import base64
 import requests
 from flask import Blueprint, jsonify, request, render_template, Response, abort
@@ -171,23 +173,23 @@ def export_logs():
     if date_to:
         logs = [l for l in logs if l.get("timestamp", "") <= date_to]
 
-    # CSV формат
-    lines = ["timestamp,student,category,penalty,reason,prompt"]
+    out = io.StringIO()
+    w = csv.writer(out, lineterminator="\n")
+    w.writerow(["timestamp", "student", "category", "penalty", "reason", "prompt"])
     for log in logs:
-        ts = log.get("timestamp", "")
-        st = log.get("student", "")
-        cat = log.get("category", "")
-        pen = log.get("penalty", False)
-        reason = log.get("reason", "").replace(",", ";").replace('"', "'")
-        prompt = log.get("prompt", "").replace(",", ";").replace("\n", " ").replace('"', "'")[:500]
-
-        lines.append(f'"{ts}","{st}","{cat}","{pen}","{reason}","{prompt}"')
-
-    csv_content = "\n".join(lines)
-    return csv_content, 200, {
+        w.writerow([
+            log.get("timestamp", ""),
+            log.get("student", ""),
+            log.get("category", ""),
+            log.get("penalty", False),
+            log.get("reason", ""),
+            str(log.get("prompt", ""))[:500],
+        ])
+    csv_bytes = "\ufeff".encode("utf-8") + out.getvalue().encode("utf-8")
+    return Response(csv_bytes, 200, {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": f'attachment; filename="grading_logs_{datetime.date.today()}.csv"'
-    }
+        "Content-Disposition": f'attachment; filename="grading_logs_{datetime.date.today()}.csv"',
+    })
 
 
 @api_bp.route("/api/summary")
