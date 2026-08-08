@@ -254,8 +254,38 @@ else
 fi
 
 if [[ "${DOWNLOAD_NEEDED:-false}" == "true" ]]; then
-    print_step "Скачивание data.zip ..."
-    wget -q -O /tmp/data.zip "$DATA_ZIP_URL"
+    DATA_SOURCE=$(ask_choice \
+        "Выберите источник данных" \
+        "1" "Скачать по ссылке (GitHub)" \
+        "2" "Локальный файл data.zip" \
+        "1")
+
+    if [[ "$DATA_SOURCE" == "2" ]]; then
+        while true; do
+            DATA_ZIP_PATH=$(ask "Путь к файлу data.zip")
+            if [[ -f "$DATA_ZIP_PATH" ]]; then
+                print_success "Файл найден: $DATA_ZIP_PATH"
+                USE_LOCAL_ZIP="true"
+                break
+            else
+                print_error "Файл не найден: $DATA_ZIP_PATH"
+            fi
+        done
+    else
+        USE_LOCAL_ZIP="false"
+    fi
+
+    if [[ "${USE_LOCAL_ZIP:-false}" == "false" ]]; then
+        print_step "Скачивание data.zip ..."
+        if command -v wget >/dev/null 2>&1; then
+            wget -q --show-progress -O /tmp/data.zip "$DATA_ZIP_URL"
+        else
+            curl -fsSL -o /tmp/data.zip "$DATA_ZIP_URL"
+        fi
+    else
+        print_step "Копирование data.zip ..."
+        cp "$DATA_ZIP_PATH" /tmp/data.zip
+    fi
 
     if [[ -f /tmp/data.zip ]]; then
         ZIP_SIZE=$(du -h /tmp/data.zip | cut -f1)
@@ -285,7 +315,7 @@ if [[ "${DOWNLOAD_NEEDED:-false}" == "true" ]]; then
         rm -rf /tmp/cifar-10* /tmp/*.csv
         cd - > /dev/null
     else
-        print_error "Не удалось скачать data.zip"
+        print_error "Не удалось получить data.zip"
         exit 1
     fi
 fi
