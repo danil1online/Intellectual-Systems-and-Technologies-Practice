@@ -48,6 +48,7 @@ php /var/www/html/occ config:system:set oidc_login_auto_redirect --value="false"
 php /var/www/html/occ config:system:set oidc_login_disable_registration --value="false" --type=boolean 2>/dev/null || true
 php /var/www/html/occ config:system:set oidc_login_auto_create_users --value="true" --type=boolean 2>/dev/null || true
 php /var/www/html/occ config:system:set oidc_login_id_attribute --value="preferred_username" 2>/dev/null || true
+php /var/www/html/occ config:system:set oidc_login_root_url --value="http://${GITLAB_HOST}:${NEXTCLOUD_PORT}" 2>/dev/null || true
 
 echo "✓ OIDC Login настроен для Nextcloud."
 

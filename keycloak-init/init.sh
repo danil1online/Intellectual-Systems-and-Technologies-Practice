@@ -151,8 +151,8 @@ upsert_client "gitlab" "$OIDC_GITLAB_SECRET" \
   "http://localhost/users/auth/openid_connect/callback"
 
 upsert_client "nextcloud" "$OIDC_NEXTCLOUD_SECRET" \
-  "http://${GITLAB_HOST}:${NEXTCLOUD_PORT:-8080}/*" \
-  "http://localhost:${NEXTCLOUD_PORT:-8080}/*"
+  "http://${GITLAB_HOST}:${NEXTCLOUD_PORT:-8080}/apps/oidc_login/oidc" \
+  "http://localhost:${NEXTCLOUD_PORT:-8080}/apps/oidc_login/oidc"
 
 upsert_client "admin-dashboard" "$OIDC_DASHBOARD_SECRET" \
   "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/*" \
