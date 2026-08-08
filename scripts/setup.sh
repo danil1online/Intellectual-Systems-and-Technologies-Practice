@@ -699,7 +699,9 @@ print_step "Очистка завершена"
 # Создаём директории для bind-mount (docker compose не создаёт их автоматически)
 mkdir -p "$PROJECT_DIR/shared/data/logs"
 mkdir -p "$PROJECT_DIR/shared/data/cache_huggingface"
+chmod -R a+w "$PROJECT_DIR/shared/data/cache_huggingface"
 mkdir -p "$PROJECT_DIR/shared/data/shared-pip-cache"
+chmod -R a+w "$PROJECT_DIR/shared/data/shared-pip-cache"
 print_success "Bind-mount директории созданы"
 
 # Предварительная загрузка Docker-образов (уменьшает время build)
