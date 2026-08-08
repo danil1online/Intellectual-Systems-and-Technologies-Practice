@@ -63,9 +63,9 @@ services:
     depends_on:
       keycloak:
         condition: service_healthy
-  networks:
+    networks:
       - internal
-   environment:
+    environment:
       KC_HOSTNAME: ${KC_HOSTNAME:-${GITLAB_HOST:-localhost}}
       GITLAB_HOST: ${GITLAB_HOST}
       HOST_IP_LOCAL: ${HOST_IP_LOCAL:-localhost}
