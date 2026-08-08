@@ -139,6 +139,11 @@ def main():
         print(f"❌ Репозиторий не найден: {repo_dir}")
         sys.exit(1)
     
+    trigger_path = os.path.join(repo_dir, ".grade-trigger")
+    if not os.path.exists(trigger_path):
+        print("⏭️  Триггер оценки не найден (.grade-trigger). Пропуск оценки.")
+        sys.exit(0)
+    
     print(f"=== Auto-grade для: {repo_dir} ===")
     print(f"Дата: {datetime.datetime.now().isoformat()}")
     print(f"Commits: {get_git_log(repo_dir)[:5]}")
