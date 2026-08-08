@@ -63,8 +63,15 @@ COPY ipython_kernel_config.py /usr/local/etc/ipython/ipython_kernel_config.py
 # Указываем IPython использовать системный профиль
 ENV IPYTHONDIR=/usr/local/etc/ipython
 
-# Создание директорий
-RUN mkdir -p /app/logs /home/jovyan/shared/data /home/jovyan/shared/student-work /shared/data /shared/pip-cache
+# Создание групп и директорий с правильными правами
+RUN groupadd shared-packages 2>/dev/null || true && \
+    chown root:shared-packages /usr/local/lib/python3.10/shared-packages && \
+    chmod 775 /usr/local/lib/python3.10/shared-packages && \
+    mkdir -p /shared/pip-cache /hf-cache && \
+    chown root:shared-packages /shared/pip-cache && \
+    chmod 775 /shared/pip-cache && \
+    chown root:shared-packages /hf-cache && \
+    chmod 775 /hf-cache
 
 # Добавление shared packages в PYTHONPATH
 RUN echo "/usr/local/lib/python3.10/shared-packages" > /usr/local/lib/python3.10/site-packages/shared-packages.pth

@@ -696,13 +696,19 @@ done
 
 print_step "Очистка завершена"
 
-# Создаём директории для bind-mount (docker compose не создаёт их автоматически)
-mkdir -p "$PROJECT_DIR/shared/data/logs"
-mkdir -p "$PROJECT_DIR/shared/data/cache_huggingface"
-chmod -R a+w "$PROJECT_DIR/shared/data/cache_huggingface"
-mkdir -p "$PROJECT_DIR/shared/data/shared-pip-cache"
-chmod -R a+w "$PROJECT_DIR/shared/data/shared-pip-cache"
-print_success "Bind-mount директории созданы"
+# Удаляем старые bind-mount директории (переход на Docker volumes)
+rm -rf "$PROJECT_DIR/shared/data/cache_huggingface"
+rm -rf "$PROJECT_DIR/shared/data/shared-pip-cache"
+rm -rf "$PROJECT_DIR/shared/data/logs"
+rm -rf "$PROJECT_DIR/shared/data/docs"
+print_success "Старые bind-mount директории удалены"
+
+# Создаём Docker volumes для кэшей
+for vol in hf-cache pip-cache; do
+    FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
+    docker volume inspect "$FULL_VOL_NAME" >/dev/null 2>&1 || docker volume create "$FULL_VOL_NAME"
+    print_success "Volume $FULL_VOL_NAME создана"
+done
 
 # Предварительная загрузка Docker-образов (уменьшает время build)
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
@@ -750,9 +756,9 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab nextcloud admin-dashboard llm gitlab-runner keycloak-init
+    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab nextcloud admin-dashboard llm gitlab-runner
 else
-    docker compose up -d --force-recreate keycloak gitlab nextcloud admin-dashboard gitlab-runner keycloak-init
+    docker compose up -d --force-recreate keycloak gitlab nextcloud admin-dashboard gitlab-runner
 fi
 
 # Проверка модели в Docker volume для LLM
@@ -779,6 +785,20 @@ for i in $(seq 1 30); do
         exit 1
     fi
     sleep 10
+done
+
+print_step "Запуск инициализации Keycloak..."
+docker compose up -d --force-recreate keycloak-init
+for i in $(seq 1 30); do
+    if docker inspect --format='{{.State.Status}}' keycloak_init 2>/dev/null | grep -q "exited"; then
+        print_success "Keycloak Init завершён"
+        break
+    fi
+    if [[ $i -eq 30 ]]; then
+        print_error "Keycloak Init не завершился за 5 минут"
+        exit 1
+    fi
+    sleep 5
 done
 
 print_step "Ожидание запуска GitLab..."

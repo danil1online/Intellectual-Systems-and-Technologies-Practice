@@ -174,12 +174,10 @@ services:
       LLM_USE_LOCAL: ${LLM_USE_LOCAL:-false}
     volumes:
       - user-homes:/home
-      - ./shared/data/logs:/app/logs
-      - ./shared/data/docs:/app/docs:ro
-      - ./shared/data/cache_huggingface:/hf-cache:rw
       - shared-data:/shared/data:ro
-      - ./shared/data/shared-packages/site-packages:/usr/local/lib/python3.10/shared-packages:ro
-      - ./shared/data/shared-pip-cache:/shared/pip-cache
+      - ./shared/data/shared-packages/site-packages:/usr/local/lib/python3.10/shared-packages
+      - hf-cache:/hf-cache
+      - pip-cache:/shared/pip-cache
     networks:
       - internal
       - host-facing
@@ -339,6 +337,12 @@ volumes:
     external: true
     name: ${PROJECT_VOLUME_PREFIX}_shared-data
   user-homes:
+  hf-cache:
+    external: true
+    name: ${PROJECT_VOLUME_PREFIX}_hf-cache
+  pip-cache:
+    external: true
+    name: ${PROJECT_VOLUME_PREFIX}_pip-cache
 
 networks:
   internal:

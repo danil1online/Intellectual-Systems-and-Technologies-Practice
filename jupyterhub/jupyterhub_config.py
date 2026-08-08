@@ -133,6 +133,22 @@ def my_pre_spawn_hook(spawner):
     os.makedirs(user_home, exist_ok=True)
     os.chmod(user_home, 0o755)
 
+    # Добавляем лекторов в группу shared-packages для записи в кэши
+    if system_name in ("lecturer_01", "lecturer_02"):
+        try:
+            subprocess.run(
+                ["usermod", "-aG", "shared-packages", system_name],
+                capture_output=True, text=True, timeout=10
+            )
+            for dir_path in ["/shared/pip-cache", "/hf-cache"]:
+                os.makedirs(dir_path, exist_ok=True)
+                subprocess.run(
+                    ["chown", f"{uid}:shared-packages", dir_path],
+                    capture_output=True, text=True, timeout=10
+                )
+        except Exception as e:
+            print(f"Group assignment warning for {system_name}: {e}")
+
     # Символическая ссылка на общие данные
     data_link = f"{user_home}/data"
     if not os.path.exists(data_link):
