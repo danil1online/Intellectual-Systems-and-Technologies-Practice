@@ -32,17 +32,16 @@ Docker Compose-развёртывание полного учебного кла
  │  Внешние порты:                                              │
 │  GitLab:       80 (HTTP) / 2222 (SSH)                        │
 │  JupyterHub:   8000 (по умолчанию)                           │
-│  Nextcloud:    8080 (по умолчанию)                           │
 │  Dashboard:    9000 (по умолчанию)                           │
 │  Registry:     5050 (Docker Container Registry)              │
 │                                                              │
 │  Internal bridge network:                                    │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │
-│  │ Keycloak │  │ GitLab   │  │ Jupyter  │  │   Nextcloud  │ │
-│  │ :9200    │  │ :80/22   │  │ :8000    │  │ :8080        │ │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘ │
-│       │OIDC          │OIDC         │OIDC            │OIDC    │
-│  ┌────┴──────────────┴─────────────┴───────────────┴───────┐ │
+│  │ Keycloak │  │ GitLab   │  │ Jupyter  │  │   Dashboard  │ │
+│  │ :9200    │  │ :80/22   │  │ :8000    │  │   (opt.)     │ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────────┘ │
+│       │OIDC          │OIDC         │OIDC                      │
+│  ┌────┴──────────────┴─────────────┴─────────────────────────┐ │
 │  │              Keycloak (Identity Provider)                │ │
 │  └─────────────────────────────────────────────────────────┘ │
 │                                                               │
@@ -75,7 +74,7 @@ Docker Compose-развёртывание полного учебного кла
 | **Единый вход** | Регистрация в Keycloak → автоматический доступ ко всем сервисам |
 | **ИИ-Ментор** | Команда `%%ask_mentor` в ячейках JupyterLab |
 | **Классификация запросов** | LAZY (штраф) / SMART (поощрение) |
-| **Файловое хранилище** | Nextcloud с общим доступом к материалам курса |
+| **Файловое хранилище** | GitLab с репозиториями и Markdown-отчётами |
 | **SSH-ключи** | Генерация при первом входе, добавление в GitLab |
 | **Git-репозиторий** | Личный репозиторий для каждого студента |
 | **CI/CD проверка** | Автоматическая оценка ipynb-отчётов через LLM |
@@ -103,8 +102,7 @@ Docker Compose-развёртывание полного учебного кла
 ├── scripts/
 │   ├── setup.sh                 # Интерактивный инсталлятор
    │   ├── init_gitlab.sh           # Инициализация GitLab
-   │   ├── init_nextcloud.sh        # Настройка OIDC для Nextcloud
-   │   └── healthcheck.sh           # Проверка здоровья сервисов
+    │   └── healthcheck.sh           # Проверка здоровья сервисов
 │
 ├── jupyterhub/
 │   ├── Dockerfile               # JupyterHub + JupyterLab + oauthenticator
@@ -135,11 +133,7 @@ Docker Compose-развёртывание полного учебного кла
 │   │   └── dashboard.html       # Real-time дашборд
 │   └── static/                  # CSS/JS (по желанию)
 │
-├── nextcloud/
-│   └── docker-entrypoint-hooks.d/
-│       └── post-installation/
-│           └── init_oidc.sh     # Настройка OIDC при запуске Nextcloud
-│
+
 ├── docs/
 │   ├── Pr_1.md                  # Инструкция по SSH и регистрации
 │   └── ...                      # Остальные практические
@@ -196,12 +190,6 @@ Packages: jupyterhub, jupyterlab, GenericOAuthenticator, jupyter-ai
 RAM: ~500 MB на спавн
 ```
 
-#### Nextcloud
-```
-Image: nextcloud:apache
-RAM: ~300 MB
-```
-
 #### LLM (опционально)
 ```
 Base: ghcr.io/ggml-org/llama.cpp:server-cuda12
@@ -245,8 +233,7 @@ sudo ./scripts/setup.sh
 1. Внешний адрес сервера (IP или домен)
 2. Порт JupyterHub (по умолчанию: `8000`)
 3. Порт Admin Dashboard (по умолчанию: `9000`)
-4. Порт Nextcloud (по умолчанию: `8080`)
-5. LLM для ментора: OpenAI API / локальный контейнер (+ имя модели)
+4. LLM для ментора: OpenAI API / локальный контейнер (+ имя модели)
 6. LLM для CI/CD: OpenAI API / локальный контейнер (+ имя модели)
 7. Путь к `.gguf` модели (если локальный режим, будет переименована в model.gguf)
 8. SSH-ключ для GitLab Runner
@@ -266,9 +253,6 @@ GitLab:       http://<IP>:80
 JupyterHub:   http://<IP>:8000
   Вход:       через Keycloak (кнопка на странице входа)
 
-Nextcloud:    http://<IP>:8080
-  Admin:      admin / <generated password>
-
 Dashboard:    http://<IP>:9000
   Admin:      lecturer_01 (через Keycloak OIDC)
 ```
@@ -279,12 +263,11 @@ Dashboard:    http://<IP>:9000
 |---|---|---|---|
 | **GitLab (root)** | `root` | см. `.env` → `GITLAB_ROOT_PASSWORD` | `http://<IP>:80` |
 | **Keycloak (admin)** | `admin` | см. `.env` → `KC_ADMIN_PASSWORD` | `http://<IP>:9200/auth` |
-| **Nextcloud (admin)** | `admin` | см. `.env` → `NC_ADMIN_PASSWORD` | `http://<IP>:8080` |
 | **JupyterHub** | любой (через Keycloak) | тот же, что в Keycloak | `http://<IP>:<JUPYTERHUB_PORT>` |
 | **Dashboard** | admin (Basic auth) | см. `.env` → `DASHBOARD_PASSWORD` | `http://<IP>:<DASHBOARD_PORT>` |
 
 > **Важно:** Все пароли генерируются при запуске `setup.sh` и хранятся в файле `.env`.
-> Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|KC_ADMIN_PASSWORD|NC_ADMIN_PASSWORD|LECTURER_"`
+> Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|KC_ADMIN_PASSWORD|LECTURER_"`
 >
 > **⚠️ Лекторы:** пароли lecturer_01/lecturer_02 нужно сменить после первого входа!
 
@@ -315,9 +298,8 @@ cat shared/data/runner-keys/runner_ed25519.pub
   → Рекомендуется VPN IP при наличии VPN (amnezia WireGuard)
 
 ШАГ 2/11: Порты сервисов
-  → JupyterHub (по умолчанию 8000)
-  → Dashboard (по умолчанию 9000)
-  → Nextcloud (по умолчанию 8080)
+   → JupyterHub (по умолчанию 8000)
+   → Dashboard (по умолчанию 9000)
 
 ШАГ 3/11: LLM для ИИ-Ментора
   → Выбор: OpenAI API / Локальный контейнер
@@ -335,7 +317,7 @@ cat shared/data/runner-keys/runner_ed25519.pub
   → Сохранение в shared/data/runner-keys/
 
 ШАГ 6/11: Генерация паролей
-    → Keycloak admin, GitLab root, Nextcloud admin, Dashboards
+    → Keycloak admin, GitLab root, Dashboards
 
 ШАГ 7/11: Настройка iptables DNAT
   → Перенаправление запросов с внешнего IP на localhost (для доступа с самого сервера)
@@ -353,10 +335,9 @@ cat shared/data/runner-keys/runner_ed25519.pub
 ШАГ 11/11: Запуск сервисов
    → docker compose up -d
    → Проверка модели в Docker volume
-   → Healthcheck Keycloak, GitLab, Nextcloud
+   → Healthcheck Keycloak, GitLab
    → Инициализация Keycloak (OIDC-клиенты)
    → Инициализация GitLab (группа, админ)
-   → Инициализация Nextcloud (OIDC)
    → Регистрация GitLab Runner
 ```
 
@@ -370,7 +351,7 @@ cp .env.example .env
 nano .env
 
 # 3. Поднимите сервисы
-docker compose up -d keycloak gitlab nextcloud admin-dashboard
+docker compose up -d keycloak gitlab admin-dashboard
 # Для локальной LLM:
 docker compose --profile local-llm up -d llm
 
@@ -381,7 +362,6 @@ docker compose up -d jupyterhub
 # 5. Инициализация
 docker compose up keycloak-init
 bash scripts/init_gitlab.sh
-bash scripts/init_nextcloud.sh
 
 # 6. Регистрация Runner
 docker exec -it gitlab-runner gitlab-runner register \
@@ -411,10 +391,9 @@ Volume: keycloak-data
 |---|---|
 | JupyterHub | `http://<IP>:8000/hub/oauth_callback` |
 | Admin Dashboard | `http://<IP>:9000/callback` |
-| Nextcloud | `http://<IP>:8080/apps/oidc_login/callback` |
 | GitLab | `http://<IP>/oauth/callback` |
 
-**Авторизация:** Keycloak OIDC → GitLab, JupyterHub, Nextcloud, Dashboard
+**Авторизация:** Keycloak OIDC → GitLab, JupyterHub, Dashboard
 
 ### 2. GitLab CE
 
@@ -448,18 +427,7 @@ Spawner: SimpleSpawner
 - **pre_spawn_start hook** — копирование шаблонов `.ipynb` при первом входе
 - **SSH-генерация** — Ed25519 ключ при первом входе
 
-### 4. Nextcloud
-
-```yaml
-Nextcloud:  nextcloud:apache
-Port: 8080 (Nextcloud)
-```
-
-**Роль:** Файловое хранилище документов с общим доступом к материалам курса.
-
-**OIDC авторизация:** через Keycloak
-
-### 5. LLM (опционально)
+### 4. LLM (опционально)
 
 ```yaml
 Build: ./llm (ghcr.io/ggml-org/llama.cpp:server-cuda12)
@@ -490,18 +458,24 @@ Tags: docker_runner, python3.10
 **Пайплайн:**
 ```yaml
 stages:
-  - review
+  - grade
 
-ai_review:
-  stage: review
-  tags: [docker_runner]
+grade:
+  stage: grade
+  tags:
+    - istp-runner
+  before_script:
+    - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
   script:
-    - jupyter execute notebook.ipynb
-    - python grade_notebook.py notebook.ipynb
+    - python /runner/scripts/auto_grade.py
+  after_script:
+    - rm -rf /tmp/runner-*
   artifacts:
     paths:
       - ai_report.json
-    expire_in: 1 week
+    expire_in: 30 days
+  only:
+    - main
 ```
 
 ### 7. Docker Registry
@@ -529,6 +503,8 @@ Refresh: auto 5 seconds
 | `GET /api/stats` | LAZY/SMART ratio по студентам |
 | `GET /api/summary` | Общая сводка |
 | `GET /api/export` | CSV экспорт |
+| `GET /api/grades` | Оценки студентов (0-5) |
+| `POST /api/grade` | Runner отправляет оценку |
 | `GET /api/gitlab/groups` | Группы GitLab |
 | `GET /api/gitlab/projects` | Проекты GitLab |
 | `GET /api/gitlab/stats` | Сводка GitLab |
@@ -624,14 +600,14 @@ Keycloak (Identity Provider)
     ┌───────┼──────────┬──────────────┐
     │       │          │              │
     ▼       ▼          ▼              ▼
-GitLab  JupyterHub  Nextcloud   Admin Dashboard
-(OIDC)  (OIDC)      (OIDC)      (OIDC)
+GitLab  JupyterHub  Admin Dashboard  (opt.)
+(OIDC)  (OIDC)      (OIDC)
 ```
 
 ### Auto-provisioning
 
 1. Студент регистрируется в Keycloak (через GitLab → Keycloak → Register)
-2. С теми же данными входит в JupyterHub, Nextcloud, GitLab
+2. С теми же данными входит в JupyterHub, GitLab
 3. `GenericOAuthenticator` создаёт учётку автоматически (`create_missing_users = True`)
 4. **pre_spawn_hook** копирует шаблоны `.ipynb`, генерирует SSH-ключ
 5. GitLab создаёт пользователя при первом OIDC-входе
@@ -678,19 +654,22 @@ GitLab  JupyterHub  Nextcloud   Admin Dashboard
 
 ```yaml
 stages:
-  - review
+  - grade
 
-ai_review:
-  stage: review
-  tags: [docker_runner]
+grade:
+  stage: grade
+  tags:
+    - istp-runner
+  before_script:
+    - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
   script:
-    - pip install jupyter nbconvert
-    - jupyter execute notebook.ipynb
-    - python grade_notebook.py notebook.ipynb
+    - python /runner/scripts/auto_grade.py
+  after_script:
+    - rm -rf /tmp/runner-*
   artifacts:
     paths:
       - ai_report.json
-    expire_in: 1 week
+    expire_in: 30 days
   only:
     - main
 ```
@@ -700,11 +679,25 @@ ai_review:
 `grade_notebook.py` проверяет:
 1. **executes** — выполняется ли код без ошибок
 2. **has_explanation** — есть ли поясняющие ячейки
-3. **score** — оценка 0-100
-4. **grade** — A/B/C/D/F
-5. **feedback** — детальный отзыв
-6. **issues** — список проблем
-7. **recommendations** — рекомендации
+3. **score** — оценка 0-5
+4. **feedback** — детальный отзыв
+5. **issues** — список проблем
+6. **recommendations** — рекомендации
+
+### Оценка Markdown-отчёта (Pr_1)
+
+`grade_md.py` проверяет:
+1. **git log** — наличие коммитов, веток, merge
+2. **Чеклист Pr_1** — branch, checkout, add, commit, revert, merge, push
+3. **score** — оценка 0-5
+
+### Auto-grade (CI/CD пайплайн)
+
+`auto_grade.py` — автоматический запуск при push:
+1. Определяет тип: `.ipynb` или `.md`
+2. Запускает appropriate grader
+3. Сохраняет `ai_report.json`
+4. Очищает временные файлы
 
 ### Шаблон проекта
 
@@ -743,8 +736,14 @@ Registry доступен по адресу `http://<server-ip>:5050` (порт 
 ║  │142 │ │ 43 │ │  99 │ │ 28 │ │ 29 │    ║
 ║  └────┘ └────┘ └────┘ └────┘ └────┘    ║
 ╠══════════════════════════════════════════╣
-║  Фильтры: [Студент ▼] [Катег ▼] [С-По] ║
+║  Фильтры: [Студент ▼] [Практ ▼] [Кат ▼] ║
 ╠══════════════════════════════════════════╣
+║  📊 Оценки студентов                     ║
+║  Студент  │ Практ │ Оценка │ Feedback ║
+║  pia_01   │ Pr_7  │ 4/5    │ ...      ║
+║  pia_02   │ Pr_1  │ 3/5    │ ...      ║
+╠══════════════════════════════════════════╣
+║  📝 Логи ИИ-ментора                      ║
 ║  Время  │ Студент  │ LAZY│ ⚠ │ Запрос  ║
 ║  14:30  │ pia_01   │SMART│ — │ "Как..."║
 ║  14:35  │ pia_02   │ LAZY│ ⚠ │ "Напиши"║
@@ -801,13 +800,14 @@ curl -O http://<IP>:9000/api/export?date_from=2025-09-01
   └→ Использовать: git clone git@gitlab.<IP>:students/project.git
 
 Шаг 5. Практическая 1 (Git)
-  └→ Терминал JupyterLab + GitLab UI
-  └→ Отчёт: PDF → репозиторий Reports (вручную)
+   └→ Fork students/project → clone → CLI-операции
+   └→ Отчёт: Pr_1_<группа>_<номер>.md → reports/ → git push
+   └→ LLM_Help.ipynb → reports/practice1/
 
-Шаг 6. Практическая 2+ (ipynb)
+Шаг 6. Практическая 3+ (ipynb)
    ├── ИИ-Ментор: %%ask_mentor в ячейках
-   ├── Отчёт: ipynb → скачать → PDF → репозиторий Reports (вручную)
-   └── CI/CD: Runner проверяет ipynb автоматически
+   ├── Отчёт: practiceN.ipynb → git push
+   └── CI/CD: Runner автоматически оценивает (0-5)
 ```
 
 ### Пример работы с ИИ-Ментором
@@ -881,7 +881,6 @@ curl http://<IP>:9000/api/stats
 |---|---|---|
 | `JUPYTERHUB_PORT` | Порт JupyterHub | `8000` |
 | `DASHBOARD_PORT` | Порт Dashboard | `9000` |
-| `NEXTCLOUD_PORT` | Порт Nextcloud | `8080` |
 | `KEYCLOAK_PORT` | Порт Keycloak | `9200` |
 | `LLM_MENTOR_TYPE` | Тип LLM для ментора | `local` |
 | `LLM_MENTOR_BASE_URL` | Endpoint LLM ментора | `http://llm:8080/v1` |
@@ -892,7 +891,6 @@ curl http://<IP>:9000/api/stats
 | `KC_ADMIN_PASSWORD` | Пароль Keycloak admin | `Keycloak123!` |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `REGISTRY_PORT` | Порт Docker Registry | `5050` |
-| `NC_ADMIN_PASSWORD` | Пароль Nextcloud admin | auto-generated |
 | `JH_API_TOKEN` | JupyterHub API token | auto-generated |
 | `GITLAB_HOST` | IP/домен GitLab | `10.8.1.3` (или другой) |
 | `GITLAB_URL` | URL GitLab для Dashboard API | `http://gitlab:80` |

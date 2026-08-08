@@ -1,0 +1,19 @@
+stages:
+  - grade
+
+grade:
+  stage: grade
+  tags:
+    - istp-runner
+  before_script:
+    - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
+  script:
+    - python /runner/scripts/auto_grade.py
+  after_script:
+    - rm -rf /tmp/runner-*
+  artifacts:
+    paths:
+      - ai_report.json
+    expire_in: 30 days
+  only:
+    - main

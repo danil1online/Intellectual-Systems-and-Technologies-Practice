@@ -85,6 +85,32 @@ def read_logs():
     return logs
 
 
+def read_grades():
+    """Читать все ai_report.json из репозиториев студентов."""
+    import glob
+    grades = []
+    # Ищем ai_report.json в репозиториях студентов
+    grade_files = glob.glob("/home/*/*/ai_report.json")
+    for gf in sorted(grade_files):
+        try:
+            with open(gf, "r", encoding="utf-8") as f:
+                report = json.load(f)
+                # Извлекаем student из пути
+                parts = gf.split("/")
+                student = "unknown"
+                for i, p in enumerate(parts):
+                    if p == "home" and i + 1 < len(parts):
+                        student = parts[i + 1]
+                        break
+                report["student"] = student
+                report["source_file"] = gf
+                grades.append(report)
+        except (json.JSONDecodeError, FileNotFoundError):
+            pass
+
+    return grades
+
+
 @api_bp.route("/")
 @auth_required
 def index():
@@ -224,6 +250,60 @@ def get_summary():
         "unique_students": unique_students,
         "daily": daily,
     })
+
+
+@api_bp.route("/api/grades")
+@auth_required
+def get_grades():
+    """Получить оценки студентов."""
+    grades = read_grades()
+
+    # Фильтрация по студенту
+    student = request.args.get("student")
+    if student:
+        grades = [g for g in grades if g.get("student") == student]
+
+    # Фильтрация по практике
+    practice = request.args.get("practice")
+    if practice:
+        grades = [g for g in grades if str(g.get("practice", "")) == str(practice)]
+
+    # Фильтрация по дате
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
+    if date_from:
+        grades = [g for g in grades if g.get("timestamp", "") >= date_from]
+    if date_to:
+        grades = [g for g in grades if g.get("timestamp", "") <= date_to]
+
+    # Сортировка по timestamp (новые первые)
+    grades = sorted(grades, key=lambda x: x.get("timestamp", ""), reverse=True)
+
+    return jsonify(grades)
+
+
+@api_bp.route("/api/grade", methods=["POST"])
+@auth_required
+def post_grade():
+    """Runner отправляет оценку."""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No JSON data"}), 400
+
+    student = data.get("student", "unknown")
+    practice = data.get("practice", 0)
+    score = data.get("score", 0)
+
+    # Сохраняем отчёт в /home/{student}/ai_report.json
+    report_dir = f"/home/{student}"
+    os.makedirs(report_dir, exist_ok=True)
+    report_path = os.path.join(report_dir, "ai_report.json")
+
+    data["timestamp"] = datetime.datetime.now().isoformat()
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    return jsonify({"status": "ok", "saved": report_path})
 
 
 @api_bp.route("/api/gitlab/groups")

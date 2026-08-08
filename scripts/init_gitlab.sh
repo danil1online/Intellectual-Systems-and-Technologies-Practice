@@ -237,7 +237,50 @@ else
     echo "✗ Не удалось создать README.md (HTTP $HTTP_CODE): $(cat ./.glab_response)"
 fi
 
-# 4. Копируем docs/ через git clone + push
+# 4. Создаём .gitlab-ci.yml
+GITLAB_CI_CONTENT=$(base64 -w 0 << 'CIEOF'
+stages:
+  - grade
+
+grade:
+  stage: grade
+  tags:
+    - istp-runner
+  before_script:
+    - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
+  script:
+    - python /runner/scripts/auto_grade.py
+  after_script:
+    - rm -rf /tmp/runner-*
+  artifacts:
+    paths:
+      - ai_report.json
+    expire_in: 30 days
+  only:
+    - main
+CIEOF
+)
+
+HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
+  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitlab-ci.yml" \
+  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data "{
+    \"branch\": \"main\",
+    \"encoding\": \"base64\",
+    \"content\": \"$GITLAB_CI_CONTENT\",
+    \"commit_message\": \"Add .gitlab-ci.yml for auto-grading\"
+  }" -o ./.glab_response)
+
+if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+    echo "✓ .gitlab-ci.yml создан"
+elif [[ "$HTTP_CODE" == "409" ]]; then
+    echo "✓ .gitlab-ci.yml уже существует"
+else
+    echo "✗ Не удалось создать .gitlab-ci.yml (HTTP $HTTP_CODE): $(cat ./.glab_response)"
+fi
+
+# 5. Копируем docs/ через git clone + push
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 

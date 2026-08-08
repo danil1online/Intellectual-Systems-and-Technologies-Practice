@@ -177,6 +177,30 @@
                 <option value="">Все</option>
             </select>
 
+            <label>Практика:</label>
+            <select id="filter-practice">
+                <option value="">Все</option>
+                <option value="1">Pr_1</option>
+                <option value="3">Pr_3</option>
+                <option value="4">Pr_4</option>
+                <option value="5">Pr_5</option>
+                <option value="6">Pr_6</option>
+                <option value="7">Pr_7</option>
+                <option value="8">Pr_8</option>
+                <option value="9">Pr_9</option>
+                <option value="10">Pr_10</option>
+                <option value="11">Pr_11</option>
+                <option value="12">Pr_12</option>
+                <option value="13">Pr_13</option>
+                <option value="14">Pr_14</option>
+                <option value="15">Pr_15</option>
+                <option value="16">Pr_16</option>
+                <option value="17">Pr_17</option>
+                <option value="18">Pr_18</option>
+                <option value="19">Pr_19</option>
+                <option value="20">Pr_20</option>
+            </select>
+
             <label>Категория:</label>
             <select id="filter-category">
                 <option value="">Все</option>
@@ -195,8 +219,28 @@
             <span id="auto-refresh-info">Auto-refresh: 5s</span>
         </div>
 
-        <!-- Table -->
-        <div class="table-container">
+        <!-- Grades Table -->
+        <div class="table-container" style="margin-top:24px">
+            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">📊 Оценки студентов</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Студент</th>
+                        <th>Практика</th>
+                        <th>Оценка</th>
+                        <th>Feedback</th>
+                        <th>Время</th>
+                    </tr>
+                </thead>
+                <tbody id="grades-tbody">
+                    <tr><td colspan="5" style="text-align:center;color:#999">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Logs Table -->
+        <div class="table-container" style="margin-top:24px">
+            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">📝 Логи ИИ-ментора</h3>
             <table>
                 <thead>
                     <tr>
@@ -324,11 +368,54 @@
             window.open(url, '_blank');
         }
 
+        async function loadGrades() {
+            const student = document.getElementById('filter-student').value;
+            const practice = document.getElementById('filter-practice').value;
+            const dateFrom = document.getElementById('filter-date-from').value;
+            const dateTo = document.getElementById('filter-date-to').value;
+
+            let url = '/api/grades?';
+            if (student) url += `student=${student}&`;
+            if (practice) url += `practice=${practice}&`;
+            if (dateFrom) url += `date_from=${dateFrom}&`;
+            if (dateTo) url += `date_to=${dateTo}&`;
+
+            try {
+                const res = await fetch(url);
+                const grades = await res.json();
+
+                const tbody = document.getElementById('grades-tbody');
+                if (!grades || grades.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999">Нет оценок</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = grades.map(g => {
+                    const score = g.score !== undefined ? g.score : '—';
+                    const scoreColor = score >= 4 ? '#43a047' : score >= 3 ? '#ff9800' : '#e53935';
+                    const practiceNum = g.practice || '—';
+                    const feedback = (g.feedback || '').substring(0, 60) + '...';
+                    const timestamp = g.timestamp ? new Date(g.timestamp).toLocaleString('ru-RU') : '—';
+
+                    return `<tr>
+                        <td><strong>${g.student || '—'}</strong></td>
+                        <td>Pr_${practiceNum}</td>
+                        <td><strong style="color:${scoreColor};font-size:18px">${score}/5</strong></td>
+                        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${(g.feedback||'').replace(/"/g,'&quot;')}">${feedback}</td>
+                        <td style="white-space:nowrap">${timestamp}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                console.log('Grades load error:', e);
+            }
+        }
+
         // Auto-refresh every 5 seconds
         function refresh() {
             loadLogs();
             loadStats();
             loadGitLabData();
+            loadGrades();
         }
 
         async function loadGitLabData() {

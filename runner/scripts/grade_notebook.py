@@ -70,12 +70,19 @@ Markdown пояснения:{md_summary}
 
 Исполнение кода: {'Есть вывод' if has_output else 'Нет вывода'}
 
-Отвечай в формате JSON:
+Шкала оценки (0-5):
+5 — все задания выполнены верно, код работает, есть пояснения
+4 — выполнено с небольшими ошибками
+3 — выполнено не полностью, но основное есть
+2 — выполнено меньше половины
+1 — выполнено меньше 20%
+0 — не выполнялось
+
+Отвечай СТРОГО в формате JSON:
 {{
     "executes": true/false,
     "has_explanation": true/false,
-    "score": число от 0 до 100,
-    "grade": "A"|"B"|"C"|"D"|"F",
+    "score": число от 0 до 5,
     "feedback": "детальный отзыв",
     "issues": ["список проблем"],
     "recommendations": ["список рекомендаций"]
@@ -179,7 +186,7 @@ def main():
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
-    print(f"Оценка: {report.get('score', 'N/A')}/100 ({report.get('grade', 'N/A')})")
+    print(f"Оценка: {report.get('score', 'N/A')}/5")
     print(f"Отчёт сохранён: {output_path}")
 
 
