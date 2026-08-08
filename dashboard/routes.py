@@ -9,7 +9,7 @@ import datetime
 import io
 import base64
 import requests
-from flask import Blueprint, jsonify, request, render_template, Response, abort
+from flask import Blueprint, jsonify, request, render_template, Response, abort, redirect
 
 api_bp = Blueprint("api", __name__)
 
@@ -116,6 +116,15 @@ def read_grades():
 def index():
     """Главная страница — дашборд."""
     return render_template("dashboard.html", title="Панель преподавателя")
+
+
+@api_bp.route("/logout")
+def logout():
+    """Redirect to Keycloak logout (ends SSO session)."""
+    gitlab_host = os.environ.get("GITLAB_HOST", "192.168.2.69")
+    kc_port = os.environ.get("KEYCLOAK_PORT", "9200")
+    logout_url = f"http://{gitlab_host}:{kc_port}/auth/realms/istp/protocol/openid-connect/logout"
+    return redirect(logout_url)
 
 
 @api_bp.route("/api/logs")

@@ -25,6 +25,10 @@
             text-decoration: none;
             font-size: 14px;
         }
+        .header a.logout-btn {
+            color: #f44336 !important;
+            margin-right: 16px;
+        }
         .container {
             max-width: 1400px;
             margin: 0 auto;
@@ -134,7 +138,10 @@
 <body>
     <div class="header">
         <h1>🎓 Панель преподавателя — Monitoring</h1>
-        <a href="/api/export?{{ request.query_string.decode() }}">📥 Экспорт CSV</a>
+        <div>
+            <a href="/logout" class="logout-btn">🚪 Выйти</a>
+            <a href="/api/export?{{ request.query_string.decode() }}">📥 Экспорт CSV</a>
+        </div>
     </div>
 
     <div class="container">

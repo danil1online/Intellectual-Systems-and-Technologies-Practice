@@ -45,6 +45,7 @@ gitlab_rails['omniauth_providers'] = [
     pkce: true,
     userInfoSignedResponseAlg: 'none',
     jwks_uri_verify: false,
+    end_session_endpoint: "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT:-9200}/auth/realms/istp/protocol/openid-connect/logout",
     claim_options: {
       name: {
         map: ['preferred_username']
