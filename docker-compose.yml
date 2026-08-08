@@ -21,7 +21,6 @@ services:
     command: start --http-enabled=true
     volumes:
       - keycloak-data:/opt/keycloak/data
-      - ./shared/data/oidc:/shared/oidc
     networks:
       - internal
       - host-facing
@@ -64,17 +63,14 @@ services:
     depends_on:
       keycloak:
         condition: service_healthy
-    volumes:
-      - ./shared/data/oidc:/shared/oidc
-    networks:
+  networks:
       - internal
-    environment:
+   environment:
       KC_HOSTNAME: ${KC_HOSTNAME:-${GITLAB_HOST:-localhost}}
       GITLAB_HOST: ${GITLAB_HOST}
       HOST_IP_LOCAL: ${HOST_IP_LOCAL:-localhost}
       JUPYTERHUB_PORT: ${JUPYTERHUB_PORT:-8000}
       DASHBOARD_PORT: ${DASHBOARD_PORT:-9000}
-      NEXTCLOUD_PORT: ${NEXTCLOUD_PORT:-8080}
       KEYCLOAK_PORT: ${KEYCLOAK_PORT:-9200}
       GITLAB_EXTERNAL_URL: ${GITLAB_EXTERNAL_URL}
       KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
@@ -82,7 +78,6 @@ services:
       KC_LECTURER_02_PASSWORD: ${LECTURER_02_PASSWORD}
       OIDC_GITLAB_SECRET: ${OIDC_GITLAB_SECRET}
       OIDC_JUPYTER_SECRET: ${OIDC_JUPYTER_SECRET}
-      OIDC_NEXTCLOUD_SECRET: ${OIDC_NEXTCLOUD_SECRET}
       OIDC_DASHBOARD_SECRET: ${OIDC_DASHBOARD_SECRET}
       OIDC_REGISTRY_SECRET: ${OIDC_REGISTRY_SECRET}
     entrypoint: ["/bin/sh", "/app/init.sh"]
@@ -193,47 +188,6 @@ services:
       retries: 3
       start_period: 90s
 
-  # --- NEXTCLOUD ---
-  nextcloud:
-    image: nextcloud:apache
-    container_name: nextcloud
-    restart: unless-stopped
-    ports:
-      - "${NEXTCLOUD_PORT:-8080}:80"
-    environment:
-      NEXTCLOUD_ADMIN_USER: ${NC_ADMIN_USER}
-      NEXTCLOUD_ADMIN_PASSWORD: ${NC_ADMIN_PASSWORD}
-      NEXTCLOUD_TRUSTED_PROXIES: "172.16.0.0/12"
-      OVERWRITEPROTOCOL: "http"
-      GITLAB_HOST: ${GITLAB_HOST}
-      HOST_IP: ${GITLAB_HOST}
-      LOCAL_IP: ${LOCAL_IP:-localhost}
-      KEYCLOAK_PORT: ${KEYCLOAK_PORT}
-      KEYCLOAK_URL: "http://keycloak:9200/auth/realms/istp"
-      NEXTCLOUD_PORT: ${NEXTCLOUD_PORT:-8080}
-      OIDC_NEXTCLOUD_SECRET: ${OIDC_NEXTCLOUD_SECRET}
-      SQLITE_DATABASE: nextcloud
-    volumes:
-      - nextcloud-data:/var/www/html
-      - nextcloud-config:/usr/local/etc/php
-      - nextcloud-custom:/var/www/html/custom_apps
-      - nextcloud-data-merged:/var/www/html/data
-      - ./shared/data/logs:/var/log/nextcloud
-      - ./nextcloud/docker-entrypoint-hooks.d/post-installation:/docker-entrypoint-hooks.d/post-installation:ro
-      - ./shared/data/oidc:/shared/oidc:ro
-    networks:
-      - internal
-      - host-facing
-    depends_on:
-      keycloak:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "php /var/www/html/occ status 2>/dev/null | grep -q installed || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
-
   # --- LOCAL LLM (optional, profile: local-llm) ---
   llm:
     build:
@@ -328,10 +282,6 @@ volumes:
   keycloak-data:
   kc-postgres-data:
   jupyterhub-data:
-  nextcloud-data:
-  nextcloud-config:
-  nextcloud-custom:
-  nextcloud-data-merged:
   llm-models:
   shared-data:
     external: true

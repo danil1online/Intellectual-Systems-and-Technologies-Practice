@@ -34,7 +34,6 @@
 |--------|-----|----------|
 | **GitLab** | `http://<server-ip>:80` | Исходный код, репозиторий методичек |
 | **JupyterHub** | `http://<server-ip>:8000` | JupyterLab, терминал, Python-среда |
-| **Nextcloud** | `http://<server-ip>:8080` | Облачное хранилище, файлы Markdown |
 | **Dashboard** | `http://<server-ip>:9000` | Панель преподавателя |
 | **Docker Registry** | `http://<server-ip>:5050` | Хранение Docker-образов (standalone) |
 
@@ -49,6 +48,6 @@
 ## Формат отчётов
 
 Все отчёты сохраняются в формате **Markdown** (`.md`):
-- Создавайте файлы `.md` в JupyterLab или Nextcloud
+- Создавайте файлы `.md` в JupyterLab
 - Используйте [справочник по Markdown](./MD_Instructions.md) для форматирования
 - Загружайте `.md` файлы в ваш репозиторий `reports_<группа>_<номер>` в GitLab

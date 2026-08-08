@@ -223,10 +223,7 @@ JUPYTERHUB_PORT=$(ask "Введите порт" "8000")
 print_step "Порт для панели преподавателя"
 DASHBOARD_PORT=$(ask "Введите порт" "9000")
 
-print_step "Порт для Nextcloud"
-NEXTCLOUD_PORT=$(ask "Введите порт" "8080")
-
-print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_PORT, Nextcloud=$NEXTCLOUD_PORT"
+print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_PORT"
 
 # ============================================
 # ШАГ 2.5/12: Загрузка датасетов для практических работ
@@ -505,7 +502,6 @@ print_header "ШАГ 6/11: Генерация паролей"
 
 KC_ADMIN_PASSWORD=$(generate_password)
 GITLAB_ROOT_PASSWORD=$(generate_password)
-NC_ADMIN_PASSWORD=$(generate_password)
 JH_API_TOKEN=$(generate_password)
 LECTURER_01_PASSWORD=$(generate_password)
 LECTURER_02_PASSWORD=$(generate_password)
@@ -528,10 +524,6 @@ KC_ADMIN_PASSWORD=$KC_ADMIN_PASSWORD
 
 # --- GitLab ---
 GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD
-
-# --- Nextcloud ---
-NC_ADMIN_PASSWORD=$NC_ADMIN_PASSWORD
-NC_ADMIN_USER=admin
 
 # --- JupyterHub ---
 JH_API_TOKEN=$JH_API_TOKEN
@@ -609,7 +601,6 @@ print_header "ШАГ 8/11: Генерация конфигурации"
 # Генерируем OIDC секреты
 OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
 OIDC_JUPYTER_SECRET=$(openssl rand -hex 32)
-OIDC_NEXTCLOUD_SECRET=$(openssl rand -hex 32)
 OIDC_DASHBOARD_SECRET=$(openssl rand -hex 32)
 OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
 
@@ -639,7 +630,6 @@ HOST_IP_LOCAL=localhost
 # Порты
 JUPYTERHUB_PORT=$JUPYTERHUB_PORT
 DASHBOARD_PORT=$DASHBOARD_PORT
-NEXTCLOUD_PORT=$NEXTCLOUD_PORT
 KEYCLOAK_PORT=9200
 REGISTRY_PORT=5050
 
@@ -675,15 +665,11 @@ DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
 # --- OIDC секреты ---
 OIDC_GITLAB_SECRET=$OIDC_GITLAB_SECRET
 OIDC_JUPYTER_SECRET=$OIDC_JUPYTER_SECRET
-OIDC_NEXTCLOUD_SECRET=$OIDC_NEXTCLOUD_SECRET
 OIDC_DASHBOARD_SECRET=$OIDC_DASHBOARD_SECRET
 OIDC_REGISTRY_SECRET=$OIDC_REGISTRY_SECRET
 
 DASH_CLIENT_ID=admin-dashboard
 DASH_CLIENT_SECRET=$OIDC_DASHBOARD_SECRET
-
-NC_ADMIN_USER=admin
-NC_ADMIN_PASSWORD=$NC_ADMIN_PASSWORD
 ENVEOF
 
 chmod 600 "$PROJECT_DIR/.env"
@@ -711,15 +697,10 @@ if [ -d "$PROJECT_DIR/shared/data/runner-config" ]; then
     print_success "Runner config очищен"
 fi
 
-if [ -d "$PROJECT_DIR/shared/data/nextcloud-data" ]; then
-    rm -rf "$PROJECT_DIR/shared/data/nextcloud-data"
-    print_success "Nextcloud data очищен"
-fi
-
 # Удаляем Docker тома (с правильным префиксом)
 print_step "Удаление Docker томов..."
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
-for vol in keycloak-data kc-postgres-data jupyterhub-data nextcloud-data nextcloud-config nextcloud-custom nextcloud-data-merged; do
+for vol in keycloak-data kc-postgres-data jupyterhub-data; do
     FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
     docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
 done
@@ -749,7 +730,6 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     docker pull postgres:17-alpine 2>/dev/null || true
     docker pull gitlab/gitlab-ce:latest 2>/dev/null || true
     docker pull gitlab/gitlab-runner:latest 2>/dev/null || true
-    docker pull nextcloud:apache 2>/dev/null || true
     docker pull registry:2 2>/dev/null || true
     docker pull python:3.10-slim 2>/dev/null || true
     
@@ -786,9 +766,9 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab nextcloud admin-dashboard llm gitlab-runner
+    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner
 else
-    docker compose up -d --force-recreate keycloak gitlab nextcloud admin-dashboard gitlab-runner
+    docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner
 fi
 
 # Проверка модели в Docker volume для LLM
@@ -844,19 +824,6 @@ for i in $(seq 1 60); do
     sleep 10
 done
 
-print_step "Ожидание запуска Nextcloud..."
-for i in $(seq 1 30); do
-    if docker inspect --format='{{.State.Health.Status}}' nextcloud 2>/dev/null | grep -q "healthy"; then
-        print_success "Nextcloud запущен"
-        break
-    fi
-    if [[ $i -eq 30 ]]; then
-        print_error "Nextcloud не запустился за 5 минут"
-        exit 1
-    fi
-    sleep 10
-done
-
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_step "Ожидание запуска LLM контейнера..."
     for i in $(seq 1 30); do
@@ -876,9 +843,6 @@ fi
 # ============================================
 print_step "Инициализация GitLab (группы, runner)..."
 bash "$SCRIPT_DIR/init_gitlab.sh"
-
-print_step "Проверка OIDC в Nextcloud..."
-bash "$SCRIPT_DIR/init_nextcloud.sh"
 
 print_step "Запуск JupyterHub..."
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
@@ -993,7 +957,6 @@ print_success "Runner создан (ID: $RUNNER_ID, Token: $RUNNER_TOKEN)"
 # Обеспечиваем наличие переменных по умолчанию (защита от unbound variable)
 KEYCLOAK_PORT="${KEYCLOAK_PORT:-9200}"
 JUPYTERHUB_PORT="${JUPYTERHUB_PORT:-8000}"
-NEXTCLOUD_PORT="${NEXTCLOUD_PORT:-8080}"
 DASHBOARD_PORT="${DASHBOARD_PORT:-9000}"
 EXTERNAL_IP="${EXTERNAL_IP:-localhost}"
 GITLAB_HOST="${GITLAB_HOST:-localhost}"
@@ -1022,7 +985,6 @@ echo ""
 echo -e "  ${BOLD}JupyterHub:${NC}    http://$EXTERNAL_IP:$JUPYTERHUB_PORT"
 echo -e "    Вход через:    Keycloak (кнопка на странице входа)"
 echo ""
-echo -e "  ${BOLD}Nextcloud:${NC}     http://$EXTERNAL_IP:$NEXTCLOUD_PORT"
 echo -e "  ${BOLD}Dashboard:${NC}     http://$EXTERNAL_IP:$DASHBOARD_PORT"
 echo ""
 
@@ -1031,7 +993,6 @@ echo ""
 echo -e "  ${BOLD}Keycloak:${NC}      http://localhost:$KEYCLOAK_PORT/auth/realms/istp"
 echo -e "  ${BOLD}GitLab:${NC}        http://localhost (или http://$PRIMARY_LOCAL_IP)"
 echo -e "  ${BOLD}JupyterHub:${NC}    http://localhost:$JUPYTERHUB_PORT"
-echo -e "  ${BOLD}Nextcloud:${NC}     http://localhost:$NEXTCLOUD_PORT"
 echo -e "  ${BOLD}Dashboard:${NC}     http://localhost:$DASHBOARD_PORT"
 echo ""
 
@@ -1071,6 +1032,5 @@ echo "  - Keycloak: единый Identity Provider для всех сервис�
 echo "  - Self-registration: студенты регистрируются через Keycloak"
 echo "  - GitLab: OIDC авторизация через Keycloak"
 echo "  - JupyterHub: OIDC авторизация через Keycloak"
-echo "  - Nextcloud: OIDC авторизация через Keycloak"
 echo ""
 echo -e "${GREEN}Все сервисы запущены!${NC}\n"

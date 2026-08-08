@@ -150,10 +150,6 @@ upsert_client "gitlab" "$OIDC_GITLAB_SECRET" \
   "http://${GITLAB_HOST}/users/auth/openid_connect/callback" \
   "http://localhost/users/auth/openid_connect/callback"
 
-upsert_client "nextcloud" "$OIDC_NEXTCLOUD_SECRET" \
-  "http://${GITLAB_HOST}:${NEXTCLOUD_PORT:-8080}/apps/oidc_login/oidc" \
-  "http://localhost:${NEXTCLOUD_PORT:-8080}/apps/oidc_login/oidc"
-
 upsert_client "admin-dashboard" "$OIDC_DASHBOARD_SECRET" \
   "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/*" \
   "http://localhost:${DASHBOARD_PORT:-9000}/*"
@@ -161,17 +157,6 @@ upsert_client "admin-dashboard" "$OIDC_DASHBOARD_SECRET" \
 upsert_client "registry" "$OIDC_REGISTRY_SECRET" \
   "http://${GITLAB_HOST}:5050/*" \
   "http://localhost:5050/*"
-
-# Сохраняю все секреты в shared файл для других сервисов
-mkdir -p /shared/oidc 2>/dev/null || true
-cat > /shared/oidc/secrets.env <<SECEOF
-jupyterhub_SECRET=$OIDC_JUPYTER_SECRET
-nextcloud_SECRET=$OIDC_NEXTCLOUD_SECRET
-gitlab_SECRET=$OIDC_GITLAB_SECRET
-admin-dashboard_SECRET=$OIDC_DASHBOARD_SECRET
-registry_SECRET=$OIDC_REGISTRY_SECRET
-SECEOF
-echo "OIDC secrets saved to /shared/oidc/secrets.env"
 
 # Настройка OIDC mappers для клиента gitlab
 setup_gitlab_mappers() {
@@ -416,7 +401,6 @@ setup_oidc_mappers() {
 }
 
 setup_oidc_mappers "jupyterhub"
-setup_oidc_mappers "nextcloud"
 setup_oidc_mappers "admin-dashboard"
 setup_oidc_mappers "registry"
 setup_gitlab_mappers
@@ -490,5 +474,5 @@ create_user "lecturer_02" "lecturer02@istp.local" "$KC_LECTURER_02_PASSWORD"
 echo ""
 echo "=== Keycloak Init completed ==="
 echo "Realm: istp"
-echo "Clients: jupyterhub, gitlab, nextcloud, admin-dashboard, registry"
+echo "Clients: jupyterhub, gitlab, admin-dashboard, registry"
 echo "Users: lecturer01@istp.local, lecturer02@istp.local"
