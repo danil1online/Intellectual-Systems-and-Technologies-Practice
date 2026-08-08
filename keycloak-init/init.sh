@@ -453,10 +453,12 @@ create_user() {
     
     if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
       # После создания — ищем пользователя по имени, чтобы получить ID
-      sleep 1
+      sleep 2
       USER_JSON=$(curl -s "$KEYCLOAK_URL/admin/realms/istp/users?username=$USERNAME" \
         -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
+      echo "  DEBUG: USER_JSON for $USERNAME = $USER_JSON" >&2
       USER_ID=$(echo "$USER_JSON" | jq -r '.[0].id // empty' 2>/dev/null || echo "")
+      echo "  DEBUG: USER_ID for $USERNAME = $USER_ID" >&2
       
       if [ -n "$USER_ID" ] && [ "$USER_ID" != "null" ]; then
         # Устанавливаем пароль

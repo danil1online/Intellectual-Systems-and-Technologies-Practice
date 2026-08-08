@@ -85,6 +85,7 @@ c.JupyterHub.spawner_class = LocalProcessSpawner
 
 c.LocalProcessSpawner.cmd = ["jupyterhub-singleuser"]
 c.LocalProcessSpawner.ip = "0.0.0.0"
+c.LocalProcessSpawner.http_timeout = 120
 
 # Environment переменные для singleuser
 # JUPYTERHUB_API_TOKEN задаётся автоматически JupyterHub при спавне — НЕ перезаписывать!
@@ -163,17 +164,17 @@ def my_pre_spawn_hook(spawner):
         except Exception as e:
             print(f"SSH key generation warning for {system_name}: {e}")
 
-    # Устанавливаем права владения
+    # Устанавливаем права владения — рекурсивно на весь home
     try:
         pw = pwd.getpwnam(system_name)
         uid = pw.pw_uid
         gid = pw.pw_gid
-        os.chown(user_home, uid, gid)
-        os.chown(ssh_dir, uid, gid)
-        if os.path.exists(priv_key_path):
-            os.chown(priv_key_path, uid, gid)
-        if os.path.exists(pub_key_path):
-            os.chown(pub_key_path, uid, gid)
+        result = subprocess.run(
+            ["chown", "-R", f"{uid}:{gid}", user_home],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            print(f"chown -R warning for {system_name}: {result.stderr}")
     except KeyError:
         print(f"Warning: system user {system_name} not found in passwd after creation")
     except Exception as e:
