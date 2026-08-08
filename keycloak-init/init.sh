@@ -48,28 +48,32 @@ REALM_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" "$KEYCLOAK_URL/admin/realm
   -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
 
 if [ "$REALM_EXISTS" != "200" ]; then
+  REALM_DATA=$(cat <<EOF
+{
+  "realm": "istp",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "editUsernameAllowed": true,
+  "verifyEmail": false,
+  "loginTheme": "keycloak",
+  "accountTheme": "keycloak",
+  "attributes": {
+    "cibaBackchannelTokenDeliveryMode": "poll",
+    "cibaExpiresIn": "120",
+    "cibaAuthRequestedUserHint": "login_hint",
+    "parRequestUriLifespan": "60",
+    "cibaInterval": "5",
+    "realmReusableOtpCode": "false",
+    "frontendUrl": "http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth"
+  }
+}
+EOF
+)
   curl -s -X POST "$KEYCLOAK_URL/admin/realms" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{
-      "realm": "istp",
-      "enabled": true,
-      "registrationAllowed": true,
-      "registrationEmailAsUsername": false,
-      "editUsernameAllowed": true,
-      "verifyEmail": false,
-      "loginTheme": "keycloak",
-      "accountTheme": "keycloak",
-      "attributes": {
-        "cibaBackchannelTokenDeliveryMode": "poll",
-        "cibaExpiresIn": "120",
-        "cibaAuthRequestedUserHint": "login_hint",
-        "parRequestUriLifespan": "60",
-        "cibaInterval": "5",
-        "realmReusableOtpCode": "false",
-        "frontendUrl": "http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth"
-      }
-    }' > /dev/null
+    -d "$REALM_DATA" > /dev/null
   echo "Realm istp created"
 else
   echo "Realm istp already exists"
@@ -448,8 +452,8 @@ create_user() {
     HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
     
     if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-      # Извлекаем ID из Location header первого POST
-      LOCATION=$(grep -i location /tmp/kc_user_resp.txt 2>/dev/null | tr -d '\r' | awk '{print $2}' | sed 's|.*/||')
+      # Извлекаем ID из Location header (он в stdout, не в файле тела)
+      LOCATION=$(echo "$CREATE_RESPONSE" | grep -i location | tr -d '\r' | awk '{print $2}' | sed 's|.*/||')
       
       if [ -n "$LOCATION" ] && echo "$LOCATION" | grep -qE '^[0-9a-f-]{36}$'; then
         USER_ID="$LOCATION"

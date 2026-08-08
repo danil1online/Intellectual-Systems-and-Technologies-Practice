@@ -39,8 +39,8 @@ if [ -f /shared/oidc/secrets.env ]; then
 fi
 
 # Настраиваем OIDC параметры
-php /var/www/html/occ config:system:set oidc_login_provider_url --value="http://keycloak:9200/auth/realms/istp" 2>/dev/null || true
-php /var/www/html/occ config:system:set oidc_login_well_known_url --value="http://keycloak:9200/auth/realms/istp/.well-known/openid-configuration" 2>/dev/null || true
+php /var/www/html/occ config:system:set oidc_login_provider_url --value="http://${GITLAB_HOST}:${KEYCLOAK_PORT}/auth/realms/istp" 2>/dev/null || true
+php /var/www/html/occ config:system:set oidc_login_well_known_url --value="http://${GITLAB_HOST}:${KEYCLOAK_PORT}/auth/realms/istp/.well-known/openid-configuration" 2>/dev/null || true
 php /var/www/html/occ config:system:set oidc_login_client_id --value="nextcloud" 2>/dev/null || true
 php /var/www/html/occ config:system:set oidc_login_client_secret --value="${OIDC_NEXTCLOUD_SECRET}" 2>/dev/null || true
 php /var/www/html/occ config:system:set oidc_login_button_text --value="Войти через Keycloak" 2>/dev/null || true

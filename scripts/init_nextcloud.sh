@@ -88,8 +88,8 @@ check_trusted_domain() {
 # Проверка основных OIDC-параметров
 echo ""
 echo "--- OIDC ---"
-check_oidc "oidc_login_provider_url" "http://keycloak:9200/auth/realms/istp"
-check_oidc "oidc_login_well_known_url" "http://keycloak:9200/auth/realms/istp/.well-known/openid-configuration"
+check_oidc "oidc_login_provider_url" "http://${GITLAB_HOST}:${KEYCLOAK_PORT}/auth/realms/istp"
+check_oidc "oidc_login_well_known_url" "http://${GITLAB_HOST}:${KEYCLOAK_PORT}/auth/realms/istp/.well-known/openid-configuration"
 check_oidc "oidc_login_client_id" "nextcloud"
 check_oidc "oidc_login_auto_create_users" "true"
 check_oidc "oidc_login_id_attribute" "preferred_username"
