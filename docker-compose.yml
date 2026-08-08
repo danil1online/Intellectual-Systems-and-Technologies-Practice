@@ -69,6 +69,7 @@ services:
     networks:
       - internal
     environment:
+      KC_HOSTNAME: ${KC_HOSTNAME:-${GITLAB_HOST:-localhost}}
       GITLAB_HOST: ${GITLAB_HOST}
       HOST_IP_LOCAL: ${HOST_IP_LOCAL:-localhost}
       JUPYTERHUB_PORT: ${JUPYTERHUB_PORT:-8000}

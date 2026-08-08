@@ -432,8 +432,8 @@ create_user() {
   USER_ID=$(echo "$USER_JSON" | jq -r '.[0].id // empty' 2>/dev/null || echo "")
 
   if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
-    # Создаём пользователя
-    CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$KEYCLOAK_URL/admin/realms/istp/users" \
+    # Создаём пользователя и извлекаем Location header + HTTP код
+    CREATE_RESPONSE=$(curl -s -D- -o /tmp/kc_user_resp.txt -w "\n%{http_code}" -X POST "$KEYCLOAK_URL/admin/realms/istp/users" \
       -H "Authorization: Bearer $ADMIN_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{
@@ -446,24 +446,16 @@ create_user() {
       }")
     
     HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -1)
-    BODY=$(echo "$CREATE_RESPONSE" | sed '$d')
     
     if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-      # Извлекаем ID из Location header
-      LOCATION=$(curl -s -I -X POST "$KEYCLOAK_URL/admin/realms/istp/users" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" \
-        -H "Content-Type: application/json" \
-        -d "{
-          \"username\": \"$USERNAME\",
-          \"email\": \"$EMAIL\",
-          \"enabled\": true,
-          \"emailVerified\": true,
-          \"firstName\": \"$USERNAME\",
-          \"lastName\": \"lecturer\"
-        }" 2>/dev/null | grep -i location | tr -d '\r' | awk '{print $2}' | sed 's|.*/||')
+      # Извлекаем ID из Location header первого POST
+      LOCATION=$(grep -i location /tmp/kc_user_resp.txt 2>/dev/null | tr -d '\r' | awk '{print $2}' | sed 's|.*/||')
       
       if [ -n "$LOCATION" ] && echo "$LOCATION" | grep -qE '^[0-9a-f-]{36}$'; then
         USER_ID="$LOCATION"
+      else
+        # Fallback: ищем ID в ответе
+        USER_ID=$(jq -r '.id // empty' /tmp/kc_user_resp.txt 2>/dev/null || echo "")
       fi
       
       if [ -n "$USER_ID" ] && [ "$USER_ID" != "null" ]; then
