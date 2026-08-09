@@ -369,7 +369,7 @@ docker exec -it gitlab-runner gitlab-runner register \
   --token <registration-token> \
   --executor docker \
   --docker-image python:3.10 \
-  --tag-list docker_runner
+  --tag-list istp-runner
 ```
 
 ---

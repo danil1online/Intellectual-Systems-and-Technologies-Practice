@@ -937,6 +937,7 @@ shutdown_request_timeout = 0s
   url = "http://$GITLAB_HOST"
   token = "$RUNNER_TOKEN"
   executor = "docker"
+  tag_list = ["istp-runner"]
   [runners.custom_build_dir]
   [runners.cache]
   [runners.docker]
