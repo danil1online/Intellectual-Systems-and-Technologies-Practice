@@ -128,36 +128,35 @@ if [[ -n "$PORTS_IN_USE" ]]; then
     print_warn "Продолжаем, но это может вызвать конфликты"
 fi
 
-# Находим все локальные IP (исключая loopback, docker, amnezia WG)
-LOCAL_IPS=$(ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | grep -v '^172\.' | grep -v '10\.8\.1' | sort -u)
+# Находим все локальные IP (исключая loopback, docker сети, VPN)
+LOCAL_IPS=$(ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | grep -vE '^172\.(1[6-9]|2[0-9]|3[01])\.' | grep -vE '^10\.8\.' | grep -vE '^192\.168\.(200|201)\.' | sort -u)
+
+# Находим VPN IP (amnezia WG — интерфейсы awg*)
+VPN_IP=$(ip -4 addr show | grep -A1 'awg' | grep -oP 'inet \K[\d.]+')
+
+# Находим подсеть и шлюз для локальной сети
+SUBNET=$(ip -4 route show | grep -E "proto dhcp|proto kernel" | grep -v "172\." | grep -v "10\." | head -1 | grep -oP '([\d.]+/\d+)' || true)
+DEFAULT_GW=$(ip route show default | head -1 | grep -oP 'via \K[\d.]+' || true)
+PRIMARY_IFACE=$(ip route show default | head -1 | grep -oP 'dev \K\S+' || true)
 
 if [[ -z "$LOCAL_IPS" ]]; then
     print_error "Локальные IP не найдены!"
+    echo "Доступные сетевые интерфейсы:"
+    ip -4 addr show | grep "inet " | grep -v '^127'
     exit 1
 fi
 
 # Берём первый не-docker IP как основной локальный
 PRIMARY_LOCAL_IP=$(echo "$LOCAL_IPS" | head -1)
 print_step "Основной локальный IP: $PRIMARY_LOCAL_IP"
-
-# Находим VPN IP (amnezia WG — интерфейсы awg*)
-VPN_IP=$(ip -4 addr show | grep -A1 'awg0' | grep -oP 'inet \K[\d.]+')
-if [[ -z "$VPN_IP" ]]; then
-    VPN_IP=$(ip -4 addr show | grep -A1 'awg' | grep -oP 'inet \K[\d.]+')
+if [[ -n "$VPN_IP" ]]; then
+    print_warn "Обнаружен VPN IP (НЕ ДОСТУПЕН из Docker): $VPN_IP"
 fi
-
-if [[ -z "$VPN_IP" ]]; then
-    print_warn "VPN (amnezia WG) интерфейс не найден"
-    print_warn "Будет запрошен вручную"
-    VPN_IP=""
-else
-    print_step "VPN IP (amnezia WG): $VPN_IP"
-fi
-
-# Находим подсеть и шлюз для локальной сети
-SUBNET=$(ip -4 route show | grep -E "proto dhcp|proto kernel" | grep -v "172\." | grep -v "10\." | head -1 | grep -oP '([\d.]+/\d+)' || true)
-DEFAULT_GW=$(ip route show default | head -1 | grep -oP 'via \K[\d.]+' || true)
-PRIMARY_IFACE=$(ip route show default | head -1 | grep -oP 'dev \K\S+' || true)
+print_step "Интерфейс: $PRIMARY_IFACE | Подсеть: ${SUBNET:-авто} | Шлюз: ${DEFAULT_GW:-авто}"
+print_step "Доступные локальные IP для использования:"
+echo "$LOCAL_IPS" | head -5 | while read ip; do
+    print_step "  - $ip"
+done
 
 print_step "Основной интерфейс: ${PRIMARY_IFACE:-авто}"
 print_step "Подсеть: ${SUBNET:-авто}"
@@ -176,18 +175,15 @@ echo -e "  - Для git clone/push/pull"
 echo -e "  - Для всех OIDC callback URL"
 echo -e "  - GitLab external_url (критично!)"
 echo -e ""
-echo -e "  Если VPN настроен — укажите VPN IP сервера (например, 10.8.1.3)"
-echo -e "  Если без VPN — укажите локальный IP ($PRIMARY_LOCAL_IP)"
-echo -e ""
-
-if [[ -n "$VPN_IP" ]]; then
-    print_warn "Обнаружен VPN IP: $VPN_IP"
-    print_warn "Рекомендуется использовать его для внешнего доступа"
-    echo ""
-fi
+echo -e "  VPN IP недоступен из Docker-контейнеров и не может быть использован."
+echo -e "  Укажите локальный IP из доступных:"
+echo "$LOCAL_IPS" | head -5 | while read ip; do
+    print_step "    - $ip"
+done
+echo ""
 
 while true; do
-    EXTERNAL_IP=$(ask "Внешний IP сервера (без http://, для доступа извне)" "$PRIMARY_LOCAL_IP")
+    EXTERNAL_IP=$(ask "Внешний IP сервера (без http://)" "$PRIMARY_LOCAL_IP")
     
     if [[ -z "$EXTERNAL_IP" ]]; then
         print_error "IP не может быть пустым!"
@@ -196,7 +192,17 @@ while true; do
     
     # Проверка формата IP
     if [[ ! "$EXTERNAL_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_error "Неверный формат IP. Пример: 10.8.1.3"
+        print_error "Неверный формат IP. Пример: 192.168.1.38"
+        continue
+    fi
+    
+    # Проверка что IP из допустимого списка
+    if ! echo "$LOCAL_IPS" | grep -q "^${EXTERNAL_IP}$"; then
+        print_error "IP $EXTERNAL_IP не найден в допустимых локальных IP!"
+        print_step "Допустимые IP:"
+        echo "$LOCAL_IPS" | head -5 | while read ip; do
+            print_step "  - $ip"
+        done
         continue
     fi
     
@@ -207,10 +213,8 @@ done
 # Извлекаем домен для hostname контейнеров
 GITLAB_EXTERNAL_URL="http://$EXTERNAL_IP"
 
-# Для доступа с самого сервера используем localhost
 print_success "GitLab external_url: $GITLAB_EXTERNAL_URL"
 print_warn "Для доступа с самого сервера используйте localhost или $PRIMARY_LOCAL_IP"
-print_warn "Доступ через $EXTERNAL_IP с самого сервера потребует DNAT (настроим)"
 
 # ============================================
 # ШАГ 2/11: Порты сервисов
@@ -543,55 +547,19 @@ print_step "Для быстрого просмотра:"
 echo "  cat $PASS_FILE | grep PASSWORD"
 
 # ============================================
-# ШАГ 7/11: Настройка iptables DNAT
+# ШАГ 7/11: Проверка сети
 # ============================================
-print_header "ШАГ 7/11: Настройка iptables DNAT"
+print_header "ШАГ 7/11: Проверка сети"
 
 echo ""
-echo -e "  ${BOLD}Зачем это нужно:${NC}"
-echo -e "  Когда вы обращаетесь к $EXTERNAL_IP с самого сервера,"
-echo -e "  Linux маршрутизирует это на loopback (lo), а не на Docker."
-echo -e "  DNAT перенаправляет запросы с $EXTERNAL_IP на localhost."
-echo -e ""
-
-# Проверяем, настроен ли уже DNAT
-if iptables -t nat -C PREROUTING -d "$EXTERNAL_IP" -j DNAT --to-destination 127.0.0.1 2>/dev/null; then
-    print_success "DNAT для $EXTERNAL_IP уже настроен"
-else
-    print_step "Настройка iptables DNAT для $EXTERNAL_IP → localhost..."
-    
-    USE_DNAT="true"
-    
-    # Добавляем DNAT правило
-    iptables -t nat -A PREROUTING -d "$EXTERNAL_IP" -p tcp -j DNAT --to-destination 127.0.0.1 2>/dev/null || {
-        print_warn "Не удалось добавить iptables правило (возможно, нет прав root)"
-        print_warn "DNAT нужно настроить вручную или запустить setup.sh с sudo"
-        USE_DNAT="false"
-    }
-    
-    if [[ "${USE_DNAT}" == "true" ]]; then
-        # Проверяем, что правило добавилось
-        if iptables -t nat -C PREROUTING -d "$EXTERNAL_IP" -p tcp -j DNAT --to-destination 127.0.0.1 2>/dev/null; then
-            print_success "DNAT настроен: $EXTERNAL_IP → 127.0.0.1"
-            
-            # Сохраняем правило для persistency
-            mkdir -p "$PROJECT_DIR/shared/scripts"
-            cat > "$PROJECT_DIR/shared/scripts/setup-dnat.sh" << DNATEOF
-#!/bin/bash
-# DNAT правило для VPN IP -> localhost
-# Добавлено: $(date '+%Y-%m-%d %H:%M:%S')
-iptables -t nat -A PREROUTING -d $EXTERNAL_IP -p tcp -j DNAT --to-destination 127.0.0.1 2>/dev/null || true
-DNATEOF
-            chmod +x "$PROJECT_DIR/shared/scripts/setup-dnat.sh"
-            print_success "Скрипт сохранения правил: shared/scripts/setup-dnat.sh"
-        else
-            print_error "Не удалось настроить DNAT"
-        fi
-    fi
-fi
-
-# Сохраняем локальный IP для дальнейшей настройки
-print_success "Локальный IP для iptables: $PRIMARY_LOCAL_IP"
+echo -e "  ${BOLD}Внешний IP (для доступа из VPN/лабсети):${NC} $EXTERNAL_IP"
+echo -e "  ${BOLD}Локальный IP (для доступа с сервера):${NC} $PRIMARY_LOCAL_IP"
+echo -e "  ${BOLD}Интерфейс:${NC} $PRIMARY_IFACE"
+echo ""
+echo -e "  ${GREEN}✓${NC} Внешний и локальный IP совпадают или находятся в одной подсети — DNAT не нужен"
+echo -e "  ${GREEN}✓${NC} Docker-контейнеры видят $PRIMARY_LOCAL_IP (не VPN IP)"
+echo ""
+print_success "Сеть проверена"
 
 # ============================================
 # ШАГ 8/11: Запись .env
@@ -984,13 +952,18 @@ if [[ -z "$ROOT_TOKEN" ]]; then
 fi
 print_success "Root PAT успешно получен"
 
+# Функция для вызова GitLab API (через docker exec, минуя oauth2-proxy)
+gl_api() {
+    docker exec gitlab curl -s --max-time 30 "$@" 2>&1
+}
+
 print_step "Создание Runner в GitLab через API..."
-RUNNER_RESPONSE=$(curl -s --request POST \
+RUNNER_RESPONSE=$(gl_api "http://gitlab:80/api/v4/user/runners" \
+  --request POST \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "X-GitLab-Admin-Mode: true" \
   --header "Content-Type: application/json" \
-  --data '{"description": "academic-runner", "runner_type": "instance_type"}' \
-  "http://localhost/api/v4/user/runners" 2>&1)
+  --data '{"description": "academic-runner", "runner_type": "instance_type"}')
 
 RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | jq -r '.token' 2>/dev/null)
 RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null)
@@ -1049,7 +1022,6 @@ DASHBOARD_PORT="${DASHBOARD_PORT:-9000}"
 EXTERNAL_IP="${EXTERNAL_IP:-localhost}"
 GITLAB_HOST="${GITLAB_HOST:-localhost}"
 PRIMARY_LOCAL_IP="${PRIMARY_LOCAL_IP:-localhost}"
-USE_DNAT="${USE_DNAT:-false}"
 
 print_header "УСТАНОВКА ЗАВЕРШЕНА"
 
@@ -1083,13 +1055,6 @@ echo -e "  ${BOLD}GitLab:${NC}        http://localhost (или http://$PRIMARY_L
 echo -e "  ${BOLD}JupyterHub:${NC}    http://localhost:$JUPYTERHUB_PORT"
 echo -e "  ${BOLD}Dashboard:${NC}     http://localhost:$DASHBOARD_PORT"
 echo ""
-
-if [[ "${USE_DNAT}" == "true" ]]; then
-    echo -e "  ${BOLD}Через VPN IP ($EXTERNAL_IP):${NC}"
-    echo -e "  DNAT настроен — $EXTERNAL_IP перенаправляется на localhost"
-    echo -e "  Скрипт persistency: shared/scripts/setup-dnat.sh"
-    echo -e ""
-fi
 
 echo -e ""
 echo -e "${BOLD}⚠️ Важно для доступа к GitLab по HTTP:${NC}"

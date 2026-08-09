@@ -13,8 +13,26 @@ cd "$SCRIPT_DIR"
 source .env
 
 GITLAB_BASE="${GITLAB_EXTERNAL_URL#*://}"
-GITLAB_URL="http://localhost"
+GITLAB_URL="http://gitlab:80"
 GITLAB_SSH_URL="ssh://git@${GITLAB_BASE%%:*}:2222"
+
+# Функция для вызова GitLab API (через docker exec, минуя oauth2-proxy)
+gl_api() {
+    local URL="$1"
+    shift
+    docker exec gitlab curl -s --max-time 30 "$URL" "$@" 2>&1
+}
+
+# Функция с захватом HTTP кода (записывает код в GLAB_HTTP_CODE)
+gl_api_code() {
+    local URL="$1"
+    shift
+    local TMPFILE
+    TMPFILE=$(mktemp)
+    GLAB_HTTP_CODE=$(docker exec gitlab curl -s -o "$TMPFILE" -w "%{http_code}" --max-time 30 "$URL" "$@" 2>&1)
+    cat "$TMPFILE"
+    rm -f "$TMPFILE"
+}
 ROOT_PASSWORD="$GITLAB_ROOT_PASSWORD"
 RUNNER_SSH_KEY="$SCRIPT_DIR/shared/data/runner-keys/runner_ed25519.pub"
 
@@ -55,7 +73,8 @@ echo "✓ Root token получен: $ROOT_TOKEN"
 echo ""
 echo "=== GitLab: создание группы students ==="
 
-GROUP_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/groups" \
+GROUP_RESPONSE=$(gl_api "$GITLAB_URL/api/v4/groups" \
+  --request POST \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data '{
@@ -67,8 +86,8 @@ GROUP_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/groups
 GROUP_ID=$(echo "$GROUP_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
 
 if [[ -z "$GROUP_ID" || "$GROUP_ID" == "null" ]]; then
-    GROUP_ID=$(curl -s --max-time 30 --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-      "$GITLAB_URL/api/v4/groups?search=students" \
+    GROUP_ID=$(gl_api "$GITLAB_URL/api/v4/groups?search=students" \
+      --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
       | jq -r '.[0].id' 2>/dev/null)
 fi
 
@@ -82,7 +101,8 @@ fi
 echo ""
 echo "=== GitLab: создание шаблона проекта для студентов ==="
 
-TEMPLATE_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/projects" \
+TEMPLATE_RESPONSE=$(gl_api "$GITLAB_URL/api/v4/projects" \
+   --request POST \
    --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
    --header "Content-Type: application/json" \
    --data "{
@@ -111,8 +131,8 @@ build/
 GITIGNOREEOF
 )
 
-HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
-  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitignore" \
+RESP=$(gl_api_code "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitignore" \
+  --request POST \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data "{
@@ -120,7 +140,9 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
     \"encoding\": \"base64\",
     \"content\": \"$GITIGNORE_CONTENT\",
     \"commit_message\": \"Add .gitignore\"
-  }" -o ./.glab_response)
+  }")
+echo "$RESP" > ./.glab_response
+HTTP_CODE="$GLAB_HTTP_CODE"
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "✓ .gitignore создан"
@@ -137,8 +159,8 @@ create_gitkeep() {
     local ENCODED_PATH=$(printf '%s/.gitkeep' "$FILE_PATH" | jq -sRr '@uri')
     local EMPTY_BASE64=$(printf '%s' "" | base64 -w 0)
 
-    HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
-      "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$ENCODED_PATH" \
+    RESP=$(gl_api_code "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/$ENCODED_PATH" \
+      --request POST \
       --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
       --header "Content-Type: application/json" \
       --data "{
@@ -146,7 +168,9 @@ create_gitkeep() {
         \"encoding\": \"base64\",
         \"content\": \"$EMPTY_BASE64\",
         \"commit_message\": \"Add $FILE_PATH/.gitkeep\"
-      }" -o ./.glab_response)
+      }")
+    echo "$RESP" > ./.glab_response
+    HTTP_CODE="$GLAB_HTTP_CODE"
 
     if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
         echo "  ✓ $FILE_PATH/.gitkeep"
@@ -160,8 +184,8 @@ create_gitkeep() {
 echo "Создание директорий..."
 
 # Корневой .gitkeep (отдельный запрос, без ведущего слэша)
-HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
-  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitkeep" \
+RESP=$(gl_api_code "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitkeep" \
+  --request POST \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data "{
@@ -169,7 +193,9 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
     \"encoding\": \"base64\",
     \"content\": \"\",
     \"commit_message\": \"Add .gitkeep\"
-  }" -o ./.glab_response)
+  }")
+echo "$RESP" > ./.glab_response
+HTTP_CODE="$GLAB_HTTP_CODE"
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "  ✓ .gitkeep"
@@ -218,8 +244,8 @@ git clone git@gitlab.10.8.1.3:students/project.git
 READMEEOF
 )
 
-HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
-  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/README.md" \
+RESP=$(gl_api_code "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/README.md" \
+  --request POST \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data "{
@@ -227,7 +253,9 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
     \"encoding\": \"base64\",
     \"content\": \"$README_CONTENT\",
     \"commit_message\": \"Add README.md\"
-  }" -o ./.glab_response)
+  }")
+echo "$RESP" > ./.glab_response
+HTTP_CODE="$GLAB_HTTP_CODE"
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "✓ README.md создан"
@@ -261,8 +289,8 @@ grade:
 CIEOF
 )
 
-HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
-  "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitlab-ci.yml" \
+RESP=$(gl_api_code "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitlab-ci.yml" \
+  --request POST \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "Content-Type: application/json" \
   --data "{
@@ -270,7 +298,9 @@ HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
     \"encoding\": \"base64\",
     \"content\": \"$GITLAB_CI_CONTENT\",
     \"commit_message\": \"Add .gitlab-ci.yml for auto-grading\"
-  }" -o ./.glab_response)
+  }")
+echo "$RESP" > ./.glab_response
+HTTP_CODE="$GLAB_HTTP_CODE"
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "✓ .gitlab-ci.yml создан"
@@ -284,24 +314,22 @@ fi
 echo "Копирование docs/..."
 DOCS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../docs" && pwd)"
 
-# Сохраняем учётные данные (один раз)
-git config --global credential.helper store 2>/dev/null || true
-
 TMP_DIR=$(mktemp -d)
 
-# Клонируем с токеном (localhost, т.к. скрипт выполняется на хосте GitLab)
-if git clone http://oauth2:$ROOT_TOKEN@localhost/students/project.git "$TMP_DIR" 2>&1; then
-    # Копируем docs
-    cp "$DOCS_DIR"/*.md "$TMP_DIR/docs/"
+# Клонируем через docker exec (порт 80 занят oauth2-proxy)
+CLONE_DIR="/tmp/gitlab-init-$$"
+if docker exec gitlab git -c http.extraHeader="PRIVATE-TOKEN: $ROOT_TOKEN" clone http://localhost/students/project.git "$CLONE_DIR" 2>&1; then
+    # Копируем docs внутрь контейнера
+    cp "$DOCS_DIR"/*.md /tmp/ 2>/dev/null || true
+    for f in /tmp/*.md; do
+        [ -f "$f" ] && docker cp "$f" "gitlab:${CLONE_DIR}/docs/" 2>/dev/null || true
+    done
 
-    # Commit + push
-    cd "$TMP_DIR"
-    git add docs/
-    if git commit -m "Add docs/" 2>&1; then
-        git push http://oauth2:$ROOT_TOKEN@localhost/students/project.git main 2>&1
-    fi
+    # Commit + push (внутри контейнера)
+    docker exec gitlab sh -c "cd $CLONE_DIR && git config user.email 'root@gitlab.local' && git config user.name 'Root' && git add docs/ && git commit -m 'Add docs/' && git -c http.extraHeader='PRIVATE-TOKEN: $ROOT_TOKEN' push http://localhost/students/project.git main" 2>&1 || true
 
-    cd "$OLDPWD"
+    # Копируем результат на хост
+    docker cp "gitlab:${CLONE_DIR}" "$TMP_DIR" 2>/dev/null || true
 else
     echo "  ⚠ Клонирование не удалось"
 fi
@@ -316,7 +344,8 @@ echo "=== GitLab: настройка SSH deploy key для runner ==="
 if [[ -f "$RUNNER_SSH_KEY" ]]; then
     SSH_PUB_KEY=$(cat "$RUNNER_SSH_KEY")
 
-    curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/deploy_keys" \
+    gl_api "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/deploy_keys" \
+      --request POST \
       --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
       --header "Content-Type: application/json" \
       --data "{
@@ -340,14 +369,14 @@ for LECT_NUM in 01 02; do
     LECT_PASS="${!LECT_PASS_VAR}"
     
     # Проверяем существование
-    EXISTING=$(curl -s --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-      "$GITLAB_URL/api/v4/users?username=$LECT_USER" 2>/dev/null)
+    EXISTING=$(gl_api "$GITLAB_URL/api/v4/users?username=$LECT_USER" --header "PRIVATE-TOKEN: $ROOT_TOKEN" 2>/dev/null)
     
     USER_ID=$(echo "$EXISTING" | jq -r '.[0].id' 2>/dev/null || echo "")
     
     if [[ -z "$USER_ID" || "$USER_ID" == "null" ]]; then
         # Создаём пользователя
-        CREATE_RESP=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/users" \
+        CREATE_RESP=$(gl_api "$GITLAB_URL/api/v4/users" \
+          --request POST \
           --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
           --header "Content-Type: application/json" \
           --data "{
