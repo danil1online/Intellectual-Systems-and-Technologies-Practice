@@ -117,20 +117,30 @@ CLIEOF
 
   if [ -n "$INTERNAL_ID" ] && [ "$INTERNAL_ID" != "null" ]; then
     # Обновляем существующий клиент
-    curl -s -X PUT "$KEYCLOAK_URL/admin/realms/istp/clients/$INTERNAL_ID" \
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "$KEYCLOAK_URL/admin/realms/istp/clients/$INTERNAL_ID" \
       -H "Authorization: Bearer $ADMIN_TOKEN" \
       -H "Content-Type: application/json" \
-      -d "$CLIENT_DATA" > /dev/null
+      -d "$CLIENT_DATA" 2>/dev/null)
+    echo "  DEBUG: PUT $KEYCLOAK_URL/admin/realms/istp/clients/$INTERNAL_ID -> HTTP $HTTP_CODE" >&2
     echo "  Client $CLIENT_ID updated"
   else
     # Создаём нового клиента
-    curl -s -X POST "$KEYCLOAK_URL/admin/realms/istp/clients" \
+    RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$KEYCLOAK_URL/admin/realms/istp/clients" \
       -H "Authorization: Bearer $ADMIN_TOKEN" \
       -H "Content-Type: application/json" \
-      -d "$CLIENT_DATA" > /dev/null
+      -d "$CLIENT_DATA" 2>/dev/null)
+    HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+    BODY=$(echo "$RESPONSE" | head -n -1)
+    echo "  DEBUG: POST clients -> HTTP $HTTP_CODE, body=[$BODY]" >&2
     echo "  Client $CLIENT_ID created"
   fi
 
+  # Проверим что клиент реально есть
+  sleep 1
+  CHECK=$(curl -s "$KEYCLOAK_URL/admin/realms/istp/clients" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
+  FOUND=$(echo "$CHECK" | jq -r ".[] | select(.clientId==\"$CLIENT_ID\") | .id" 2>/dev/null)
+  echo "  DEBUG: After create, found $CLIENT_ID id=$FOUND" >&2
   echo "  Client $CLIENT_ID processed with secret"
 }
 
