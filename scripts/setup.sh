@@ -776,9 +776,39 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard
+    print_step "Запуск сервисов (с LLM)..."
+    if ! docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard; then
+        print_error "docker compose up завершился с ошибкой"
+        print_step "Логи упавших контейнеров:"
+        docker compose $LLM_PROFILES ps --filter "restart-policy=always" 2>/dev/null | while read line; do
+            container=$(echo "$line" | awk '{print $1}')
+            if [[ -n "$container" && "$container" != "NAME" ]]; then
+                status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
+                if [[ "$status" == "exited" || "$status" == "dead" ]]; then
+                    print_warn "  $container (status: $status)"
+                    docker logs "$container" --tail 20 2>&1 | sed 's/^/    /'
+                fi
+            fi
+        done
+        exit 1
+    fi
 else
-    docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard
+    print_step "Запуск сервисов..."
+    if ! docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard; then
+        print_error "docker compose up завершился с ошибкой"
+        print_step "Логи упавших контейнеров:"
+        docker compose ps 2>/dev/null | while read line; do
+            container=$(echo "$line" | awk '{print $1}')
+            if [[ -n "$container" && "$container" != "NAME" ]]; then
+                status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
+                if [[ "$status" == "exited" || "$status" == "dead" ]]; then
+                    print_warn "  $container (status: $status)"
+                    docker logs "$container" --tail 20 2>&1 | sed 's/^/    /'
+                fi
+            fi
+        done
+        exit 1
+    fi
 fi
 
 # Проверка модели в Docker volume для LLM
@@ -814,6 +844,10 @@ for i in $(seq 1 60); do
     fi
     if [[ $i -eq 60 ]]; then
         print_error "Keycloak не запустился за 10 минут"
+        print_step "Логи keycloak:"
+        docker logs keycloak --tail 50 2>&1 | sed 's/^/    /'
+        print_step "Логи kc-postgres:"
+        docker logs kc-postgres --tail 30 2>&1 | sed 's/^/    /'
         exit 1
     fi
     sleep 5
@@ -822,11 +856,21 @@ done
 docker compose up -d --force-recreate keycloak-init
 for i in $(seq 1 30); do
     if docker inspect --format='{{.State.Status}}' keycloak_init 2>/dev/null | grep -q "exited"; then
+        # Проверяем код выхода
+        EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' keycloak_init 2>/dev/null)
+        if [[ "$EXIT_CODE" != "0" ]]; then
+            print_error "Keycloak Init завершился с ошибкой (код: $EXIT_CODE)"
+            print_step "Логи keycloak_init:"
+            docker logs keycloak_init 2>&1 | sed 's/^/    /'
+            exit 1
+        fi
         print_success "Keycloak Init завершён"
         break
     fi
     if [[ $i -eq 30 ]]; then
         print_error "Keycloak Init не завершился за 5 минут"
+        print_step "Логи keycloak_init:"
+        docker logs keycloak_init --tail 50 2>&1 | sed 's/^/    /'
         exit 1
     fi
     sleep 5
@@ -840,6 +884,10 @@ for i in $(seq 1 60); do
     fi
     if [[ $i -eq 60 ]]; then
         print_error "GitLab не запустился за 10 минут"
+        print_step "Логи gitlab:"
+        docker logs gitlab --tail 50 2>&1 | sed 's/^/    /'
+        print_step "Логи oauth2-proxy-gitlab:"
+        docker logs oauth2-proxy-gitlab --tail 30 2>&1 | sed 's/^/    /'
         exit 1
     fi
     sleep 10
@@ -863,7 +911,10 @@ fi
 # Инициализация сервисов
 # ============================================
 print_step "Инициализация GitLab (группы, runner)..."
-bash "$SCRIPT_DIR/init_gitlab.sh"
+if ! bash "$SCRIPT_DIR/init_gitlab.sh"; then
+    print_error "Инициализация GitLab завершилась с ошибкой"
+    exit 1
+fi
 
 print_step "Запуск JupyterHub..."
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
@@ -902,6 +953,12 @@ for i in $(seq 1 90); do
     if docker exec gitlab curl -sf http://localhost:80 > /dev/null 2>&1; then
         print_success "GitLab готов для Runner ($i попыток)"
         break
+    fi
+    if [[ $i -eq 90 ]]; then
+        print_error "GitLab не готов для Runner за 15 минут"
+        print_step "Логи gitlab:"
+        docker logs gitlab --tail 30 2>&1 | sed 's/^/    /'
+        exit 1
     fi
     sleep 10
 done

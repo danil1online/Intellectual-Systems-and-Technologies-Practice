@@ -12,7 +12,7 @@ services:
       KC_HTTP_RELATIVE_PATH: /auth
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
-      KC_HOSTNAME: ${KC_HOSTNAME:-${GITLAB_HOST:-localhost}}
+      KC_HOSTNAME: ${LOCAL_IP:-192.168.1.38}
       KC_HOSTNAME_STRICT: "false"
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_PORT: ${KEYCLOAK_PORT:-9200}
@@ -66,7 +66,7 @@ services:
     networks:
       - internal
     environment:
-      KC_HOSTNAME: ${KC_HOSTNAME:-${GITLAB_HOST:-localhost}}
+      KC_HOSTNAME: ${LOCAL_IP:-192.168.1.38}
       GITLAB_HOST: ${GITLAB_HOST}
       HOST_IP_LOCAL: ${HOST_IP_LOCAL:-localhost}
       JUPYTERHUB_PORT: ${JUPYTERHUB_PORT:-8000}
