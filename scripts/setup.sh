@@ -598,11 +598,21 @@ print_success "Локальный IP для iptables: $PRIMARY_LOCAL_IP"
 # ============================================
 print_header "ШАГ 8/11: Генерация конфигурации"
 
-# Генерируем OIDC секреты
-OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
-OIDC_JUPYTER_SECRET=$(openssl rand -hex 32)
-OIDC_DASHBOARD_SECRET=$(openssl rand -hex 32)
-OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
+# Проверяем, есть ли существующий .env с OIDC-секретами
+EXISTING_ENV="$PROJECT_DIR/.env"
+if [[ -f "$EXISTING_ENV" ]] && grep -q "^OIDC_GITLAB_SECRET=" "$EXISTING_ENV" 2>/dev/null; then
+    print_warn "Существующий .env найден — сохраняем OIDC-секреты из него"
+    OIDC_GITLAB_SECRET=$(grep "^OIDC_GITLAB_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
+    OIDC_JUPYTER_SECRET=$(grep "^OIDC_JUPYTER_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
+    OIDC_DASHBOARD_SECRET=$(grep "^OIDC_DASHBOARD_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
+    OIDC_REGISTRY_SECRET=$(grep "^OIDC_REGISTRY_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
+else
+    # Генерируем OIDC секреты
+    OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
+    OIDC_JUPYTER_SECRET=$(openssl rand -hex 32)
+    OIDC_DASHBOARD_SECRET=$(openssl rand -hex 32)
+    OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
+fi
 
 # Извлекаем чистый IP из GITLAB_EXTERNAL_URL
 GITLAB_HOST=$(echo "$GITLAB_EXTERNAL_URL" | sed 's|http://||' | sed 's|:.*||')
@@ -784,20 +794,30 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     fi
 fi
 
-print_step "Ожидание запуска Keycloak..."
-for i in $(seq 1 30); do
+print_step "Запуск инициализации Keycloak..."
+
+# Полная очистка данных Keycloak перед инициализацией
+print_step "Очистка данных Keycloak для сброса пользователей..."
+KEYCLOAK_VOLUME="${PROJECT_VOLUME_PREFIX}_keycloak-data"
+if docker volume inspect "$KEYCLOAK_VOLUME" >/dev/null 2>&1; then
+    docker compose down -v keycloak 2>/dev/null || true
+    docker volume rm "$KEYCLOAK_VOLUME" 2>/dev/null || true
+    print_success "Volume $KEYCLOAK_VOLUME удалён"
+fi
+
+docker compose up -d --force-recreate keycloak gitlab-runner
+for i in $(seq 1 60); do
     if docker inspect --format='{{.State.Health.Status}}' keycloak 2>/dev/null | grep -q "healthy"; then
         print_success "Keycloak запущен"
         break
     fi
-    if [[ $i -eq 30 ]]; then
-        print_error "Keycloak не запустился за 5 минут"
+    if [[ $i -eq 60 ]]; then
+        print_error "Keycloak не запустился за 10 минут"
         exit 1
     fi
-    sleep 10
+    sleep 5
 done
 
-print_step "Запуск инициализации Keycloak..."
 docker compose up -d --force-recreate keycloak-init
 for i in $(seq 1 30); do
     if docker inspect --format='{{.State.Status}}' keycloak_init 2>/dev/null | grep -q "exited"; then
