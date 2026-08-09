@@ -67,6 +67,7 @@ c.CustomOAuthenticator.authorize_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/r
 c.CustomOAuthenticator.oauth_callback_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/oauth_callback"
 c.CustomOAuthenticator.logout_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
 c.CustomOAuthenticator.logout_redirect_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"
+c.CustomOAuthenticator.backchannel_logout_enabled = True
 
 c.CustomOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
 c.CustomOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")

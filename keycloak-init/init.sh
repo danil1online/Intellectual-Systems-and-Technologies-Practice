@@ -85,6 +85,7 @@ upsert_client() {
   local SECRET=$2
   local REDIRECT1=$3
   local REDIRECT2=$4
+  local LOGOUT_URL=$5
 
   echo "Processing client: $CLIENT_ID"
 
@@ -105,7 +106,6 @@ upsert_client() {
   "protocol": "openid-connect",
   "standardFlowEnabled": true,
   "publicClient": false,
-  "frontchannelLogout": true,
   "consentRequired": false,
   "attributes": {
     "oidc.ciba.grant.enabled": "false"
@@ -113,6 +113,10 @@ upsert_client() {
 }
 CLIEOF
 )
+
+  if [ -n "$LOGOUT_URL" ] && [ "$LOGOUT_URL" != "" ]; then
+    CLIENT_DATA=$(echo "$CLIENT_DATA" | sed "s/\"oidc.ciba.grant.enabled\": \"false\"/\"oidc.ciba.grant.enabled\": \"false\",\\n  \"backchannelLogout\": true,\\n  \"backchannelLogoutUrl\": \"$LOGOUT_URL\"/")
+  fi
 
   if [ -n "$INTERNAL_ID" ] && [ "$INTERNAL_ID" != "null" ]; then
     # Обновляем существующий клиент
@@ -146,15 +150,18 @@ CLIEOF
 # Создаём клиентов
 upsert_client "jupyterhub" "$OIDC_JUPYTER_SECRET" \
   "http://${GITLAB_HOST}:${JUPYTERHUB_PORT:-8000}/hub/oauth_callback" \
-  "http://localhost:${JUPYTERHUB_PORT:-8000}/hub/oauth_callback"
+  "http://localhost:${JUPYTERHUB_PORT:-8000}/hub/oauth_callback" \
+  "http://jupyterhub:${JUPYTERHUB_PORT:-8000}/hub/logout"
 
 upsert_client "gitlab" "$OIDC_GITLAB_SECRET" \
   "http://${GITLAB_HOST}/users/auth/openid_connect/callback" \
-  "http://localhost/users/auth/openid_connect/callback"
+  "http://localhost/users/auth/openid_connect/callback" \
+  "http://${GITLAB_HOST}/users/auth/openid_connect/logout"
 
 upsert_client "admin-dashboard" "$OIDC_DASHBOARD_SECRET" \
   "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/*" \
-  "http://localhost:${DASHBOARD_PORT:-9000}/*"
+  "http://localhost:${DASHBOARD_PORT:-9000}/*" \
+  "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/logout"
 
 upsert_client "registry" "$OIDC_REGISTRY_SECRET" \
   "http://${GITLAB_HOST}:5050/*" \
