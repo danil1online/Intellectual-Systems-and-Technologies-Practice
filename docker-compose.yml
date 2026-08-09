@@ -12,7 +12,7 @@ services:
       KC_HTTP_RELATIVE_PATH: /auth
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
-      KC_HOSTNAME: ${LOCAL_IP:-192.168.1.38}
+      KC_HOSTNAME: ${KC_HOSTNAME:-${GITLAB_HOST:-localhost}}
       KC_HOSTNAME_STRICT: "false"
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_PORT: ${KEYCLOAK_PORT:-9200}
@@ -66,7 +66,7 @@ services:
     networks:
       - internal
     environment:
-      KC_HOSTNAME: ${LOCAL_IP:-192.168.1.38}
+      KC_HOSTNAME: ${KC_HOSTNAME:-${GITLAB_HOST:-localhost}}
       GITLAB_HOST: ${GITLAB_HOST}
       HOST_IP_LOCAL: ${HOST_IP_LOCAL:-localhost}
       JUPYTERHUB_PORT: ${JUPYTERHUB_PORT:-8000}
@@ -148,8 +148,6 @@ services:
       - "${JUPYTERHUB_PORT:-8000}:8000"
     env_file:
       - .env.jupyterhub
-    networks:
-      - internal
     environment:
       HOST_IP: ${GITLAB_HOST}
       HOST_IP_LOCAL: ${HOST_IP_LOCAL:-localhost}
@@ -175,6 +173,9 @@ services:
       - ./shared/data/shared-packages/site-packages:/usr/local/lib/python3.10/shared-packages
       - hf-cache:/hf-cache
       - pip-cache:/shared/pip-cache
+    networks:
+      - internal
+      - host-facing
     depends_on:
       keycloak:
         condition: service_healthy
@@ -240,7 +241,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:5000/v2/ || exit 1"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 5
       start_period: 30s
 
@@ -302,6 +303,7 @@ volumes:
   llm-models:
     external: true
     name: ${PROJECT_VOLUME_PREFIX}_llm-models
+  scheduled-logout-logs:
   shared-data:
     external: true
     name: ${PROJECT_VOLUME_PREFIX}_shared-data
@@ -312,7 +314,6 @@ volumes:
   pip-cache:
     external: true
     name: ${PROJECT_VOLUME_PREFIX}_pip-cache
-  scheduled-logout-logs:
 
 networks:
   internal:

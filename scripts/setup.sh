@@ -141,26 +141,23 @@ PRIMARY_IFACE=$(ip route show default | head -1 | grep -oP 'dev \K\S+' || true)
 
 if [[ -z "$LOCAL_IPS" ]]; then
     print_error "Локальные IP не найдены!"
-    echo "Доступные сетевые интерфейсы:"
+    print_step "Доступные сетевые интерфейсы:"
     ip -4 addr show | grep "inet " | grep -v '^127'
     exit 1
 fi
 
 # Берём первый не-docker IP как основной локальный
 PRIMARY_LOCAL_IP=$(echo "$LOCAL_IPS" | head -1)
-print_step "Основной локальный IP: $PRIMARY_LOCAL_IP"
+
 if [[ -n "$VPN_IP" ]]; then
     print_warn "Обнаружен VPN IP (НЕ ДОСТУПЕН из Docker): $VPN_IP"
 fi
+
 print_step "Интерфейс: $PRIMARY_IFACE | Подсеть: ${SUBNET:-авто} | Шлюз: ${DEFAULT_GW:-авто}"
 print_step "Доступные локальные IP для использования:"
 echo "$LOCAL_IPS" | head -5 | while read ip; do
     print_step "  - $ip"
 done
-
-print_step "Основной интерфейс: ${PRIMARY_IFACE:-авто}"
-print_step "Подсеть: ${SUBNET:-авто}"
-print_step "Шлюз: ${DEFAULT_GW:-авто}"
 
 # ============================================
 # ШАГ 1/11: Внешний адрес сервера
@@ -175,7 +172,7 @@ echo -e "  - Для git clone/push/pull"
 echo -e "  - Для всех OIDC callback URL"
 echo -e "  - GitLab external_url (критично!)"
 echo -e ""
-echo -e "  VPN IP недоступен из Docker-контейнеров и не может быть использован."
+echo -e "  ${BOLD}Важно:${NC} VPN IP недоступен из Docker-контейнеров и не может быть использован."
 echo -e "  Укажите локальный IP из доступных:"
 echo "$LOCAL_IPS" | head -5 | while read ip; do
     print_step "    - $ip"
@@ -213,8 +210,8 @@ done
 # Извлекаем домен для hostname контейнеров
 GITLAB_EXTERNAL_URL="http://$EXTERNAL_IP"
 
+# Для доступа с самого сервера используем localhost
 print_success "GitLab external_url: $GITLAB_EXTERNAL_URL"
-print_warn "Для доступа с самого сервера используйте localhost или $PRIMARY_LOCAL_IP"
 
 # ============================================
 # ШАГ 2/11: Порты сервисов
@@ -566,21 +563,11 @@ print_success "Сеть проверена"
 # ============================================
 print_header "ШАГ 8/11: Генерация конфигурации"
 
-# Проверяем, есть ли существующий .env с OIDC-секретами
-EXISTING_ENV="$PROJECT_DIR/.env"
-if [[ -f "$EXISTING_ENV" ]] && grep -q "^OIDC_GITLAB_SECRET=" "$EXISTING_ENV" 2>/dev/null; then
-    print_warn "Существующий .env найден — сохраняем OIDC-секреты из него"
-    OIDC_GITLAB_SECRET=$(grep "^OIDC_GITLAB_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
-    OIDC_JUPYTER_SECRET=$(grep "^OIDC_JUPYTER_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
-    OIDC_DASHBOARD_SECRET=$(grep "^OIDC_DASHBOARD_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
-    OIDC_REGISTRY_SECRET=$(grep "^OIDC_REGISTRY_SECRET=" "$EXISTING_ENV" | cut -d= -f2-)
-else
-    # Генерируем OIDC секреты
-    OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
-    OIDC_JUPYTER_SECRET=$(openssl rand -hex 32)
-    OIDC_DASHBOARD_SECRET=$(openssl rand -hex 32)
-    OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
-fi
+# Генерируем OIDC секреты
+OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
+OIDC_JUPYTER_SECRET=$(openssl rand -hex 32)
+OIDC_DASHBOARD_SECRET=$(openssl rand -hex 32)
+OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
 
 # Извлекаем чистый IP из GITLAB_EXTERNAL_URL
 GITLAB_HOST=$(echo "$GITLAB_EXTERNAL_URL" | sed 's|http://||' | sed 's|:.*||')
@@ -744,10 +731,8 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    print_step "Запуск сервисов (с LLM)..."
     docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner
 else
-    print_step "Запуск сервисов..."
     docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner
 fi
 
@@ -764,53 +749,28 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     fi
 fi
 
-print_step "Запуск инициализации Keycloak..."
-
-# Полная очистка данных Keycloak (оба volume — data и postgres) перед инициализацией
-print_step "Очистка данных Keycloak для сброса пользователей..."
-for VOL in keycloak-data kc-postgres-data; do
-    FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${VOL}"
-    if docker volume inspect "$FULL_VOL_NAME" >/dev/null 2>&1; then
-        docker volume rm "$FULL_VOL_NAME" 2>/dev/null || true
-        print_success "Volume $FULL_VOL_NAME удалён"
-    fi
-done
-
-docker compose up -d --force-recreate keycloak gitlab-runner
-for i in $(seq 1 60); do
+print_step "Ожидание запуска Keycloak..."
+for i in $(seq 1 30); do
     if docker inspect --format='{{.State.Health.Status}}' keycloak 2>/dev/null | grep -q "healthy"; then
         print_success "Keycloak запущен"
         break
     fi
-    if [[ $i -eq 60 ]]; then
-        print_error "Keycloak не запустился за 10 минут"
-        print_step "Логи keycloak:"
-        docker logs keycloak --tail 50 2>&1 | sed 's/^/    /'
-        print_step "Логи kc-postgres:"
-        docker logs kc-postgres --tail 30 2>&1 | sed 's/^/    /'
+    if [[ $i -eq 30 ]]; then
+        print_error "Keycloak не запустился за 5 минут"
         exit 1
     fi
-    sleep 5
+    sleep 10
 done
 
+print_step "Запуск инициализации Keycloak..."
 docker compose up -d --force-recreate keycloak-init
 for i in $(seq 1 30); do
     if docker inspect --format='{{.State.Status}}' keycloak_init 2>/dev/null | grep -q "exited"; then
-        # Проверяем код выхода
-        EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' keycloak_init 2>/dev/null)
-        if [[ "$EXIT_CODE" != "0" ]]; then
-            print_error "Keycloak Init завершился с ошибкой (код: $EXIT_CODE)"
-            print_step "Логи keycloak_init:"
-            docker logs keycloak_init 2>&1 | sed 's/^/    /'
-            exit 1
-        fi
         print_success "Keycloak Init завершён"
         break
     fi
     if [[ $i -eq 30 ]]; then
         print_error "Keycloak Init не завершился за 5 минут"
-        print_step "Логи keycloak_init:"
-        docker logs keycloak_init --tail 50 2>&1 | sed 's/^/    /'
         exit 1
     fi
     sleep 5
@@ -824,8 +784,6 @@ for i in $(seq 1 60); do
     fi
     if [[ $i -eq 60 ]]; then
         print_error "GitLab не запустился за 10 минут"
-        print_step "Логи gitlab:"
-        docker logs gitlab --tail 50 2>&1 | sed 's/^/    /'
         exit 1
     fi
     sleep 10
@@ -849,10 +807,7 @@ fi
 # Инициализация сервисов
 # ============================================
 print_step "Инициализация GitLab (группы, runner)..."
-if ! bash "$SCRIPT_DIR/init_gitlab.sh"; then
-    print_error "Инициализация GitLab завершилась с ошибкой"
-    exit 1
-fi
+bash "$SCRIPT_DIR/init_gitlab.sh"
 
 print_step "Запуск JupyterHub..."
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
@@ -882,12 +837,6 @@ for i in $(seq 1 90); do
     if docker exec gitlab curl -sf http://localhost:80 > /dev/null 2>&1; then
         print_success "GitLab готов для Runner ($i попыток)"
         break
-    fi
-    if [[ $i -eq 90 ]]; then
-        print_error "GitLab не готов для Runner за 15 минут"
-        print_step "Логи gitlab:"
-        docker logs gitlab --tail 30 2>&1 | sed 's/^/    /'
-        exit 1
     fi
     sleep 10
 done
@@ -978,6 +927,7 @@ DASHBOARD_PORT="${DASHBOARD_PORT:-9000}"
 EXTERNAL_IP="${EXTERNAL_IP:-localhost}"
 GITLAB_HOST="${GITLAB_HOST:-localhost}"
 PRIMARY_LOCAL_IP="${PRIMARY_LOCAL_IP:-localhost}"
+USE_DNAT="${USE_DNAT:-false}"
 
 print_header "УСТАНОВКА ЗАВЕРШЕНА"
 
@@ -1011,6 +961,13 @@ echo -e "  ${BOLD}GitLab:${NC}        http://localhost (или http://$PRIMARY_L
 echo -e "  ${BOLD}JupyterHub:${NC}    http://localhost:$JUPYTERHUB_PORT"
 echo -e "  ${BOLD}Dashboard:${NC}     http://localhost:$DASHBOARD_PORT"
 echo ""
+
+if [[ "${USE_DNAT}" == "true" ]]; then
+    echo -e "  ${BOLD}Через VPN IP ($EXTERNAL_IP):${NC}"
+    echo -e "  DNAT настроен — $EXTERNAL_IP перенаправляется на localhost"
+    echo -e "  Скрипт persistency: shared/scripts/setup-dnat.sh"
+    echo -e ""
+fi
 
 echo -e ""
 echo -e "${BOLD}⚠️ Важно для доступа к GitLab по HTTP:${NC}"
