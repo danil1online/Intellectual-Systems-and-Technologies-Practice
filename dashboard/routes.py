@@ -123,7 +123,11 @@ def logout():
     """Redirect to Keycloak logout (ends SSO session)."""
     gitlab_host = os.environ.get("GITLAB_HOST", "192.168.2.69")
     kc_port = os.environ.get("KEYCLOAK_PORT", "9200")
-    logout_url = f"http://{gitlab_host}:{kc_port}/auth/realms/istp/protocol/openid-connect/logout"
+    dashboard_url = os.environ.get("DASHBOARD_URL", f"http://{gitlab_host}:{os.environ.get('DASHBOARD_PORT', '9000')}")
+    logout_url = (
+        f"http://{gitlab_host}:{kc_port}/auth/realms/istp/protocol/openid-connect/logout"
+        f"?post_logout_redirect_uri={dashboard_url}/"
+    )
     return redirect(logout_url)
 
 

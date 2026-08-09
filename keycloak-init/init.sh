@@ -58,6 +58,8 @@ if [ "$REALM_EXISTS" != "200" ]; then
   "verifyEmail": false,
   "loginTheme": "keycloak",
   "accountTheme": "keycloak",
+  "backchannelLogoutSessions": true,
+  "backchannelLogoutRevokeOfflineTokens": true,
   "attributes": {
     "cibaBackchannelTokenDeliveryMode": "poll",
     "cibaExpiresIn": "120",
