@@ -796,14 +796,15 @@ fi
 
 print_step "Запуск инициализации Keycloak..."
 
-# Полная очистка данных Keycloak перед инициализацией
+# Полная очистка данных Keycloak (оба volume — data и postgres) перед инициализацией
 print_step "Очистка данных Keycloak для сброса пользователей..."
-KEYCLOAK_VOLUME="${PROJECT_VOLUME_PREFIX}_keycloak-data"
-if docker volume inspect "$KEYCLOAK_VOLUME" >/dev/null 2>&1; then
-    docker compose down -v keycloak 2>/dev/null || true
-    docker volume rm "$KEYCLOAK_VOLUME" 2>/dev/null || true
-    print_success "Volume $KEYCLOAK_VOLUME удалён"
-fi
+for VOL in keycloak-data kc-postgres-data; do
+    FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${VOL}"
+    if docker volume inspect "$FULL_VOL_NAME" >/dev/null 2>&1; then
+        docker volume rm "$FULL_VOL_NAME" 2>/dev/null || true
+        print_success "Volume $FULL_VOL_NAME удалён"
+    fi
+done
 
 docker compose up -d --force-recreate keycloak gitlab-runner
 for i in $(seq 1 60); do
