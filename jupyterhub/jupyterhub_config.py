@@ -68,6 +68,12 @@ c.CustomOAuthenticator.oauth_callback_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}
 c.CustomOAuthenticator.logout_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
 c.CustomOAuthenticator.logout_redirect_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"
 
+# Custom logout handler — passes id_token_hint to Keycloak
+from jupyterhub.custom_logout_handler import KeycloakLogoutHandler
+c.JupyterHub.logout_handlers = [
+    (r'/hub/logout', KeycloakLogoutHandler),
+]
+
 c.CustomOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
 c.CustomOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")
 

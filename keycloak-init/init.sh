@@ -102,6 +102,29 @@ upsert_client() {
   
   INTERNAL_ID=$(echo "$CLIENT_JSON" | jq -r ".[] | select(.clientId==\"$CLIENT_ID\") | .id" 2>/dev/null)
 
+  # Определяем frontchannelLogoutUrl и backchannelLogoutUrl
+  local FRONTCHANNEL_URL=""
+  local BACKCHANNEL_URL=""
+  
+  case "$CLIENT_ID" in
+    jupyterhub)
+      FRONTCHANNEL_URL="http://${GITLAB_HOST}:${JUPYTERHUB_PORT:-8000}/hub/logout"
+      BACKCHANNEL_URL="http://${GITLAB_HOST}:${JUPYTERHUB_PORT:-8000}/hub/logout"
+      ;;
+    gitlab)
+      FRONTCHANNEL_URL="http://${GITLAB_HOST}/users/auth/openid_connect/sign_out"
+      BACKCHANNEL_URL="http://${GITLAB_HOST}/users/auth/openid_connect/sign_out"
+      ;;
+    admin-dashboard)
+      FRONTCHANNEL_URL="http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/logout"
+      BACKCHANNEL_URL="http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/logout"
+      ;;
+    registry)
+      FRONTCHANNEL_URL="http://${GITLAB_HOST}:5050/"
+      BACKCHANNEL_URL="http://${GITLAB_HOST}:5050/"
+      ;;
+  esac
+
   # Формируем JSON клиента
   CLIENT_DATA=$(cat <<CLIEOF
 {
@@ -114,6 +137,8 @@ upsert_client() {
   "standardFlowEnabled": true,
   "publicClient": false,
   "frontchannelLogout": true,
+  "frontchannelLogoutUrl": "$FRONTCHANNEL_URL",
+  "backchannelLogout": true,
   "consentRequired": false,
   "attributes": {
     "oidc.ciba.grant.enabled": "false",

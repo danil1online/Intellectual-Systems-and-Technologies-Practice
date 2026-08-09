@@ -33,37 +33,37 @@ gitlab_rails['omniauth_providers'] = [
     discovery: false,
     app_id: 'gitlab',
     app_secret: '${OIDC_GITLAB_SECRET}',
-    scope: ['openid', 'profile', 'email'],
-    redirect_uri: "http://${OIDC_HOST_IP}/users/auth/openid_connect/callback",
-    authorization_endpoint: "http://${OIDC_HOST_IP}:9200/auth/realms/istp/protocol/openid-connect/auth",
-    token_endpoint: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/token",
-    userinfo_endpoint: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/userinfo",
-    jwks_uri: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/certs",
-    response_type: 'code',
-    token_response_params: [],
-    state: true,
-    pkce: true,
-    userInfoSignedResponseAlg: 'none',
-    jwks_uri_verify: false,
-    end_session_endpoint: "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT:-9200}/auth/realms/istp/protocol/openid-connect/logout",
-    claim_options: {
-      name: {
-        map: ['preferred_username']
+    args: {
+      scope: ['openid', 'profile', 'email'],
+      response_type: 'code',
+      issuer: "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT:-9200}/auth/realms/istp",
+      authorization_endpoint: "http://${OIDC_HOST_IP}:9200/auth/realms/istp/protocol/openid-connect/auth",
+      token_endpoint: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/token",
+      userinfo_endpoint: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/userinfo",
+      jwks_uri: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/certs",
+      end_session_endpoint: "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT:-9200}/auth/realms/istp/protocol/openid-connect/logout",
+      state: true,
+      pkce: true,
+      userInfoSignedResponseAlg: 'none',
+      jwks_uri_verify: false,
+      claim_options: {
+        name: {
+          map: ['preferred_username']
+        },
+        email: {
+          map: ['email']
+        },
+        first_name: {
+          map: ['given_name']
+        },
+        last_name: {
+          map: ['family_name']
+        }
       },
-      email: {
-        map: ['email']
-      },
-      first_name: {
-        map: ['given_name']
-      },
-      last_name: {
-        map: ['family_name']
+      attribute_links: {
+        'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier' => 'uid'
       }
-    },
-    attribute_links: {
-      'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier' => 'uid'
-    },
-    disable_ui: false
+    }
   }
 ]
 gitlab_rails['omniauth_enabled'] = true
