@@ -1,0 +1,16 @@
+# Weekday scheduled logout for academic sessions
+# Keycloak session invalidation
+
+30 8 * * 1-5 /app/scripts/keycloak-logout.sh
+40 10 * * 1-5 /app/scripts/keycloak-logout.sh
+25 12 * * 1-5 /app/scripts/keycloak-logout.sh
+55 14 * * 1-5 /app/scripts/keycloak-logout.sh
+40 16 * * 1-5 /app/scripts/keycloak-logout.sh
+
+# JupyterHub server cleanup (5 min after each logout)
+
+35 8 * * 1-5 /app/scripts/jupyterhub-logout.sh
+45 10 * * 1-5 /app/scripts/jupyterhub-logout.sh
+30 12 * * 1-5 /app/scripts/jupyterhub-logout.sh
+0 15 * * 1-5 /app/scripts/jupyterhub-logout.sh
+45 16 * * 1-5 /app/scripts/jupyterhub-logout.sh

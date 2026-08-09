@@ -391,6 +391,24 @@ services:
       retries: 5
       start_period: 30s
 
+  # --- SCHEDULED LOGOUT (cron: Keycloak sessions + JupyterHub servers) ---
+  scheduled-logout:
+    build:
+      context: ./scheduled-logout
+      dockerfile: Dockerfile
+    container_name: scheduled-logout
+    restart: unless-stopped
+    environment:
+      KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      JH_API_TOKEN: ${JH_API_TOKEN}
+    networks:
+      - internal
+    depends_on:
+      - keycloak
+      - jupyterhub
+    volumes:
+      - scheduled-logout-logs:/var/log
+
 volumes:
   keycloak-data:
   kc-postgres-data:
@@ -408,6 +426,7 @@ volumes:
   pip-cache:
     external: true
     name: ${PROJECT_VOLUME_PREFIX}_pip-cache
+  scheduled-logout-logs:
 
 networks:
   internal:
