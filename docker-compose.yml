@@ -250,7 +250,6 @@ services:
       OAUTH2_PROXY_CSRF_COOKIE_NAME: "_oauth2_proxy_jupyterhub_csrf"
     networks:
       - internal
-      - host-facing
     depends_on:
       - keycloak
     healthcheck:
@@ -290,7 +289,6 @@ services:
       OAUTH2_PROXY_CSRF_COOKIE_NAME: "_oauth2_proxy_gitlab_csrf"
     networks:
       - internal
-      - host-facing
     depends_on:
       - keycloak
       - gitlab
@@ -350,7 +348,6 @@ services:
       OAUTH2_PROXY_CSRF_COOKIE_NAME: "_oauth2_proxy_dashboard_csrf"
     networks:
       - internal
-      - host-facing
     depends_on:
       - keycloak
       - admin-dashboard
