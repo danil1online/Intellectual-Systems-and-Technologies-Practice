@@ -96,7 +96,28 @@ upsert_client() {
   INTERNAL_ID=$(echo "$CLIENT_JSON" | jq -r ".[] | select(.clientId==\"$CLIENT_ID\") | .id" 2>/dev/null)
 
   # Формируем JSON клиента
-  CLIENT_DATA=$(cat <<CLIEOF
+  if [ -n "$LOGOUT_URL" ] && [ "$LOGOUT_URL" != "" ]; then
+    CLIENT_DATA=$(cat <<CLIEOF
+{
+  "clientId": "$CLIENT_ID",
+  "secret": "$SECRET",
+  "redirectUris": ["$REDIRECT1", "$REDIRECT2"],
+  "webOrigins": ["+"],
+  "enabled": true,
+  "protocol": "openid-connect",
+  "standardFlowEnabled": true,
+  "publicClient": false,
+  "consentRequired": false,
+  "backchannelLogout": true,
+  "backchannelLogoutUrl": "$LOGOUT_URL",
+  "attributes": {
+    "oidc.ciba.grant.enabled": "false"
+  }
+}
+CLIEOF
+)
+  else
+    CLIENT_DATA=$(cat <<CLIEOF
 {
   "clientId": "$CLIENT_ID",
   "secret": "$SECRET",
@@ -113,9 +134,6 @@ upsert_client() {
 }
 CLIEOF
 )
-
-  if [ -n "$LOGOUT_URL" ] && [ "$LOGOUT_URL" != "" ]; then
-    CLIENT_DATA=$(echo "$CLIENT_DATA" | sed "s/\"oidc.ciba.grant.enabled\": \"false\"/\"oidc.ciba.grant.enabled\": \"false\",\\n  \"backchannelLogout\": true,\\n  \"backchannelLogoutUrl\": \"$LOGOUT_URL\"/")
   fi
 
   if [ -n "$INTERNAL_ID" ] && [ "$INTERNAL_ID" != "null" ]; then
