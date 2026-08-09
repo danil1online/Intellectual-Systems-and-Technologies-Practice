@@ -82,7 +82,7 @@ services:
       OIDC_REGISTRY_SECRET: ${OIDC_REGISTRY_SECRET}
     entrypoint: ["/bin/sh", "/app/init.sh"]
 
-  # --- GITLAB CE ---
+  # --- GITLAB CE (за OAuth2-Proxy) ---
   gitlab:
     build:
       context: ./gitlab-custom
@@ -99,7 +99,6 @@ services:
       OIDC_HOST_IP: ${GITLAB_HOST}
       KEYCLOAK_PORT: ${KEYCLOAK_PORT:-9200}
     ports:
-      - "80:80"
       - "2222:22"
     volumes:
       - ./shared/data/gitlab-config:/etc/gitlab
@@ -137,17 +136,15 @@ services:
       retries: 5
       start_period: 60s
 
-  # --- JUPYTERHUB ---
+  # --- JUPYTERHUB (за OAuth2-Proxy) ---
   jupyterhub:
     build:
       context: ./jupyterhub
       dockerfile: Dockerfile
     container_name: jupyterhub
     restart: unless-stopped
-    ports:
-      - "${JUPYTERHUB_PORT:-8000}:8000"
-    env_file:
-      - .env.jupyterhub
+    networks:
+      - internal
     environment:
       HOST_IP: ${GITLAB_HOST}
       HOST_IP_LOCAL: ${HOST_IP_LOCAL:-localhost}
@@ -173,9 +170,6 @@ services:
       - ./shared/data/shared-packages/site-packages:/usr/local/lib/python3.10/shared-packages
       - hf-cache:/hf-cache
       - pip-cache:/shared/pip-cache
-    networks:
-      - internal
-      - host-facing
     depends_on:
       keycloak:
         condition: service_healthy
@@ -226,6 +220,87 @@ services:
       retries: 5
       start_period: 300s
 
+   # --- OAUTH2-PROXY для JupyterHub ---
+  oauth2-proxy-jupyterhub:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: oauth2-proxy-jupyterhub
+    restart: unless-stopped
+    ports:
+      - "${JUPYTERHUB_PORT:-8000}:4180"
+    environment:
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:-c3VwZXItc2VjcmV0LWNvb2tpZS1zZWNyZXQtMTIzNDU=}"
+      OAUTH2_PROXY_CLIENT_ID: "jupyterhub"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OIDC_JUPYTER_SECRET}"
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "http://${GITLAB_HOST}:${KEYCLOAK_PORT:-9200}/auth/realms/istp"
+      OAUTH2_PROXY_REDIRECT_URL: "http://${GITLAB_HOST}:${JUPYTERHUB_PORT:-8000}/oauth2/callback"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_UPSTREAMS: "http://jupyterhub:8000"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_REMEMBER_COOKIE_NAME: "_oauth2_proxy_jupyterhub"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "*"
+      OAUTH2_PROXY_SCOPE: "openid profile email"
+      OAUTH2_PROXY_PASS_ACCESS_TOKEN: "true"
+      OAUTH2_PROXY_PASS_ID_TOKEN: "true"
+      OAUTH2_PROXY_SSL_REDIRECT: "false"
+      OAUTH2_PROXY_FORCE_REDIRECT_TO_HTTP: "true"
+      OAUTH2_PROXY_SKIP_JWT_EMAIL: "*"
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_CSRF_COOKIE_NAME: "_oauth2_proxy_jupyterhub_csrf"
+    networks:
+      - internal
+      - host-facing
+    depends_on:
+      - keycloak
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4180/oauth2/start || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # --- OAUTH2-PROXY для GitLab ---
+  oauth2-proxy-gitlab:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: oauth2-proxy-gitlab
+    restart: unless-stopped
+    ports:
+      - "80:4180"
+    environment:
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:-c3VwZXItc2VjcmV0LWNvb2tpZS1zZWNyZXQtMTIzNDU=}"
+      OAUTH2_PROXY_CLIENT_ID: "gitlab"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OIDC_GITLAB_SECRET}"
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "http://${GITLAB_HOST}:${KEYCLOAK_PORT:-9200}/auth/realms/istp"
+      OAUTH2_PROXY_REDIRECT_URL: "http://${GITLAB_HOST}/oauth2/callback"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_UPSTREAMS: "http://gitlab:80"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_REMEMBER_COOKIE_NAME: "_oauth2_proxy_gitlab"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "*"
+      OAUTH2_PROXY_SCOPE: "openid profile email"
+      OAUTH2_PROXY_PASS_ACCESS_TOKEN: "true"
+      OAUTH2_PROXY_PASS_ID_TOKEN: "true"
+      OAUTH2_PROXY_SSL_REDIRECT: "false"
+      OAUTH2_PROXY_FORCE_REDIRECT_TO_HTTP: "true"
+      OAUTH2_PROXY_SKIP_JWT_EMAIL: "*"
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_CSRF_COOKIE_NAME: "_oauth2_proxy_gitlab_csrf"
+    networks:
+      - internal
+      - host-facing
+    depends_on:
+      - keycloak
+      - gitlab
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4180/oauth2/start || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   # --- DOCKER REGISTRY ---
   registry:
     image: registry:2
@@ -241,19 +316,60 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:5000/v2/ || exit 1"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 5
       start_period: 30s
 
-  # --- ADMIN DASHBOARD ---
+  # --- OAUTH2-PROXY для Dashboard ---
+  oauth2-proxy-dashboard:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: oauth2-proxy-dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-9000}:4180"
+    environment:
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET:-c3VwZXItc2VjcmV0LWNvb2tpZS1zZWNyZXQtMTIzNDU=}"
+      OAUTH2_PROXY_CLIENT_ID: "admin-dashboard"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OIDC_DASHBOARD_SECRET}"
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "http://${GITLAB_HOST}:${KEYCLOAK_PORT:-9200}/auth/realms/istp"
+      OAUTH2_PROXY_REDIRECT_URL: "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/oauth2/callback"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_UPSTREAMS: "http://admin-dashboard:5000"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_REMEMBER_COOKIE_NAME: "_oauth2_proxy_dashboard"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "*"
+      OAUTH2_PROXY_SCOPE: "openid profile email"
+      OAUTH2_PROXY_PASS_ACCESS_TOKEN: "true"
+      OAUTH2_PROXY_PASS_ID_TOKEN: "true"
+      OAUTH2_PROXY_SSL_REDIRECT: "false"
+      OAUTH2_PROXY_FORCE_REDIRECT_TO_HTTP: "true"
+      OAUTH2_PROXY_SKIP_JWT_EMAIL: "*"
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_CSRF_COOKIE_NAME: "_oauth2_proxy_dashboard_csrf"
+    networks:
+      - internal
+      - host-facing
+    depends_on:
+      - keycloak
+      - admin-dashboard
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:4180/oauth2/start || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # --- ADMIN DASHBOARD (за OAuth2-Proxy) ---
   admin-dashboard:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
     container_name: admin-dashboard
     restart: unless-stopped
-    ports:
-      - "${DASHBOARD_PORT:-9000}:5000"
+    networks:
+      - internal
     environment:
       KEYCLOAK_ISSUER: "http://keycloak:9200/auth/realms/istp"
       DASHBOARD_CLIENT_ID: ${DASH_CLIENT_ID}
@@ -265,9 +381,6 @@ services:
       GITLAB_ADMIN_TOKEN: ${GITLAB_ADMIN_TOKEN:-}
     volumes:
       - user-homes:/home
-    networks:
-      - internal
-      - host-facing
     depends_on:
       keycloak:
         condition: service_healthy

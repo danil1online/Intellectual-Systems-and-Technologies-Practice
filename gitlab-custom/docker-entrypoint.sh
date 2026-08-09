@@ -24,61 +24,19 @@ nginx['listen_addresses'] = ['0.0.0.0', '[::]']
 nginx['listen_port'] = 80
 nginx['proxy_read_timeout'] = 3600
 
-# OIDC через Keycloak
-gitlab_rails['omniauth_providers'] = [
-  {
-    name: 'openid_connect',
-    label: 'Keycloak',
-    issuer: "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT:-9200}/auth/realms/istp",
-    discovery: false,
-    app_id: 'gitlab',
-    app_secret: '${OIDC_GITLAB_SECRET}',
-    args: {
-      scope: ['openid', 'profile', 'email'],
-      response_type: 'code',
-      issuer: "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT:-9200}/auth/realms/istp",
-      authorization_endpoint: "http://${OIDC_HOST_IP}:9200/auth/realms/istp/protocol/openid-connect/auth",
-      token_endpoint: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/token",
-      userinfo_endpoint: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/userinfo",
-      jwks_uri: "http://keycloak:9200/auth/realms/istp/protocol/openid-connect/certs",
-      end_session_endpoint: "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT:-9200}/auth/realms/istp/protocol/openid-connect/logout",
-      state: true,
-      pkce: true,
-      userInfoSignedResponseAlg: 'none',
-      jwks_uri_verify: false,
-      claim_options: {
-        name: {
-          map: ['preferred_username']
-        },
-        email: {
-          map: ['email']
-        },
-        first_name: {
-          map: ['given_name']
-        },
-        last_name: {
-          map: ['family_name']
-        }
-      },
-      attribute_links: {
-        'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier' => 'uid'
-      }
-    }
-  }
-]
-gitlab_rails['omniauth_enabled'] = true
-gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
+# ============================================
+# SLO: RemoteUser через OAuth2-Proxy
+# ============================================
+# GitLab принимает пользователя из заголовка X-Forwarded-User от OAuth2-Proxy
+# Отключаем OmniAuth полностью — аутентификация через OAuth2-Proxy
+gitlab_rails['omniauth_providers'] = []
+gitlab_rails['omniauth_enabled'] = false
+
+# Разрешаем создание пользователей без аутентификации
+gitlab_rails['omniauth_block_auto_created_users'] = false
 gitlab_rails['omniauth_auto_link_user'] = true
 gitlab_rails['omniauth_auto_link_user_id_token'] = true
 gitlab_rails['omniauth_auto_link_user_with_same_email'] = true
-gitlab_rails['omniauth_sync_email_from_provider'] = ['openid_connect']
-gitlab_rails['omniauth_sync_profile_from_provider'] = ['openid_connect']
-gitlab_rails['omniauth_sync_profile_attributes'] = ['openid_connect']
-gitlab_rails['omniauth_allowed_request_methods'] = ['get', 'post']
-gitlab_rails['omniauth_logout_redirect_uri'] = "http://${OIDC_HOST_IP}/users/auth/openid_connect/sign_out"
-
-# Локальный вход сохраняется при наличии OIDC-провайдеров
-gitlab_rails['omniauth_block_auto_created_users'] = false
 
 # Полное отключение prometheus (mmap падает в /dev/shm)
 prometheus_monitoring['enable'] = false

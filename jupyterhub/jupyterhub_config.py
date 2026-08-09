@@ -1,6 +1,6 @@
 """
 JupyterHub конфигурация для учебного комплекса.
-Авторизация: Keycloak OIDC.
+Авторизация: OAuth2-Proxy (X-Forwarded-User header).
 Спавнер: LocalProcessSpawner с хуками первого входа.
 """
 
@@ -10,7 +10,6 @@ import datetime
 import pwd
 import subprocess
 from pathlib import Path
-from oauthenticator.generic import GenericOAuthenticator
 
 # ============================================
 # Основные настройки
@@ -30,56 +29,27 @@ if not cookie_secret_str:
 c.JupyterHub.cookie_secret = bytes.fromhex(cookie_secret_str)
 c.JupyterHub.db_url = "sqlite:///jupyterhub.db"
 
-# Cookie settings для cross-domain OAuth
-c.JupyterHub.cookie_options = {
-    "samesite": os.environ.get("COOKIE_SAMESITE", "None"),
-    "secure": os.environ.get("COOKIE_SECURE", "false").lower() == "true",
-}
+# ============================================
+# Авторизация через OAuth2-Proxy (RemoteUser)
+# ============================================
+c.JupyterHub.authenticator_class = 'jupyterhub.auth.RemoteUserAuthenticator'
+c.RemoteUserAuthenticator.header_name = 'X-Forwarded-User'
 
-# ============================================
-# Авторизация через Keycloak OAuth
-# ============================================
-HOST_IP = os.environ.get('HOST_IP', '10.8.1.3')
-HOST_IP_LOCAL = os.environ.get('HOST_IP_LOCAL', 'localhost')
-KEYCLOAK_PORT = os.environ.get('KEYCLOAK_PORT', '9200')
+# Выход через Keycloak (SLO)
+GITLAB_HOST = os.environ.get('GITLAB_HOST', '10.8.1.3')
 JUPYTERHUB_PORT = os.environ.get('JUPYTERHUB_PORT', '8000')
+KEYCLOAK_PORT = os.environ.get('KEYCLOAK_PORT', '9200')
 
-class CustomOAuthenticator(GenericOAuthenticator):
-    username_claim = "preferred_username"
-    scope = ["openid", "profile", "email"]
-    tls_verify = False
-    auto_login = True
-    create_missing_users = True
+KEYCLOAK_LOGOUT = f"http://{GITLAB_HOST}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
+POST_LOGOUT_URL = f"http://{GITLAB_HOST}:{JUPYTERHUB_PORT}/hub/login"
+c.JupyterHub.logout_redirect_url = f"{KEYCLOAK_LOGOUT}?post_logout_redirect_uri={POST_LOGOUT_URL}"
 
-    @property
-    def issuer_url(self):
-        return f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp"
-
-c.JupyterHub.authenticator_class = CustomOAuthenticator
-c.CustomOAuthenticator.login_service = "Keycloak"
-
-# INTERNAL URL: JupyterHub server → Keycloak (через Docker internal DNS)
-c.CustomOAuthenticator.token_url = f"http://keycloak:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/token"
-c.CustomOAuthenticator.userdata_url = f"http://keycloak:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/userinfo"
-
-# EXTERNAL URL: браузер пользователя → Keycloak
-c.CustomOAuthenticator.authorize_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/auth"
-c.CustomOAuthenticator.oauth_callback_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/oauth_callback"
-c.CustomOAuthenticator.logout_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
-c.CustomOAuthenticator.logout_redirect_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"
-
-# Custom logout handler — passes id_token_hint to Keycloak
-from jupyterhub.custom_logout_handler import KeycloakLogoutHandler
-c.JupyterHub.logout_handlers = [
-    (r'/hub/logout', KeycloakLogoutHandler),
-]
-
-c.CustomOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
-c.CustomOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")
+# Удалять сервер одиночного пользователя при логауте
+c.JupyterHub.shutdown_on_logout = True
 
 # Разрешить всех аутентифицированных пользователей
-c.CustomOAuthenticator.allow_all = True
-c.CustomOAuthenticator.admin_users = {
+c.RemoteUserAuthenticator.allowed_users = set()
+c.RemoteUserAuthenticator.admin_users = {
     "lecturer_01",
     "lecturer_02",
 }
