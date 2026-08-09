@@ -77,6 +77,7 @@ EOF
     -H "Content-Type: application/json" \
     -d "$REALM_DATA" > /dev/null
   echo "Realm istp created"
+  sleep 3
 else
   echo "Realm istp already exists"
   # Обновляем frontendUrl для существующего realm
@@ -85,6 +86,7 @@ else
     -H "Content-Type: application/json" \
     -d "{\"attributes\":{\"frontendUrl\":\"http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth\"}}" > /dev/null
   echo "  Realm frontendUrl updated"
+  sleep 3
 fi
 
 # Функция создания/обновления клиента
@@ -158,6 +160,7 @@ CLIEOF
   fi
 
   echo "  Client $CLIENT_ID processed with secret"
+  sleep 2
 }
 
 # Создаём клиентов
@@ -419,10 +422,16 @@ setup_oidc_mappers() {
   echo "  OIDC mappers for $CLIENT_ID configured successfully"
 }
 
+# Ждём пока Keycloak обновит кэш клиентов
+sleep 5
+
 setup_oidc_mappers "jupyterhub"
 setup_oidc_mappers "admin-dashboard"
 setup_oidc_mappers "registry"
 setup_gitlab_mappers
+
+# Ждём пока Keycloak обновит кэш realm
+sleep 5
 
 # Создаём пользователей-лекторов
 create_user() {
@@ -432,58 +441,78 @@ create_user() {
 
   echo "Processing user: $USERNAME"
 
-  # Проверяем существование
-  USER_JSON=$(curl -s "$KEYCLOAK_URL/admin/realms/istp/users?username=$USERNAME" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
-  
-  USER_ID=$(echo "$USER_JSON" | jq -r '.[0].id // empty' 2>/dev/null || echo "")
+  # Retry logic: ждём пока realm istp будет готов
+  local MAX_RETRIES=5
+  local RETRY=0
+  local USER_ID=""
+  local USER_JSON=""
+  local HTTP_CODE=""
 
-  if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
-    # Создаём пользователя
-    curl -s -o /dev/null -w "%{http_code}" -X POST "$KEYCLOAK_URL/admin/realms/istp/users" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"username\": \"$USERNAME\",
-        \"email\": \"$EMAIL\",
-        \"enabled\": true,
-        \"emailVerified\": true,
-        \"firstName\": \"$USERNAME\",
-        \"lastName\": \"lecturer\"
-      }" > /tmp/kc_create_code.txt 2>/dev/null
+  while [ $RETRY -lt $MAX_RETRIES ]; do
+    RETRY=$((RETRY + 1))
+    echo "  Attempt $RETRY/$MAX_RETRIES..."
     
-    HTTP_CODE=$(cat /tmp/kc_create_code.txt 2>/dev/null | tr -d '[:space:]')
+    # Проверяем существование
+    USER_JSON=$(curl -s --max-time 10 "$KEYCLOAK_URL/admin/realms/istp/users?username=$USERNAME" \
+      -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
     
-    if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
-      # После создания — ищем пользователя по имени, чтобы получить ID
-      sleep 2
-      USER_JSON=$(curl -s "$KEYCLOAK_URL/admin/realms/istp/users?username=$USERNAME" \
-        -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
-      echo "  DEBUG: USER_JSON for $USERNAME = $USER_JSON" >&2
-      USER_ID=$(echo "$USER_JSON" | jq -r '.[0].id // empty' 2>/dev/null || echo "")
-      echo "  DEBUG: USER_ID for $USERNAME = $USER_ID" >&2
+    if [ $? -ne 0 ]; then
+      echo "  Warning: Keycloak API error, retrying in 3s..."
+      sleep 3
+      continue
+    fi
+
+    USER_ID=$(echo "$USER_JSON" | jq -r '.[0].id // empty' 2>/dev/null || echo "")
+
+    if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
+      # Создаём пользователя
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 -X POST "$KEYCLOAK_URL/admin/realms/istp/users" \
+        -H "Authorization: Bearer $ADMIN_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"username\": \"$USERNAME\",
+          \"email\": \"$EMAIL\",
+          \"enabled\": true,
+          \"emailVerified\": true,
+          \"firstName\": \"$USERNAME\",
+          \"lastName\": \"lecturer\"
+        }" 2>/dev/null)
       
-      if [ -n "$USER_ID" ] && [ "$USER_ID" != "null" ]; then
-        # Устанавливаем пароль
-        curl -s -X PUT "$KEYCLOAK_URL/admin/realms/istp/users/$USER_ID/reset-password" \
-          -H "Authorization: Bearer $ADMIN_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d "{\"type\":\"password\",\"value\":\"$PASSWORD\",\"temporary\":false}" > /dev/null 2>&1
-        echo "  User $USERNAME created with email $EMAIL"
+      if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+        # После создания — ищем пользователя по имени, чтобы получить ID
+        sleep 2
+        USER_JSON=$(curl -s --max-time 10 "$KEYCLOAK_URL/admin/realms/istp/users?username=$USERNAME" \
+          -H "Authorization: Bearer $ADMIN_TOKEN" 2>/dev/null)
+        USER_ID=$(echo "$USER_JSON" | jq -r '.[0].id // empty' 2>/dev/null || echo "")
+        
+        if [ -n "$USER_ID" ] && [ "$USER_ID" != "null" ]; then
+          break
+        fi
+      elif [ "$HTTP_CODE" = "404" ]; then
+        echo "  Warning: Realm istp not found, retrying in 3s..."
+        sleep 3
+        continue
       else
-        echo "  WARNING: Could not get user ID for $USERNAME"
+        echo "  Warning: HTTP $HTTP_CODE, retrying in 3s..."
+        sleep 3
+        continue
       fi
     else
-      echo "  WARNING: Failed to create user $USERNAME (HTTP $HTTP_CODE)"
+      break
     fi
-  else
-    # Пользователь существует — устанавливаем пароль
-    curl -s -X PUT "$KEYCLOAK_URL/admin/realms/istp/users/$USER_ID/reset-password" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" \
-      -H "Content-Type: application/json" \
-      -d "{\"type\":\"password\",\"value\":\"$PASSWORD\",\"temporary\":false}" > /dev/null 2>&1
-    echo "  User $USERNAME already exists, password reset"
+  done
+
+  if [ -z "$USER_ID" ] || [ "$USER_ID" = "null" ]; then
+    echo "  WARNING: Could not get user ID for $USERNAME after $MAX_RETRIES attempts"
+    return 1
   fi
+
+  # Устанавливаем пароль
+  curl -s -X PUT --max-time 10 "$KEYCLOAK_URL/admin/realms/istp/users/$USER_ID/reset-password" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"password\",\"value\":\"$PASSWORD\",\"temporary\":false}" > /dev/null 2>&1
+  echo "  User $USERNAME created with email $EMAIL"
 }
 
 # Создаём лекторов с username lecturer_01 и lecturer_02
