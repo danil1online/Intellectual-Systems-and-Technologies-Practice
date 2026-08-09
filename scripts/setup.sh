@@ -776,9 +776,9 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner
+    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard
 else
-    docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner
+    docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard
 fi
 
 # Проверка модели в Docker volume для LLM
@@ -882,6 +882,15 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 docker compose up -d jupyterhub
+
+# Запуск OAuth2-Proxy для JupyterHub (перехватывает порт 8000)
+docker compose up -d oauth2-proxy-jupyterhub
+docker compose up -d oauth2-proxy-gitlab
+docker compose up -d oauth2-proxy-dashboard
+
+# Запуск scheduled-logout (cron для очистки сессий)
+docker compose up -d scheduled-logout
+print_success "OAuth2-Proxy и scheduled-logout запущены"
 
 # ============================================
 # Регистрация GitLab Runner
