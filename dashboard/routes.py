@@ -1,6 +1,5 @@
 """
 Роуты Admin Dashboard — API для чтения и анализа grading_log.json.
-Аутентификация: OAuth2-Proxy (X-Forwarded-User header).
 """
 
 import os
@@ -14,19 +13,24 @@ from flask import Blueprint, jsonify, request, render_template, Response, abort,
 
 api_bp = Blueprint("api", __name__)
 
-# OAuth2-Proxy заголовок с именем пользователя
 DASHBOARD_USERNAME = os.environ.get("DASHBOARD_USERNAME", "admin")
-
-def get_current_user():
-    """Получить имя пользователя из заголовка OAuth2-Proxy."""
-    return request.headers.get("X-Forwarded-User", "")
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 
 def require_auth():
-    """Проверка аутентификации через OAuth2-Proxy."""
-    user = get_current_user()
-    if not user:
+    """Проверка базовой аутентификации."""
+    if not DASHBOARD_PASSWORD:
+        return True
+    auth = request.headers.get("Authorization")
+    if not auth:
         return False
-    return True
+    try:
+        auth_type, auth_data = auth.split(" ", 1)
+        if auth_type != "Basic":
+            return False
+        username, password = base64.b64decode(auth_data).decode("utf-8").split(":", 1)
+        return username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD
+    except Exception:
+        return False
 
 def auth_required(f):
     """Декоратор для проверки аутентификации."""
@@ -37,7 +41,7 @@ def auth_required(f):
             return Response(
                 'Authentication required',
                 401,
-                {'WWW-Authenticate': 'OAuth2-Proxy realm="Dashboard"'}
+                {'WWW-Authenticate': 'Basic realm="Dashboard"'}
             )
         return f(*args, **kwargs)
     return decorated_function
@@ -111,8 +115,7 @@ def read_grades():
 @auth_required
 def index():
     """Главная страница — дашборд."""
-    user = get_current_user()
-    return render_template("dashboard.html", title="Панель преподавателя", user=user)
+    return render_template("dashboard.html", title="Панель преподавателя")
 
 
 @api_bp.route("/logout")

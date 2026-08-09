@@ -745,38 +745,10 @@ fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
     print_step "Запуск сервисов (с LLM)..."
-    if ! docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard; then
-        print_error "docker compose up завершился с ошибкой"
-        print_step "Логи упавших контейнеров:"
-        docker compose $LLM_PROFILES ps --filter "restart-policy=always" 2>/dev/null | while read line; do
-            container=$(echo "$line" | awk '{print $1}')
-            if [[ -n "$container" && "$container" != "NAME" ]]; then
-                status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
-                if [[ "$status" == "exited" || "$status" == "dead" ]]; then
-                    print_warn "  $container (status: $status)"
-                    docker logs "$container" --tail 20 2>&1 | sed 's/^/    /'
-                fi
-            fi
-        done
-        exit 1
-    fi
+    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner
 else
     print_step "Запуск сервисов..."
-    if ! docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner oauth2-proxy-gitlab oauth2-proxy-jupyterhub oauth2-proxy-dashboard; then
-        print_error "docker compose up завершился с ошибкой"
-        print_step "Логи упавших контейнеров:"
-        docker compose ps 2>/dev/null | while read line; do
-            container=$(echo "$line" | awk '{print $1}')
-            if [[ -n "$container" && "$container" != "NAME" ]]; then
-                status=$(docker inspect --format='{{.State.Status}}' "$container" 2>/dev/null)
-                if [[ "$status" == "exited" || "$status" == "dead" ]]; then
-                    print_warn "  $container (status: $status)"
-                    docker logs "$container" --tail 20 2>&1 | sed 's/^/    /'
-                fi
-            fi
-        done
-        exit 1
-    fi
+    docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner
 fi
 
 # Проверка модели в Docker volume для LLM
@@ -854,8 +826,6 @@ for i in $(seq 1 60); do
         print_error "GitLab не запустился за 10 минут"
         print_step "Логи gitlab:"
         docker logs gitlab --tail 50 2>&1 | sed 's/^/    /'
-        print_step "Логи oauth2-proxy-gitlab:"
-        docker logs oauth2-proxy-gitlab --tail 30 2>&1 | sed 's/^/    /'
         exit 1
     fi
     sleep 10
@@ -902,15 +872,6 @@ fi
 
 docker compose up -d jupyterhub
 
-# Запуск OAuth2-Proxy для JupyterHub (перехватывает порт 8000)
-docker compose up -d oauth2-proxy-jupyterhub
-docker compose up -d oauth2-proxy-gitlab
-docker compose up -d oauth2-proxy-dashboard
-
-# Запуск scheduled-logout (cron для очистки сессий)
-docker compose up -d scheduled-logout
-print_success "OAuth2-Proxy и scheduled-logout запущены"
-
 # ============================================
 # Регистрация GitLab Runner
 # ============================================
@@ -952,18 +913,13 @@ if [[ -z "$ROOT_TOKEN" ]]; then
 fi
 print_success "Root PAT успешно получен"
 
-# Функция для вызова GitLab API (через docker exec, минуя oauth2-proxy)
-gl_api() {
-    docker exec gitlab curl -s --max-time 30 "$@" 2>&1
-}
-
 print_step "Создание Runner в GitLab через API..."
-RUNNER_RESPONSE=$(gl_api "http://gitlab:80/api/v4/user/runners" \
-  --request POST \
+RUNNER_RESPONSE=$(curl -s --request POST \
   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
   --header "X-GitLab-Admin-Mode: true" \
   --header "Content-Type: application/json" \
-  --data '{"description": "academic-runner", "runner_type": "instance_type"}')
+  --data '{"description": "academic-runner", "runner_type": "instance_type"}' \
+  "http://localhost/api/v4/user/runners" 2>&1)
 
 RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | jq -r '.token' 2>/dev/null)
 RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null)
