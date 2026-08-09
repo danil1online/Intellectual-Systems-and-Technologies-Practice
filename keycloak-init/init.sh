@@ -106,7 +106,6 @@ upsert_client() {
   "standardFlowEnabled": true,
   "publicClient": false,
   "frontchannelLogout": true,
-  "frontchannelLogoutUrl": "http://${GITLAB_HOST}/logout",
   "consentRequired": false,
   "attributes": {
     "oidc.ciba.grant.enabled": "false"
