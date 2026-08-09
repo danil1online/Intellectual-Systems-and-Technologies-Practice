@@ -691,7 +691,7 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_header "ШАГ 10/11: Предзагрузка Docker-образов"
     
     print_step "Загрузка базовых образов..."
-    docker pull quay.io/keycloak/keycloak:26.1 2>/dev/null || true
+    docker pull quay.io/keycloak/keycloak:26.7.1 2>/dev/null || true
     docker pull postgres:17-alpine 2>/dev/null || true
     docker pull gitlab/gitlab-ce:latest 2>/dev/null || true
     docker pull gitlab/gitlab-runner:latest 2>/dev/null || true
