@@ -95,7 +95,7 @@ upsert_client() {
   
   INTERNAL_ID=$(echo "$CLIENT_JSON" | jq -r ".[] | select(.clientId==\"$CLIENT_ID\") | .id" 2>/dev/null)
 
-  # Формируем JSON клиента
+# Формируем JSON клиента
   if [ -n "$LOGOUT_URL" ] && [ "$LOGOUT_URL" != "" ]; then
     CLIENT_DATA=$(cat <<CLIEOF
 {
@@ -108,10 +108,10 @@ upsert_client() {
   "standardFlowEnabled": true,
   "publicClient": false,
   "consentRequired": false,
-  "backchannelLogout": true,
-  "backchannelLogoutUrl": "$LOGOUT_URL",
   "attributes": {
-    "oidc.ciba.grant.enabled": "false"
+    "oidc.ciba.grant.enabled": "false",
+    "backchannel.logout.url": "$LOGOUT_URL",
+    "backchannel.logout.session.required": "true"
   }
 }
 CLIEOF
