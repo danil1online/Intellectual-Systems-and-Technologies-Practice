@@ -36,14 +36,11 @@ Docker Compose-развёртывание полного учебного кла
 │  Registry:     5050 (Docker Container Registry)                │
 │                                                                │
 │  Internal bridge network:                                      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐       │
-│  │Keycloak  │ │ GitLab   │ │ Jupyter  │ │  Dashboard   │       │
-│  │  :9200   │ │  :80/22  │ │  :8000   │ │   (opt.)     │       │
-│  └─────┬────┘ └─────┬────┘ └─────┬────┘ └───────┬──────┘       │
-│        │OIDC         │OIDC         │OIDC         │             │
-│  ┌───┴────────────┴────────────┴───────┴────────┴──┐           │
-│  │          Keycloak (Identity Provider)            │          │
-│  └──────────────────────────────────────────────────┘          │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────┐                    │
+│  │ GitLab   │ │ Jupyter  │ │  Dashboard   │                    │
+│  │  :80/22  │ │  :8000   │ │   (opt.)     │                    │
+│  └──────────┘ └──────────┘ └──────────────┘                    │
+│        │Local auth    │Local auth    │Basic Auth               │
 │                                                                │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────┐                    │
 │  │ GitLab   │ │  LLM     │ │  Admin       │                    │
@@ -71,7 +68,7 @@ Docker Compose-развёртывание полного учебного кла
 
 | Функция | Описание |
 |---|---|
-| **Единый вход** | Регистрация в Keycloak → автоматический доступ ко всем сервисам |
+| **Саморегистрация** | Регистрация в GitLab или JupyterHub через форму Sign Up |
 | **ИИ-Ментор** | Команда `%%ask_mentor` в ячейках JupyterLab |
 | **Классификация запросов** | LAZY (штраф) / SMART (поощрение) |
 | **Файловое хранилище** | GitLab с репозиториями и Markdown-отчётами |
@@ -105,8 +102,8 @@ Docker Compose-развёртывание полного учебного кла
 │   └── healthcheck.sh           # Проверка здоровья сервисов
 │
 ├── jupyterhub/
-│   ├── Dockerfile               # JupyterHub + JupyterLab + oauthenticator
-│   ├── jupyterhub_config.py     # OAuth, SimpleSpawner, hooks
+│   ├── Dockerfile               # JupyterHub + JupyterLab + nativeauthenticator
+│   ├── jupyterhub_config.py     # NativeAuth, LocalProcessSpawner, hooks
 │   ├── startup/
 │   │   └── 00_mentor.py         # %%ask_mentor magic
 │   ├── persona_mentor.py        # @mentor persona (MCP)
@@ -163,12 +160,6 @@ Docker Compose-развёртывание полного учебного кла
 
 ### Зависимости Docker-образов
 
-#### Keycloak
-```
-Image: quay.io/keycloak/keycloak:26.1
-RAM: ~700 MB
-```
-
 #### GitLab CE
 ```
 Image: gitlab/gitlab-ce:latest
@@ -186,7 +177,7 @@ Mount: /var/run/docker.sock
 #### JupyterHub
 ```
 Base: python:3.10-slim
-Packages: jupyterhub, jupyterlab, GenericOAuthenticator, jupyter-ai
+Packages: jupyterhub, jupyterlab, nativeauthenticator, jupyter-ai
 RAM: ~500 MB на спавн
 ```
 
@@ -243,18 +234,15 @@ sudo ./scripts/setup.sh
 После установки скрипт выведет:
 
 ```
-Keycloak (регистрация): http://<IP>:9200/auth/realms/istp/account/
-
 GitLab:       http://<IP>:80
   Root:       root / <generated password>
-  Lecturer:   lecturer_01 / <generated password> (смените!)
-  Lecturer:   lecturer_02 / <generated password> (смените!)
+  Регистрация: через форму Sign up на странице входа
 
 JupyterHub:   http://<IP>:8000
-  Вход:       через Keycloak (кнопка на странице входа)
+  Регистрация: через форму Sign up на странице входа
 
 Dashboard:    http://<IP>:9000
-  Admin:      lecturer_01 (через Keycloak OIDC)
+  Admin:      admin (пароль Basic auth из credentials.env)
 ```
 
 ### 5. Административные доступы
@@ -262,14 +250,11 @@ Dashboard:    http://<IP>:9000
 | Сервис | Логин | Пароль | URL |
 |---|---|---|---|
 | **GitLab (root)** | `root` | см. `.env` → `GITLAB_ROOT_PASSWORD` | `http://<IP>:80` |
-| **Keycloak (admin)** | `admin` | см. `.env` → `KC_ADMIN_PASSWORD` | `http://<IP>:9200/auth` |
-| **JupyterHub** | любой (через Keycloak) | тот же, что в Keycloak | `http://<IP>:<JUPYTERHUB_PORT>` |
+| **JupyterHub** | любой (через форму Sign Up) | тот же, что создан при регистрации | `http://<IP>:<JUPYTERHUB_PORT>` |
 | **Dashboard** | admin (Basic auth) | см. `.env` → `DASHBOARD_PASSWORD` | `http://<IP>:<DASHBOARD_PORT>` |
 
 > **Важно:** Все пароли генерируются при запуске `setup.sh` и хранятся в файле `.env`.
-> Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|KC_ADMIN_PASSWORD|LECTURER_"`
->
-> **⚠️ Лекторы:** пароли lecturer_01/lecturer_02 нужно сменить после первого входа!
+> Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|LECTURER_"`
 
 ### 6. Добавление SSH-ключа для GitLab Runner
 
@@ -317,7 +302,7 @@ cat shared/data/runner-keys/runner_ed25519.pub
   → Сохранение в shared/data/runner-keys/
 
 ШАГ 6/11: Генерация паролей
-  → Keycloak admin, GitLab root, Dashboards
+   → GitLab root, Dashboard, JupyterHub API
 
 ШАГ 7/11: Настройка iptables DNAT
   → Перенаправление запросов с внешнего IP на localhost (для доступа с самого сервера)
@@ -335,8 +320,8 @@ cat shared/data/runner-keys/runner_ed25519.pub
 ШАГ 11/11: Запуск сервисов
   → docker compose up -d
    → Проверка модели в Docker volume
-   → Healthcheck Keycloak, GitLab
-   → Инициализация Keycloak (OIDC-клиенты)
+   → Healthcheck GitLab
+   → Инициализация GitLab (группа, админ)
    → Инициализация GitLab (группа, админ)
    → Регистрация GitLab Runner
 ```
@@ -351,7 +336,7 @@ cp .env.example .env
 nano .env
 
 # 3. Поднимите сервисы
-docker compose up -d keycloak gitlab admin-dashboard
+docker compose up -d gitlab admin-dashboard
 # Для локальной LLM:
 docker compose --profile local-llm up -d llm
 
@@ -360,7 +345,6 @@ sleep 300
 docker compose up -d jupyterhub
 
 # 5. Инициализация
-docker compose up keycloak-init
 bash scripts/init_gitlab.sh
 
 # 6. Регистрация Runner
@@ -376,26 +360,7 @@ docker exec -it gitlab-runner gitlab-runner register \
 
 ## Архитектура сервисов
 
-### 1. Keycloak (OIDC Provider)
-
-```yaml
-Image: quay.io/keycloak/keycloak:26.1
-Port: 9200 (internal)
-Volume: keycloak-data
-```
-
-**Роль:** Единый провайдер аутентификации (OIDC) для всех сервисов.
-
-**OIDC-клиенты:**
-| Клиент | Redirect URI |
-|---|---|
-| JupyterHub | `http://<IP>:8000/hub/oauth_callback` |
-| Admin Dashboard | `http://<IP>:9000/callback` |
-| GitLab | `http://<IP>/oauth/callback` |
-
-**Авторизация:** Keycloak OIDC → GitLab, JupyterHub, Dashboard
-
-### 2. GitLab CE
+### 1. GitLab CE
 
 ```yaml
 Image: gitlab/gitlab-ce:latest
@@ -405,27 +370,27 @@ Volumes: gitlab-config, gitlab-logs, gitlab-data
 
 **Роль:** SCM, CI/CD, файловое хранилище отчётов.
 
-**Авторизация:** Keycloak OIDC (через кнопку "Keycloak" на странице входа).
+**Авторизация:** Встроенная саморегистрация (форма Sign up на странице входа).
 
 **Группы:** `students` — для всех студенческих проектов.
 
 **SSH-порты:** `git@gitlab:2222` для SSH-доступа.
 
-### 3. JupyterHub
+### 2. JupyterHub
 
 ```yaml
 Build: ./jupyterhub
 Port: 8000 (по умолчанию)
-Auth: Keycloak OIDC (GenericOAuthenticator)
-Spawner: SimpleSpawner
+Auth: NativeAuthenticator (саморегистрация)
+Spawner: LocalProcessSpawner
 ```
 
 **Ключевые компоненты:**
-- **GenericOAuthenticator** — авторизация через Keycloak OIDC
-- **create_missing_users = True** — авто-создание учётки при первом OAuth-входе
-- **SimpleSpawner** — простой спавнер JupyterLab
-- **pre_spawn_start hook** — копирование шаблонов `.ipynb` при первом входе
-- **SSH-генерация** — Ed25519 ключ при первом входе
+- **NativeAuthenticator** — саморегистрация пользователей, хранение паролей в БД
+- **open_signup = True** — регистрация без одобрения администратора
+- **LocalProcessSpawner** — создание отдельного Linux-пользователя и процесса для каждого студента
+- **pre_spawn_hook** — создание системного пользователя, копирование шаблонов `.ipynb`, генерация SSH-ключей
+- **Изоляция** — каждый студент имеет собственный `/home/{username}` с собственными правами
 
 ### 4. LLM (опционально)
 
@@ -592,33 +557,35 @@ LLM_CI_API_KEY=local-api-key
 
 ## Авторизация
 
-### Схема OAuth / OIDC
+### Схема аутентификации
 
 ```
-Keycloak (Identity Provider)
-    │
-    │ self-registration + OIDC
-    │
-┌───────┼──────────┬──────────────┐
-│       │          │              │
-▼       ▼          ▼              ▼
-GitLab  JupyterHub  Admin Dashboard  (opt.)
-(OIDC)  (OIDC)      (OIDC)
+GitLab          JupyterHub          Dashboard
+(Sign Up)       (NativeAuth)        (Basic Auth)
+    │               │                    │
+    └─── Независимые учётные записи ──────┘
 ```
 
-### Auto-provisioning
+### Регистрация
 
-1. Студент регистрируется в Keycloak (через GitLab → Keycloak → Register)
-2. С теми же данными входит в JupyterHub, GitLab
-3. `GenericOAuthenticator` создаёт учётку автоматически (`create_missing_users = True`)
-4. **pre_spawn_hook** копирует шаблоны `.ipynb`, генерирует SSH-ключ
-5. GitLab создаёт пользователя при первом OIDC-входе
+1. Студент регистрируется в GitLab через форму Sign Up на `/users/sign_up`
+2. Студент регистрируется в JupyterHub через форму Sign Up на `/hub/signup`
+3. **NativeAuthenticator** создаёт учётку с паролем в SQLite БД JupyterHub
+4. **pre_spawn_hook** создаёт системного пользователя Linux, копирует шаблоны `.ipynb`, генерирует SSH-ключ
+5. GitLab создаёт пользователя при регистрации (локальная учётная запись)
+
+### Изоляция
+
+- Каждый студент имеет отдельный Linux-пользователь в контейнере JupyterHub
+- Домашняя директория `/home/{username}` с собственными правами (755)
+- Данные других студентов недоступны — только свои и общие `/shared/data` (только чтение)
+- Сбор данных для Dashboard: логи и оценки пишутся в `/home/{username}/`, откуда Dashboard их читает
 
 ### Fallback
 
-**Нет fallback** — при недоступности Keycloak/JupyterHub студенты не смогут войти. Рекомендуется:
-- Дублирование Keycloak-бэкапов
+**Нет fallback** — при недоступности JupyterHub студенты не смогут войти. Рекомендуется:
 - Мониторинг через healthcheck
+- Регулярные бэкапы Docker volumes (`user-homes`, `jupyterhub-data`)
 
 ---
 
@@ -743,15 +710,15 @@ Registry доступен по адресу `http://<server-ip>:5050` (порт 
 ╠════════════════════════════════════════════╣
 ║  Фильтры: [Студент ▼] [Практика ▼]         ║
 ╠════════════════════════════════════════════╣
-║  📊 Оценки студентов                       ║
+║  📊 Оценки студентов                      ║
 ║  Студент  │ Практика │ Оценка │ Feedback   ║
 ║  pia_01   │ Pr_7     │  4/5   │ ...        ║
 ║  pia_02   │ Pr_1     │  3/5   │ ...        ║
 ╠════════════════════════════════════════════╣
 ║  📝 Логи ИИ-Ментора                        ║
-║  Время  │ Студент  │ LAZY │ ⚠ │ Запрос    ║
-║  14:30  │ pia_01   │SMART │ — │ "Как..."  ║
-║  14:35  │ pia_02   │ LAZY │ ⚠ │ "Напиши" ║
+║  Время  │ Студент  │ LAZY │ ⚠ │ Запрос     ║
+║  14:30  │ pia_01   │SMART │ — │ "Как..."   ║
+║  14:35  │ pia_02   │ LAZY │ ⚠ │ "Напиши"   ║
 ║  ...                                       ║
 ╚════════════════════════════════════════════╝
 ```
@@ -786,13 +753,14 @@ curl -O http://<IP>:9000/api/export?date_from=2025-09-01
 ```
 Шаг 1. Регистрация
   └→ Открыть JupyterHub: http://<IP>:8000
-  └→ Нажать "Keycloak" → Register → student_<группа>_<номер>
+  └→ Нажать "Sign Up" → Register → student_<группа>_<номер>
   └→ Войти с теми же данными
 
 Шаг 2. Пароль для Git-клиента
-  └→ После входа в GitLab через Keycloak:
+  └→ Открыть GitLab: http://<IP>
+  └→ Зарегистрироваться через форму Sign up (или войти через JupyterHub если логин совпадает)
   └→ GitLab → Settings (иконка профиля) → Password
-  └→ Установить пароль (не обязательно тот же, что в Keycloak)
+  └→ Установить пароль
   └→ Теперь git clone/push/pull по HTTP работает
 
 Шаг 3. Клонирование проекта
@@ -886,14 +854,12 @@ curl http://<IP>:9000/api/stats
 |---|---|---|
 | `JUPYTERHUB_PORT` | Порт JupyterHub | `8000` |
 | `DASHBOARD_PORT` | Порт Dashboard | `9000` |
-| `KEYCLOAK_PORT` | Порт Keycloak | `9200` |
 | `LLM_MENTOR_TYPE` | Тип LLM для ментора | `local` |
 | `LLM_MENTOR_BASE_URL` | Endpoint LLM ментора | `http://llm:8080/v1` |
 | `LLM_CI_TYPE` | Тип LLM для CI/CD | `local` |
 | `LLM_CI_BASE_URL` | Endpoint LLM CI/CD | `http://llm:8080/v1` |
 | `GGUF_PATH` | Путь к модели | `/models/model.gguf` |
 | `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
-| `KC_ADMIN_PASSWORD` | Пароль Keycloak admin | `Keycloak123!` |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `REGISTRY_PORT` | Порт Docker Registry | `5050` |
 | `JH_API_TOKEN` | JupyterHub API token | auto-generated |
@@ -935,21 +901,14 @@ docker logs gitlab
 docker exec gitlab gitlab-rake db:status
 ```
 
-### Keycloak не отвечает
-
-```bash
-# Keycloak должен быть health перед другими сервисами
-docker inspect --format='{{.State.Health.Status}}' keycloak
-
-# Проверка логов
-docker logs keycloak
-```
-
 ### JupyterHub не входит
 
 ```bash
-# Проверка OAuth-конфигурации
-docker logs jupyterhub | grep -i oauth
+# Проверка логов
+docker logs jupyterhub
+
+# Проверка статуса контейнера
+docker inspect --format='{{.State.Status}}' jupyterhub
 ```
 
 ### Runner не запускает jobs

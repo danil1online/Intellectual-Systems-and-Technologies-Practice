@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
 cd "$PROJECT_DIR"
 
-SERVICES=("keycloak" "kc-postgres" "gitlab" "gitlab-runner" "jupyterhub" "admin-dashboard")
+SERVICES=("gitlab" "gitlab-runner" "jupyterhub" "admin-dashboard")
 HEALTHY=0
 UNHEALTHY=0
 

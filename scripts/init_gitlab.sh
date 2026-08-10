@@ -3,7 +3,6 @@ set -euo pipefail
 
 # ============================================
 # Инициализация GitLab: группа, админ, runner
-# ВАЖНО: OIDC настроен через GITLAB_OMNIBUS_CONFIG в docker-compose
 # Этот скрипт занимается ТОЛЬКО API-запросами
 # ============================================
 
@@ -333,7 +332,6 @@ echo ""
 echo "=== GitLab: создание локальных учётных записей лекторов ==="
 
 # Создаём локальных пользователей-лекторов
-# Они нужны для входа по паролю (OIDC auto-link работает для студентов)
 for LECT_NUM in 01 02; do
     LECT_USER="lecturer_${LECT_NUM}"
     LECT_PASS_VAR="LECTURER_${LECT_NUM}_PASSWORD"

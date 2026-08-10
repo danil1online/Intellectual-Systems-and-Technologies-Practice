@@ -114,7 +114,7 @@ generate_password() {
 print_header "ШАГ 0/11: Проверка портов и автоопределение сетевых параметров"
 
 # Проверка занятых портов
-REQUIRED_PORTS="80 2222 8000 8080 9000 9200 5050"
+REQUIRED_PORTS="80 2222 8000 8080 9000 5050"
 PORTS_IN_USE=""
 for port in $REQUIRED_PORTS; do
     if ss -tlnp 2>/dev/null | grep -q ":${port} " || netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
@@ -169,7 +169,7 @@ echo -e "  ${BOLD}Внимание!${NC}"
 echo -e "  Это адрес, по которому сервер будет доступен ИЗВНЕ:"
 echo -e "  - Со студентовких ПК через VPN (amnezia WireGuard)"
 echo -e "  - Для git clone/push/pull"
-echo -e "  - Для всех OIDC callback URL"
+echo -e "  - Для GitLab external_url и callback URL"
 echo -e "  - GitLab external_url (критично!)"
 echo -e ""
 echo -e "  ${BOLD}Важно:${NC} VPN IP недоступен из Docker-контейнеров и не может быть использован."
@@ -501,7 +501,6 @@ print_step "Ключ будет автоматически добавлен в G
 # ============================================
 print_header "ШАГ 6/11: Генерация паролей"
 
-KC_ADMIN_PASSWORD=$(generate_password)
 GITLAB_ROOT_PASSWORD=$(generate_password)
 JH_API_TOKEN=$(generate_password)
 LECTURER_01_PASSWORD=$(generate_password)
@@ -519,9 +518,6 @@ cat > "$PASS_FILE" << 'PASSEOF'
 # ============================================
 PASSEOF
 cat >> "$PASS_FILE" << PASSEOF
-
-# --- Keycloak ---
-KC_ADMIN_PASSWORD=$KC_ADMIN_PASSWORD
 
 # --- GitLab ---
 GITLAB_ROOT_PASSWORD=$GITLAB_ROOT_PASSWORD
@@ -563,12 +559,6 @@ print_success "Сеть проверена"
 # ============================================
 print_header "ШАГ 8/11: Генерация конфигурации"
 
-# Генерируем OIDC секреты
-OIDC_GITLAB_SECRET=$(openssl rand -hex 32)
-OIDC_JUPYTER_SECRET=$(openssl rand -hex 32)
-OIDC_DASHBOARD_SECRET=$(openssl rand -hex 32)
-OIDC_REGISTRY_SECRET=$(openssl rand -hex 32)
-
 # Извлекаем чистый IP из GITLAB_EXTERNAL_URL
 GITLAB_HOST=$(echo "$GITLAB_EXTERNAL_URL" | sed 's|http://||' | sed 's|:.*||')
 
@@ -595,7 +585,6 @@ HOST_IP_LOCAL=localhost
 # Порты
 JUPYTERHUB_PORT=$JUPYTERHUB_PORT
 DASHBOARD_PORT=$DASHBOARD_PORT
-KEYCLOAK_PORT=9200
 REGISTRY_PORT=5050
 
 # --- LLM ---
@@ -608,9 +597,6 @@ LLM_CI_BASE_URL=$LLM_CI_BASE_URL
 LLM_CI_API_KEY=$LLM_CI_API_KEY
 LLM_CI_MODEL=$LLM_CI_MODEL
 LLM_USE_LOCAL=$LLM_USE_LOCAL
-
-# --- Keycloak ---
-KC_ADMIN_PASSWORD=$KC_ADMIN_PASSWORD
 
 # --- Лекторы ---
 LECTURER_01_PASSWORD=$LECTURER_01_PASSWORD
@@ -626,15 +612,6 @@ JH_API_TOKEN=$JH_API_TOKEN
 # --- Dashboard ---
 DASHBOARD_USERNAME=admin
 DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
-
-# --- OIDC секреты ---
-OIDC_GITLAB_SECRET=$OIDC_GITLAB_SECRET
-OIDC_JUPYTER_SECRET=$OIDC_JUPYTER_SECRET
-OIDC_DASHBOARD_SECRET=$OIDC_DASHBOARD_SECRET
-OIDC_REGISTRY_SECRET=$OIDC_REGISTRY_SECRET
-
-DASH_CLIENT_ID=admin-dashboard
-DASH_CLIENT_SECRET=$OIDC_DASHBOARD_SECRET
 ENVEOF
 
 chmod 600 "$PROJECT_DIR/.env"
@@ -665,7 +642,7 @@ fi
 # Удаляем Docker тома (с правильным префиксом)
 print_step "Удаление Docker томов..."
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
-for vol in keycloak-data kc-postgres-data jupyterhub-data; do
+for vol in jupyterhub-data; do
     FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
     docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
 done
@@ -691,8 +668,6 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_header "ШАГ 10/11: Предзагрузка Docker-образов"
     
     print_step "Загрузка базовых образов..."
-    docker pull quay.io/keycloak/keycloak:26.7.1 2>/dev/null || true
-    docker pull postgres:17-alpine 2>/dev/null || true
     docker pull gitlab/gitlab-ce:latest 2>/dev/null || true
     docker pull gitlab/gitlab-runner:latest 2>/dev/null || true
     docker pull registry:2 2>/dev/null || true
@@ -718,8 +693,6 @@ if [ ! -f "$JUPYTERHUB_ENV" ]; then
     JUPYTERHUB_COOKIE_SECRET=$(openssl rand -hex 32)
     cat > "$JUPYTERHUB_ENV" << EOF
 JUPYTERHUB_COOKIE_SECRET=$JUPYTERHUB_COOKIE_SECRET
-COOKIE_SAMESITE="None"
-COOKIE_SECURE=false
 EOF
     chmod 600 "$JUPYTERHUB_ENV"
     print_success "Создан .env.jupyterhub"
@@ -731,9 +704,9 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d --force-recreate keycloak gitlab admin-dashboard llm gitlab-runner
+    docker compose $LLM_PROFILES up -d --force-recreate gitlab admin-dashboard llm gitlab-runner
 else
-    docker compose up -d --force-recreate keycloak gitlab admin-dashboard gitlab-runner
+    docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner
 fi
 
 # Проверка модели в Docker volume для LLM
@@ -748,33 +721,6 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
         exit 1
     fi
 fi
-
-print_step "Ожидание запуска Keycloak..."
-for i in $(seq 1 30); do
-    if docker inspect --format='{{.State.Health.Status}}' keycloak 2>/dev/null | grep -q "healthy"; then
-        print_success "Keycloak запущен"
-        break
-    fi
-    if [[ $i -eq 30 ]]; then
-        print_error "Keycloak не запустился за 5 минут"
-        exit 1
-    fi
-    sleep 10
-done
-
-print_step "Запуск инициализации Keycloak..."
-docker compose up -d --force-recreate keycloak-init
-for i in $(seq 1 30); do
-    if docker inspect --format='{{.State.Status}}' keycloak_init 2>/dev/null | grep -q "exited"; then
-        print_success "Keycloak Init завершён"
-        break
-    fi
-    if [[ $i -eq 30 ]]; then
-        print_error "Keycloak Init не завершился за 5 минут"
-        exit 1
-    fi
-    sleep 5
-done
 
 print_step "Ожидание запуска GitLab..."
 for i in $(seq 1 60); do
@@ -921,7 +867,6 @@ print_success "Runner создан (ID: $RUNNER_ID, Token: $RUNNER_TOKEN)"
 # ============================================
 
 # Обеспечиваем наличие переменных по умолчанию (защита от unbound variable)
-KEYCLOAK_PORT="${KEYCLOAK_PORT:-9200}"
 JUPYTERHUB_PORT="${JUPYTERHUB_PORT:-8000}"
 DASHBOARD_PORT="${DASHBOARD_PORT:-9000}"
 EXTERNAL_IP="${EXTERNAL_IP:-localhost}"
@@ -942,21 +887,19 @@ echo "  cat $PASS_FILE | grep PASSWORD"
 echo ""
 echo -e "  ${BOLD}С других ПК (через VPN/лабсеть):${NC}"
 echo ""
-echo -e "  ${BOLD}Keycloak:${NC}      http://$EXTERNAL_IP:$KEYCLOAK_PORT/auth/realms/istp"
 echo -e "  ${BOLD}GitLab:${NC}        http://$EXTERNAL_IP"
 echo -e "    Git clone:   git clone http://$EXTERNAL_IP/students/project.git"
 echo -e "    Git SSH:     git@gitlab.$GITLAB_HOST:students/project.git"
 echo -e "    Runner key:  cat $RUNNER_SSH_PRIV.pub"
 echo ""
 echo -e "  ${BOLD}JupyterHub:${NC}    http://$EXTERNAL_IP:$JUPYTERHUB_PORT"
-echo -e "    Вход через:    Keycloak (кнопка на странице входа)"
+echo -e "    Регистрация:   Ссылка Sign up здесь"
 echo ""
 echo -e "  ${BOLD}Dashboard:${NC}     http://$EXTERNAL_IP:$DASHBOARD_PORT"
 echo ""
 
 echo -e "  ${BOLD}С этого сервера:${NC}"
 echo ""
-echo -e "  ${BOLD}Keycloak:${NC}      http://localhost:$KEYCLOAK_PORT/auth/realms/istp"
 echo -e "  ${BOLD}GitLab:${NC}        http://localhost (или http://$PRIMARY_LOCAL_IP)"
 echo -e "  ${BOLD}JupyterHub:${NC}    http://localhost:$JUPYTERHUB_PORT"
 echo -e "  ${BOLD}Dashboard:${NC}     http://localhost:$DASHBOARD_PORT"
@@ -971,16 +914,14 @@ fi
 
 echo -e ""
 echo -e "${BOLD}⚠️ Важно для доступа к GitLab по HTTP:${NC}"
-echo -e "  После первого входа в GitLab через Keycloak:"
 echo -e "  1. GitLab → Settings (иконка профиля) → Password"
-echo -e "  2. Установить пароль для Git-клиента (не обязательно тот же, что в Keycloak)"
+echo -e "  2. Установить пароль для Git-клиента"
 echo -e "  ${GREEN}✓${NC} После этого git clone/push/pull по HTTP будет работать"
 echo ""
 
 echo -e "${YELLOW}Следующие шаги:${NC}"
 echo ""
-echo "  1. Студенты регистрируются: GitLab → Sign in → Keycloak → Register"
-echo "     Или напрямую: http://$EXTERNAL_IP:$KEYCLOAK_PORT/auth/realms/istp/login-actions/registration"
+echo "  1. Студенты регистрируются: GitLab / JupyterHub → Sign up"
 echo ""
 echo "  2. Git clone/push/pull с студентовких ПК:"
 echo "     git clone http://$EXTERNAL_IP/students/project.git"
@@ -994,9 +935,10 @@ echo ""
 echo "  4. Инструкция по настройке студентов: docs/Pr_1.md"
 echo ""
 echo -e "${YELLOW}Архитектура:${NC}"
-echo "  - Keycloak: единый Identity Provider для всех сервисов"
-echo "  - Self-registration: студенты регистрируются через Keycloak"
-echo "  - GitLab: OIDC авторизация через Keycloak"
-echo "  - JupyterHub: OIDC авторизация через Keycloak"
+echo "  - GitLab: встроенная саморегистрация (sign_up_enabled)"
+echo "  - JupyterHub: NativeAuthenticator (саморегистрация, сохранение паролей в БД)"
+echo "  - Dashboard: Basic Auth (admin пароль из credentials.env)"
+echo "  - Изоляция: LocalProcessSpawner создаёт отдельный Linux-пользователь для каждого студента"
+echo "  - Сбор данных: логи и оценки сохраняются в /home/{student}/ (видны dashboard)"
 echo ""
 echo -e "${GREEN}Все сервисы запущены!${NC}\n"

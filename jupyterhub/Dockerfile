@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir \
     jupyterhub==4.1.6 \
     jupyterlab==4.3.4 \
     notebook==7.3.2 \
-    oauthenticator==17.4.0 \
+    jupyterhub-nativeauthenticator \
     jupyter-ai==2.31.7 \
     jupyter-ai-magics==2.31.7 \
     langchain-openai==0.2.14 \

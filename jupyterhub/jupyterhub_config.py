@@ -1,6 +1,6 @@
 """
 JupyterHub конфигурация для учебного комплекса.
-Авторизация: Keycloak OIDC.
+Авторизация: NativeAuthenticator (саморегистрация).
 Спавнер: LocalProcessSpawner с хуками первого входа.
 """
 
@@ -11,19 +11,11 @@ import pwd
 import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
-from oauthenticator.generic import GenericOAuthenticator
-from cryptography.fernet import Fernet
-from jupyterhub.handlers.login import LogoutHandler
+import nativeauthenticator
 
 # ============================================
 # Основные настройки
 # ============================================
-
-# --- Защита auth_state ---
-if "JUPYTERHUB_CRYPT_KEY" not in os.environ:
-    os.environ["JUPYTERHUB_CRYPT_KEY"] = Fernet.generate_key().decode()
-
-c.CryptKeeper.keys = [os.environ["JUPYTERHUB_CRYPT_KEY"]]
 c = get_config()
 
 c.JupyterHub.bind_url = "http://0.0.0.0:8000"
@@ -39,70 +31,34 @@ if not cookie_secret_str:
 c.JupyterHub.cookie_secret = bytes.fromhex(cookie_secret_str)
 c.JupyterHub.db_url = "sqlite:///jupyterhub.db"
 
-# Cookie settings для cross-domain OAuth
+# Cookie settings
 c.Spawner.cookie_options = {
     "samesite": "Lax",
     "secure": False,
 }
 
 # ============================================
-# Авторизация через Keycloak OAuth
+# NativeAuthenticator — саморегистрация
 # ============================================
-HOST_IP = os.environ.get('HOST_IP', '10.8.1.3')
-HOST_IP_LOCAL = os.environ.get('HOST_IP_LOCAL', 'localhost')
-KEYCLOAK_PORT = os.environ.get('KEYCLOAK_PORT', '9200')
-JUPYTERHUB_PORT = os.environ.get('JUPYTERHUB_PORT', '8000')
+c.JupyterHub.authenticator_class = "native"
+c.JupyterHub.template_paths = [f"{os.path.dirname(nativeauthenticator.__file__)}/templates/"]
 
-class CustomOAuthenticator(GenericOAuthenticator):
-    username_claim = "preferred_username"
-    scope = ["openid", "profile", "email"]
-    tls_verify = False
-    auto_login = True
-    create_missing_users = True
+# Саморегистрация без одобрения админа
+c.NativeAuthenticator.open_signup = True
 
-    @property
-    def issuer_url(self):
-        return f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp"
+# Собирать email при регистрации
+c.NativeAuthenticator.ask_email_on_signup = True
 
-c.JupyterHub.authenticator_class = CustomOAuthenticator
-c.CustomOAuthenticator.login_service = "Keycloak"
+# Защита слабых паролей
+c.NativeAuthenticator.minimum_password_length = 8
+c.NativeAuthenticator.check_common_password = True
 
-# INTERNAL URL: JupyterHub server → Keycloak (через Docker internal DNS)
-c.CustomOAuthenticator.token_url = f"http://keycloak:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/token"
-c.CustomOAuthenticator.userdata_url = f"http://keycloak:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/userinfo"
+# Блокировка после 5 неудачных попыток
+c.NativeAuthenticator.allowed_failed_logins = 5
+c.NativeAuthenticator.seconds_before_next_try = 1200
 
-# EXTERNAL URL: браузер пользователя → Keycloak
-c.CustomOAuthenticator.authorize_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/auth"
-c.CustomOAuthenticator.oauth_callback_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/oauth_callback"
-c.CustomOAuthenticator.enable_auth_state = True
-
-# ============================================
-# Keycloak Logout Handler
-# ============================================
-class KeycloakLogoutHandler(LogoutHandler):
-    async def render_logout_page(self):
-        user = self.current_user
-        id_token = None
-        if user:
-            auth_state = await user.get_auth_state()
-            if auth_state and "id_token" in auth_state:
-                id_token = auth_state["id_token"]
-
-        base_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
-        params = {"post_logout_redirect_uri": f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"}
-        if id_token:
-            params["id_token_hint"] = id_token
-
-        self.redirect(f"{base_url}?{urlencode(params)}")
-
-c.JupyterHub.logout_handler = KeycloakLogoutHandler
-
-c.CustomOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
-c.CustomOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")
-
-# Разрешить всех аутентифицированных пользователей
-c.CustomOAuthenticator.allow_all = True
-c.CustomOAuthenticator.admin_users = {
+# Администраторы (преподаватели)
+c.Authenticator.admin_users = {
     "lecturer_01",
     "lecturer_02",
 }
