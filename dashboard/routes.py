@@ -111,6 +111,12 @@ def read_grades():
     return grades
 
 
+@api_bp.route("/health")
+def health():
+    """Health check — без аутентификации."""
+    return jsonify({"status": "ok"})
+
+
 @api_bp.route("/")
 @auth_required
 def index():
