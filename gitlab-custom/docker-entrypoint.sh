@@ -76,7 +76,7 @@ gitlab_rails['omniauth_sync_email_from_provider'] = ['openid_connect']
 gitlab_rails['omniauth_sync_profile_from_provider'] = ['openid_connect']
 gitlab_rails['omniauth_sync_profile_attributes'] = ['openid_connect']
 gitlab_rails['omniauth_allowed_request_methods'] = ['get', 'post']
-gitlab_rails['omniauth_logout_redirect_uri'] = "http://${OIDC_HOST_IP}/users/auth/openid_connect/sign_out"
+gitlab_rails['omniauth_logout_redirect_uri'] = "http://${OIDC_HOST_IP}:${KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout?post_logout_redirect_uri=http://${OIDC_HOST_IP}/users/sign_in"
 
 # Локальный вход сохраняется при наличии OIDC-провайдеров
 gitlab_rails['omniauth_block_auto_created_users'] = false

@@ -12,10 +12,18 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
 from oauthenticator.generic import GenericOAuthenticator
+from cryptography.fernet import Fernet
+from jupyterhub.handlers.login import LogoutHandler
 
 # ============================================
 # Основные настройки
 # ============================================
+
+# --- Защита auth_state ---
+if "JUPYTERHUB_CRYPT_KEY" not in os.environ:
+    os.environ["JUPYTERHUB_CRYPT_KEY"] = Fernet.generate_key().decode()
+
+c.CryptKeeper.keys = [os.environ["JUPYTERHUB_CRYPT_KEY"]]
 c = get_config()
 
 c.JupyterHub.bind_url = "http://0.0.0.0:8000"
@@ -32,9 +40,9 @@ c.JupyterHub.cookie_secret = bytes.fromhex(cookie_secret_str)
 c.JupyterHub.db_url = "sqlite:///jupyterhub.db"
 
 # Cookie settings для cross-domain OAuth
-c.JupyterHub.cookie_options = {
-    "samesite": os.environ.get("COOKIE_SAMESITE", "None"),
-    "secure": os.environ.get("COOKIE_SECURE", "false").lower() == "true",
+c.Spawner.cookie_options = {
+    "samesite": "Lax",
+    "secure": False,
 }
 
 # ============================================
@@ -66,19 +74,28 @@ c.CustomOAuthenticator.userdata_url = f"http://keycloak:{KEYCLOAK_PORT}/auth/rea
 # EXTERNAL URL: браузер пользователя → Keycloak
 c.CustomOAuthenticator.authorize_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/auth"
 c.CustomOAuthenticator.oauth_callback_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/oauth_callback"
-c.CustomOAuthenticator.logout_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
-c.CustomOAuthenticator.logout_redirect_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"
 c.CustomOAuthenticator.enable_auth_state = True
 
-async def oidc_logout_redirect(authenticator, spawner, logout_response):
-    auth_state = await authenticator.get_auth_state(spawner.user)
-    base_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"
-    params = {"post_logout_redirect_uri": base_url}
-    if auth_state and "id_token" in auth_state:
-        params["id_token_hint"] = auth_state["id_token"]
-    return f"{base_url}?{urlencode(params)}"
+# ============================================
+# Keycloak Logout Handler
+# ============================================
+class KeycloakLogoutHandler(LogoutHandler):
+    async def render_logout_page(self):
+        user = self.current_user
+        id_token = None
+        if user:
+            auth_state = await user.get_auth_state()
+            if auth_state and "id_token" in auth_state:
+                id_token = auth_state["id_token"]
 
-c.GenericOAuthenticator.logout_handler_return_url = oidc_logout_redirect
+        base_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
+        params = {"post_logout_redirect_uri": f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"}
+        if id_token:
+            params["id_token_hint"] = id_token
+
+        self.redirect(f"{base_url}?{urlencode(params)}")
+
+c.JupyterHub.logout_handler = KeycloakLogoutHandler
 
 c.CustomOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
 c.CustomOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")
