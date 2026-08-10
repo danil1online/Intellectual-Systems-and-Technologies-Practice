@@ -129,7 +129,7 @@ if [[ -n "$PORTS_IN_USE" ]]; then
 fi
 
 # Находим все локальные IP (исключая loopback, docker сети, VPN)
-LOCAL_IPS=$(ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | grep -vE '^172\.(1[6-9]|2[0-9]|3[01])\.' | grep -vE '^10\.8\.' | grep -vE '^192\.168\.(200|201)\.' | sort -u)
+LOCAL_IPS=$(ip -4 addr show | grep -oP 'inet \K[\d.]+' | grep -v '^127\.' | grep -vE '^172\.(1[6-9]|2[0-9]|3[01])\.' | grep -vE '^192\.168\.(200|201)\.' | sort -u)
 
 # Находим VPN IP (amnezia WG — интерфейсы awg*)
 VPN_IP=$(ip -4 addr show | grep -A1 'awg' | grep -oP 'inet \K[\d.]+')

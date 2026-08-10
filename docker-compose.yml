@@ -167,7 +167,7 @@ services:
       - internal
       - host-facing
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000')\""]
+      test: ["CMD-SHELL", "curl -sf -u ${DASHBOARD_USERNAME}:${DASHBOARD_PASSWORD} http://localhost:5000 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
