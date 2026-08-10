@@ -10,6 +10,7 @@ import datetime
 import pwd
 import subprocess
 from pathlib import Path
+from urllib.parse import urlencode
 from oauthenticator.generic import GenericOAuthenticator
 
 # ============================================
@@ -67,7 +68,17 @@ c.CustomOAuthenticator.authorize_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/r
 c.CustomOAuthenticator.oauth_callback_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/oauth_callback"
 c.CustomOAuthenticator.logout_url = f"http://{HOST_IP}:{KEYCLOAK_PORT}/auth/realms/istp/protocol/openid-connect/logout"
 c.CustomOAuthenticator.logout_redirect_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"
-c.CustomOAuthenticator.backchannel_logout_enabled = True
+c.CustomOAuthenticator.enable_auth_state = True
+
+async def oidc_logout_redirect(authenticator, spawner, logout_response):
+    auth_state = await authenticator.get_auth_state(spawner.user)
+    base_url = f"http://{HOST_IP}:{JUPYTERHUB_PORT}/hub/login"
+    params = {"post_logout_redirect_uri": base_url}
+    if auth_state and "id_token" in auth_state:
+        params["id_token_hint"] = auth_state["id_token"]
+    return f"{base_url}?{urlencode(params)}"
+
+c.GenericOAuthenticator.logout_handler_return_url = oidc_logout_redirect
 
 c.CustomOAuthenticator.client_id = os.environ.get("JH_KEYCLOAK_CLIENT_ID", "jupyterhub")
 c.CustomOAuthenticator.client_secret = os.environ.get("JH_KEYCLOAK_CLIENT_SECRET", "")

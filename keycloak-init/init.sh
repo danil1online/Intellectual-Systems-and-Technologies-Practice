@@ -58,6 +58,12 @@ if [ "$REALM_EXISTS" != "200" ]; then
   "verifyEmail": false,
   "loginTheme": "keycloak",
   "accountTheme": "keycloak",
+  "ssoSessionIdleTimeout": 3600,
+  "ssoSessionMaxLifespan": 28800,
+  "offlineSessionIdleTimeout": 21600,
+  "offlineSessionMaxLifespan": 21600,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 1,
   "attributes": {
     "frontendUrl": "http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth"
   }
@@ -71,12 +77,12 @@ EOF
   echo "Realm istp created"
 else
   echo "Realm istp already exists"
-  # Обновляем frontendUrl для существующего realm
+  # Обновляем session settings для существующего realm
   curl -s -X PUT "$KEYCLOAK_URL/admin/realms/istp" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"attributes\":{\"frontendUrl\":\"http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth\"}}" > /dev/null
-  echo "  Realm frontendUrl updated"
+    -d '{"ssoSessionIdleTimeout":3600,"ssoSessionMaxLifespan":28800,"offlineSessionIdleTimeout":21600,"offlineSessionMaxLifespan":21600,"revokeRefreshToken":true,"refreshTokenMaxReuse":1,"attributes":{"frontendUrl":"http://${KC_HOSTNAME}:${KEYCLOAK_PORT:-9200}/auth"}}' > /dev/null
+  echo "  Realm session settings updated"
 fi
 
 # Функция создания/обновления клиента
@@ -85,7 +91,7 @@ upsert_client() {
   local SECRET=$2
   local REDIRECT1=$3
   local REDIRECT2=$4
-  local LOGOUT_URL=$5
+  local POST_LOGOUT_URI=$5
 
   echo "Processing client: $CLIENT_ID"
 
@@ -95,9 +101,8 @@ upsert_client() {
   
   INTERNAL_ID=$(echo "$CLIENT_JSON" | jq -r ".[] | select(.clientId==\"$CLIENT_ID\") | .id" 2>/dev/null)
 
-# Формируем JSON клиента
-  if [ -n "$LOGOUT_URL" ] && [ "$LOGOUT_URL" != "" ]; then
-    CLIENT_DATA=$(cat <<CLIEOF
+  # Формируем JSON клиента
+  CLIENT_DATA=$(cat <<CLIEOF
 {
   "clientId": "$CLIENT_ID",
   "secret": "$SECRET",
@@ -110,31 +115,11 @@ upsert_client() {
   "consentRequired": false,
   "attributes": {
     "oidc.ciba.grant.enabled": "false",
-    "backchannel.logout.url": "$LOGOUT_URL",
-    "backchannel.logout.session.required": "true"
+    "post.logout.redirect.uris": "$POST_LOGOUT_URI"
   }
 }
 CLIEOF
 )
-  else
-    CLIENT_DATA=$(cat <<CLIEOF
-{
-  "clientId": "$CLIENT_ID",
-  "secret": "$SECRET",
-  "redirectUris": ["$REDIRECT1", "$REDIRECT2"],
-  "webOrigins": ["+"],
-  "enabled": true,
-  "protocol": "openid-connect",
-  "standardFlowEnabled": true,
-  "publicClient": false,
-  "consentRequired": false,
-  "attributes": {
-    "oidc.ciba.grant.enabled": "false"
-  }
-}
-CLIEOF
-)
-  fi
 
   if [ -n "$INTERNAL_ID" ] && [ "$INTERNAL_ID" != "null" ]; then
     # Обновляем существующий клиент
@@ -169,21 +154,22 @@ CLIEOF
 upsert_client "jupyterhub" "$OIDC_JUPYTER_SECRET" \
   "http://${GITLAB_HOST}:${JUPYTERHUB_PORT:-8000}/hub/oauth_callback" \
   "http://localhost:${JUPYTERHUB_PORT:-8000}/hub/oauth_callback" \
-  "http://jupyterhub:${JUPYTERHUB_PORT:-8000}/hub/logout"
+  "http://${GITLAB_HOST}:${JUPYTERHUB_PORT:-8000}/hub/login"
 
 upsert_client "gitlab" "$OIDC_GITLAB_SECRET" \
   "http://${GITLAB_HOST}/users/auth/openid_connect/callback" \
   "http://localhost/users/auth/openid_connect/callback" \
-  "http://${GITLAB_HOST}/users/auth/openid_connect/logout"
+  "http://${GITLAB_HOST}/"
 
 upsert_client "admin-dashboard" "$OIDC_DASHBOARD_SECRET" \
   "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/*" \
   "http://localhost:${DASHBOARD_PORT:-9000}/*" \
-  "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/logout"
+  "http://${GITLAB_HOST}:${DASHBOARD_PORT:-9000}/"
 
 upsert_client "registry" "$OIDC_REGISTRY_SECRET" \
   "http://${GITLAB_HOST}:5050/*" \
-  "http://localhost:5050/*"
+  "http://localhost:5050/*" \
+  "+"
 
 # Настройка OIDC mappers для клиента gitlab
 setup_gitlab_mappers() {

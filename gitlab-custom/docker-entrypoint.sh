@@ -63,7 +63,8 @@ gitlab_rails['omniauth_providers'] = [
     attribute_links: {
       'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier' => 'uid'
     },
-    disable_ui: false
+    disable_ui: false,
+    single_sign_out: true
   }
 ]
 gitlab_rails['omniauth_enabled'] = true
