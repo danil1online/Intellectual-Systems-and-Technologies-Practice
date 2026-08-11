@@ -292,6 +292,8 @@ TMP_DIR=$(mktemp -d)
 if git clone http://oauth2:$ROOT_TOKEN@localhost/students/project.git "$TMP_DIR" 2>&1; then
     # Копируем docs
     cp "$DOCS_DIR"/*.md "$TMP_DIR/docs/"
+    # Копируем images
+    cp -r "$DOCS_DIR/../images" "$TMP_DIR/" 2>/dev/null || true
 
     # Commit + push
     cd "$TMP_DIR"

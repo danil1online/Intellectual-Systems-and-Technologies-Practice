@@ -53,7 +53,7 @@ def get_git_log(repo_dir):
 
 
 def grade_practice_notebook(repo_dir, notebook_path):
-    """Оценить notebook-практику (Pr_3 — Pr_20)."""
+    """Оценить notebook-практику (Pr_2 — Pr_21)."""
     print(f"  Оцениваю notebook: {notebook_path}")
     
     cmd = [
@@ -85,7 +85,7 @@ def grade_practice_notebook(repo_dir, notebook_path):
 
 
 def grade_practice_md(repo_dir, md_path=None):
-    """Оценить md-отчёт (Pr_1, Pr_2)."""
+    """Оценить md-отчёт (Pr_1)."""
     if not md_path:
         # Ищем Pr_*.md
         reports = find_md_reports(repo_dir)
@@ -148,10 +148,10 @@ def main():
     print(f"Дата: {datetime.datetime.now().isoformat()}")
     print(f"Commits: {get_git_log(repo_dir)[:5]}")
     
-    # Ищем notebook-практики (Pr_3 — Pr_20)
+    # Ищем notebook-практики (Pr_2 — Pr_21)
     notebooks = find_notebooks(repo_dir)
     
-    # Ищем md-отчёты (Pr_1, Pr_2)
+    # Ищем md-отчёты (Pr_1)
     md_reports = find_md_reports(repo_dir)
     
     if notebooks:

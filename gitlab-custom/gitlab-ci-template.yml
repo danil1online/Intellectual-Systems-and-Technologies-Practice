@@ -15,5 +15,5 @@ grade:
     paths:
       - ai_report.json
     expire_in: 30 days
-   only:
+  only:
     - main

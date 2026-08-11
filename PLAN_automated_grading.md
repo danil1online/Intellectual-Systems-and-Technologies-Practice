@@ -7,9 +7,12 @@
 - Проверка: Runner клонирует репозиторий → анализирует `git log` → LLM оценивает (0-5)
 - Dashboard: оценка 0-5 + LAZY/SMART count (по дате занятия)
 
-### Pr_2 — Исключена (Telegram не актуален)
+### Pr_2 — Python: структуры данных и циклы (Notebook-based)
+- Студент: JupyterLab → Pr_2_<группа>_<номер>.ipynb с %%ask_mentor → push
+- Проверка: Runner клонирует → grade_notebook.py → LLM оценивает (0-5)
+- Dashboard: оценка 0-5 + LAZY/SMART count (по дате занятия)
 
-### Pr_3–Pr_20 — Notebook-based
+### Pr_4–Pr_21 — Notebook-based
 - Студент: JupyterLab → practiceN.ipynb с %%ask_mentor → push
 - Проверка: Runner клонирует → grade_notebook.py → LLM оценивает (0-5)
 - Dashboard: оценка 0-5 + LAZY/SMART count (по дате занятия)
@@ -152,24 +155,33 @@ grade:
 
 ---
 
-### 8. Обновить Pr_2.md — исключить Telegram, добавить Docker
+### 8. Создать Pr_2.md — Python: структуры данных и циклы
 
-**Файл:** `docs/Pr_2.md`
+**Новый файл:** `docs/Pr_2.md`
 
-**Изменения:**
-- Убрать Telegram бота
-- Добавить создание Docker-контейнера с Python-приложением:
-  1. `Dockerfile` для Python-приложения
-  2. `docker build`
-  3. `docker run`
-  4. `docker logs`
-- `LLM_Help.ipynb` с вопросами к ментору по Docker
-- `Pr_2_<группа>_<номер>.md` отчёт
-- `git push`
+**Содержание:**
+- Теория: list, tuple, set, dict — методы, особенности
+- Циклы: for, while, range(), enumerate(), zip()
+- List comprehensions, dict comprehensions
+- Практика: задачи на работу со структурами данных
+- Notebook-based отчёт: `Pr_2_<группа>_<номер>.ipynb`
+- `%%ask_mentor` для помощи
+
+### 9. Создать Pr_3.md — Python: функции и ООП
+
+**Новый файл:** `docs/Pr_3.md`
+
+**Содержание:**
+- Теория: функции, *args, **kwargs, lambda, map/filter/reduce
+- Область видимости: global, nonlocal
+- Классы, наследование, магические методы, декораторы
+- Практика: задачи на функции и ООП
+- Notebook-based отчёт: `Pr_3_<группа>_<номер>.ipynb`
+- `%%ask_mentor` для помощи
 
 ---
 
-### 9. Обновить init.sh — добавить шаблон CI/CD в `students/project`
+### 10. Обновить init.sh — добавить шаблон CI/CD в `students/project`
 
 **Файл:** `keycloak-init/init.sh`
 
@@ -188,8 +200,9 @@ grade:
 4. **Dashboard API** → приём оценок
 5. **Dashboard UI** → отображение оценок
 6. **Pr_1.md** → обновить методичку
-7. **Pr_2.md** → исключить Telegram
-8. **init.sh** → шаблон CI/CD
+7. **Pr_2.md** → создать (Python: структуры данных)
+8. **Pr_3.md** → создать (Python: функции и ООП)
+9. **init.sh** → шаблон CI/CD
 
 ---
 
@@ -209,7 +222,8 @@ dashboard/
 
 docs/
 ├── Pr_1.md              ← обновить
-└── Pr_2.md              ← обновить
+├── Pr_2.md              ← новый (Python: структуры)
+└── Pr_3.md              ← новый (Python: функции и ООП)
 
 gitlab-custom/
 └── gitlab-ci-template.yml  ← новый (шаблон)

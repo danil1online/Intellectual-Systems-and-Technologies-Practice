@@ -120,25 +120,24 @@ git clone git@gitlab.example.com:user/repo.git
 > ⚠️ Замените `<server-ip>` на IP-адрес вашего сервера (указан преподавателем).
 
 1. Откройте браузер и перейдите по адресу `http://<server-ip>:8000/`
-2. Нажмите **Keycloak** для входа
-3. Войдите под своей учётной записью (`student_<группа>_<номер>`)
+2. Войдите под своей учётной записью (`student_<группа>_<номер>`)
 
-![Авторизация](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/autorization.png)
+![Авторизация](images/autorization.png)
 
 **Создать новую вкладку Terminal**
 
 1. Нажмите символ **+** в верхней части JupyterLab
 2. Выберите **Terminal**
 
-![Создание вкладки Terminal](https://github.com/danil1online/intelligent_information_and_measurement_systems/blob/main/images/terminal_window_create.png)
+![Создание вкладки Terminal](images/terminal_window_create.png)
 
 ---
 
 ### 📁 Форк проекта
 
 1. Откройте **GitLab**: `http://<server-ip>:80`
-2. Войдите через **Keycloak**
-3. Перейдите в проект **students/project**
+2. Войдите под своим логином и паролем
+3. Перейдите в проект с учебными материалами (уточните у преподавателя)
 4. Нажмите **Fork** → **Create fork**
 5. Ваш проект появится по адресу: `http://<server-ip>:80/<username>/project`
 
@@ -149,11 +148,11 @@ git clone git@gitlab.example.com:user/repo.git
 **Клонирование вашего форкнутого репозитория:**
 
 ```bash
-git clone git@gitlab.<server-ip>:<username>/project.git
+git clone -p 2222 git@gitlab.<server-ip>:<username>/project.git
 cd project
 ```
 
-> ⚠️ Для работы по SSH убедитесь, что ваш SSH-ключ добавлен в GitLab (см. Практическую работу №0).
+> ⚠️ Для работы по SSH убедитесь, что ваш SSH-ключ добавлен в GitLab (см. Практическую работу №0). SSH-порт GitLab — 2222.
 
 **Настройка пользователя Git:**
 
@@ -249,7 +248,7 @@ git branch -d feature-1
 
 ## 📝 LLM_Help.ipynb
 
-Создайте ноутбук `LLM_Help.ipynb` в папке `reports/practice1` и задайте уточняющие вопросы к ИИ-ментору по теме работы через `%%ask_mentor`. Примеры:
+Создайте ноутбук `LLM_Help.ipynb` и задайте уточняющие вопросы к ИИ-ментору по теме работы через `%%ask_mentor`. Примеры:
 
 ```
 %%ask_mentor

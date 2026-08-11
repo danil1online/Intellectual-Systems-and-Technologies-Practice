@@ -1,183 +1,327 @@
-# Практическая работа №4 Визуализация данных средствами MatplotLib. Основы 
+# Практическая работа №4 Основы контейнеризации и чат-боты для мессенджера MAX
 
 ---
 
 ## 🎯 Цель работы.
 
-Получить навыки использования библиотеки визуализации данных Matplotlib с использованием языка программирования Python
-
----
-
-## ⚠️ Важно
-
-Это работа в формате **Notebook-based**. Вам будет доступен **ИИ-ментор** (`%%ask_mentor`). Все запросы логируются.
-
----
-
-## 📚 Основные идеи и теоретические основы.
-
-matplotlib – это основная библиотека для построения научных графиков в Python. 
-Она включает функции для создания высококачественных визуализаций типа линейных диаграмм, гистограмм, диаграмм разброса и т.д. 
-Визуализация данных и различных аспектов вашего анализа может дать важную информацию. 
-
-В данной работе взаимодействие с matplotlib будет проходить в [Jupyter Notebook](Pr_3.md) на базе [Google Colab](https://colab.research.google.com/notebooks/intro.ipynb)
-В среде Jupyter Notebook  возможно вывести рисунок прямо в браузере с помощью встроенных команд ```%matplotlib notebook``` и ```%matplotlib inline```.
-Рекомендуется использовать ```%matplotlib inline```.
+Создание сервера с постоянно работающим чат-ботом для мессенджера MAX в Docker-контейнере
 
 ---
 
 ## 📁 Материалы и методы
 
-- Среда выполнения - [Google Colab](https://github.com/deepmipt/dlschl/wiki/Инструкция-по-работе-с-Google-Colab)
-- Язык программирования – [python](https://www.python.org/).
-- Основные технологии:
-  -  [jupyter Notebook](https://jupyter.org/).
+- Операционная система - [Ubuntu 22.04](https://help.ubuntu.ru/wiki/командная_строка)
+- Язык программирования – [Python](https://www.python.org/).
 - Основные библиотеки:
-  - [matplotlib](https://matplotlib.org/)
-  - [numpy](https://numpy.org/)
-  - [pandas](https://pandas.pydata.org/)
- 
----
-
-## 🧪 Программа работы 
+  - [Git](https://habr.com/ru/articles/541258/).
+  - [Docker](https://www.docker.com/).
+  - [maxapi](https://pypi.org/project/maxapi/) — библиотека для создания ботов MAX
 
 ---
 
-### ⚙️ Настройка среды  
-
-**Зарегистрировать электронную почту google (либо использовать существующий аккаунт)**
-
-**Перейти по [ссылке](https://colab.research.google.com/notebooks/intro.ipynb)**
-
-**В правом верхнем углу нажать кнопку «Войти» и затем ввести свои учетные данные google.**
-
-**В верхнем левом углу найдите подменю «Файл», далее «Создать блокнот».**
+## 🧪 Программа работы
 
 ---
 
+### ⚙️ Настройка среды
 
-### 📌 Выполнение простейшей последовательности команд
+**Авторизоваться на сервере [Jupyter-Hub](https://jupyter.org/hub) по адресу `http://<server-ip>:8000/`**
 
-  - Опробовать программу для построения 2D графиков со следующим текстом:
-  ```python
-  %matplotlib inline
-  import matplotlib.pyplot as plt 
-  import numpy as np
-  # Генерируем последовательность чисел от -10 до 10 с 100 шагами 
-  x = np.linspace(-10, 10, 100) 
-  # Генерируем случайную амплитуду для синусоиды
-  a = np.random.random()
-  # Создаем второй массив с помощью синуса 
-  y = a*np.sin(x) 
-  # Функция создает линейный график на основе двух массивов 
-  plt.plot(x, y, marker="o")
+![Авторизация](images/autorization.png)
 
+**Создать новую вкладку символом +**
+
+![Создание новой вкладки](images/new_window_create.png)
+
+**Выбрать тип новой вкладки -- Terminal**
+
+![Создание вкладки Terminal](images/terminal_window_create.png)
+
+**Работать в новой вкладке вида**
+
+![Вкладка Terminal](images/basic_window.png)
+
+**(При первом входе на сервер) Создать каталог с именем, соответствующим Вашим ФИО и году обучения, например:**
+
+```bash
+mkdir ivanov_ii_2026
+```
+
+**(При втором и последующих входах на сервер) Перейти каталог с именем, соответствующим Вашим ФИО и году обучения, например:**
+
+```bash
+cd ivanov_ii_2026
+```
+
+---
+
+### 📌 Создание бота
+
+  - Создаем и переходим в новый каталог с именем, соответствующим номеру практической работы:
+  ```bash
+  mkdir pr_4
+  cd pr_4
   ```
-### 📌 Работа с данными, загруженными из открытых источников сети интернет
+  - Проверяем работу python3.10
+  ```bash
+  python3.10
+  ```
+  - Выходим
+  ```python
+  exit()
+  ```
+  - Для того, чтобы не нарушать структуру базового python, не мешать своими установками администраторам серверов и коллегам, создаем «окружение» *python3.10 env* и [активируем его](https://netpoint-dc.com/blog/python-venv-ubuntu-1804/)
+  ```bash
+  python3.10 -m venv env
+  source env/bin/activate
+  ```
+  - В результате в начале командной строки появляется указание на использование окружения ```(env) student@uuser-X10X99-16D:~/pr_4$```
+  - Устанавливаем необходимые pip-пакеты, в частности, нам понадобится библиотеку maxapi
+  ```bash
+  pip install maxapi
+  ```
+  - Создаем собственную учетную запись – нового бота для мессенджера MAX, как это указано в [Приложении 2](Pr_4.md#-приложение-2-справочное-регистрация-собственного-бота-max) (дополнительно см. [статью на Хабре](https://habr.com/ru/articles/930230/)). 
+  - Получаем токен, его будет достаточно для работы простейшего приложения.
+  - Запускаем текстовый редактор:
+  ```bash
+  nano bot.py
+  ```
+  - Код приложения (асинхронный эхо-бот):
+  ```python
+  import asyncio
+  import logging
+  
+  from maxapi import Bot, Dispatcher, F
+  from maxapi.types import MessageCreated
+  
+  logging.basicConfig(level=logging.INFO)
+  
+  # Замените 'ВАШ_ТОКЕН' на токен из MasterBot
+  bot = Bot('ВАШ_ТОКЕН')
+  dp = Dispatcher()
+  
+  
+  @dp.message_created(F.message.body.text)
+  async def echo(event: MessageCreated):
+      await event.message.answer(f"Повторяю: {event.message.body.text}")
+  
+  
+  async def main():
+      await dp.start_polling(bot)
+  
+  
+  if __name__ == '__main__':
+      asyncio.run(main())
+  ```
+  В данном коде следует изменить строку ```bot = Bot('ВАШ_ТОКЕН')```, вставив свой токен.
+  - Cохраняем файл ```Ctrl+O```, выходим ```Ctrl+X```.
+  - Запускаем программу:
+  ```bash
+  python bot.py
+  ```
+  - 📌 Проверяем работу бота, отправляя ему сообщение в MAX.
+  - 📌 Настраиваем работу собственной python-программы в виде docker-контейнера с автозапуском после старта ОС:
+    - Отключаем python env, так как теперь в качестве закрытого окружения будет docker-контейнер:
+    ```bash
+    deactivate
+    ```
+    - Создаем файл requirements.txt со списком pip-библиотек, необходимых для работы нашей программы
+    ```bash
+    nano requirements.txt
+    ```
+    - Вводим следующее содержимое:
+    ```bash
+    maxapi
+    ```
+    - Cохраняем файл ```Ctrl+O```, выходим ```Ctrl+X```.
+    - Создаем файл для сборки docker образа
+    ```bash
+    nano Dockerfile
+    ```
+    - Вводим следующее содержание (multi-stage build):
+    ```dockerfile
+    FROM python:3.10 AS builder
+    
+    COPY requirements.txt .
+    RUN pip install --user -r requirements.txt
+    
+    FROM python:3.10-slim
+    WORKDIR /code
+    COPY --from=builder /root/.local /root/.local
+    COPY ./bot.py .
+    ENV PATH=/root/.local:$PATH
+    CMD ["python", "-u", "./bot.py"]
+    ```
+    - Cохраняем файл ```Ctrl+O```, выходим ```Ctrl+X```.
 
-В рамках данного пункта лабораторной работы будут использованы библиотеки Python pandas, Numpy. 
-Стоит отметить, что библиотека pandas имеет встроенный построитель графиков plot, который и будет использоваться в данном пункте. 
-Будет использован набор данных (dataset) об [Иммиграции в Канаду с 1980 по 2013 год - Международная миграция в отдельные страны и из них - Редакция 2015 года с веб-сайта Организации Объединенных Наций](https://www.un.org/en/development/desa/population/migration/data/empirical2/migrationflows.shtml). 
-Набор данных содержит годовые данные о потоках международных мигрантов, регистрируемых различными странами. 
-Данные показывают как приток, так и отток в зависимости от места рождения, гражданства или места предыдущего / следующего проживания как для иностранцев, так и для граждан. 
-В рамках данного пункта мы сосредоточимся на данных иммиграционной службы Канады.
+*ПРИМЕЧАНИЕ* Следует обратить внимание на версию python: указанная в данном примере соответствует python, установленном на сервере 10.8.0.5,
+если Вы используете свой сервер, но следует указать версию, установленную на нем, например,
+для Debian 12 по умолчанию устанавливается python:3.11
 
-  - Загрузка и подготовка данных.
-    - Импорт первичных библиотек - pandas, Numpy.
-    ```python
-    import numpy as np
-    import pandas as pd
+    - Собираем docker образ с именем – номером Вашей зачётки
+    ```bash
+    docker build -t номер_зачетки .
     ```
-    - Загрузка данных из сети интернет в pandas dataframe.
-    ```python
-    df_can = pd.read_excel('https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx',
-              sheet_name='Canada by Citizenship',
-              skiprows=range(20),
-              skipfooter=2)
-    print('Данные загружены и записаны в dataframe!')
+    - Запускаем *docker* образ в режиме работы в фоне (*-d*) и даем команду запуска при перезапуске *docker* (*--restart=always*)
+    ```bash
+    docker run -d --restart=always номер_зачетки
     ```
-    - Обзор данных – первые 5 элементов:
-    ```python
-    df_can.head()
+    - Проверяем, что в ответ на данную команду, docker сообщит CONTAINER ID вида
+    ```bash
+    5df687ebc2f6380abd23e4ac5f7899c5f9a8a0e414cfa633ffefb0c372e40fcd
     ```
-    - Обзор данных – размер (строки и столбы) dataset’а:
-    ```python
-    print(df_can.shape)
+    - Также данный CONTAINER ID можно понять из списка, выдаваемого в ответ на команду:
+    ```bash
+    docker ps -a
     ```
-    - Очистка данных – удаление неинформативных для нас столбцов, повторный вывод первых 5 строк:
-    ```python
-    df_can.drop(['AREA', 'REG', 'DEV', 'Type', 'Coverage'], axis=1, inplace=True)
-    df_can.head()
+    - Пример ответа:
+    ```bash
+    CONTAINER ID   IMAGE          COMMAND                CREATED              STATUS              PORTS     NAMES
+    5df687ebc2f6       000000           "python -u ./bot.py"     About a minute ago Up About a minute                bold_bhabha
     ```
-    - Приведение данных к более удобному виду – переименование нескольких столбцов, повторный вывод первых 5 строк:
-    ```python
-    df_can.rename(columns={'OdName':'Country', 'AreaName':'Continent','RegName':'Region'}, inplace=True)
-    df_can.head()
+    - В данном случае CONTAINER ID значительно короче; можно пользоваться любым номером. Например, для просмотра log'ов (в данном случае - результатов работы функций "print(" программы):
+    ```bash
+    docker logs 5df687ebc2f6
     ```
-    - Проверка структуры данных – уточняем, являются ли наименования всех столбцов типами «строка» («string»):
-    ```python
-    all(isinstance(column, str) for column in df_can.columns)
+    - Пример ответа:
+    ```bash
+    INFO:root:Bot started
+    INFO:maxapi:Polling started
     ```
-    Результатом будет скорее всего False. Поэтому выполняем преобразование.
-    - Изменяем наименование всех столбцов так, чтобы они были типа string и проверяем заново:
-    ```python
-    df_can.columns = list(map(str, df_can.columns))
-    all(isinstance(column, str) for column in df_can.columns)
+    - После проверки следует сохранить docker image в виде архива. Это может быть полезно для передачи Вашим заказчикам, например, если нет желания и возможности воспользоваться Docker Hub
+    - Cохраняем образ [командой](https://stackoverflow.com/questions/24482822/how-to-share-my-docker-image-without-using-the-docker-hub)
+    ```bash
+    docker save -o <path for created tar file> <image name>
     ```
-    - Приведение данных к более удобному виду – задаем в качестве строчного индекса наименование страны, повторный вывод первых 5 строк:
-    ```python
-    df_can.set_index('Country', inplace=True)
-    df_can.head()
+    Например,
+    ```bash
+    docker save -o ./docker_image_000000.tar 000000
     ```
-    - Расширяем данные – создаем новый столбец Total, который будет являться суммой всех столбцов, соответствующих годам (фактически – количеством иммигрантов за все года с 1980 по 2013), повторный вывод первых 5 строк:
-    ```python
-    # Выбираем только столбцы с годами для суммирования
-    years = list(map(str, range(1980, 2014)))
-    df_can['Total'] = df_can[years].sum(axis=1)
-    df_can.head()
-    ```
-    - Создаем новый набор данных на базе предыдущего – выделяем в него 5 стран, иммиграция из которых больше всех остальных:
-    ```python
-    years = list(map(str, range(1980, 2014)))
-    df_can.sort_values(['Total'], ascending=False, axis=0, inplace=True)
-    df_top5 = df_can.head()
-    # Транспонирование таблицы
-    df_top5 = df_top5[years].transpose() 
-    df_top5.head()
-    ```
-    - Вывод данных в виде графика типа «Диаграмма с областями»:
-    ```python
-    %matplotlib inline 
-    
-    import matplotlib as mpl
-    import matplotlib.pyplot as plt
-    
-    mpl.style.use('ggplot') # опционально: задаем стиль ggplot
-    
-    # Для построения графика изменяем тип индексов строк (года) 
-    # на integer
-    df_top5.index = df_top5.index.map(int)
-    
-    # Построение графика типа ‘area’ встроенной 
-    # в pandas суб-библиотекой matplotlib
-    df_top5.plot(kind='area', 
-                 stacked=False,
-                 figsize=(20, 10), # размер области построения графика
-                 )
-    
-    #Задаем наименование графика
-    plt.title('Тенденции иммиграции в 5 ведущих странах')
-    #Задаем наименование оси Y
-    plt.ylabel('Количество иммигрантов')
-    #Задаем наименование оси X
-    plt.xlabel('Год')
-    # Выводим график со всеми параметрами на экран
-    plt.show()
-    ```
-    
+    - Находим файл образа в правой части рабочего окна, нажимаем на него правой кнопкой, выбираем **Download**, сохраняем локально.
+  - 📌 Закрываем текущий Terminal 
+--- 
+
+## 🧪 Приложение №1 (Справочное) Подготовка собственного облачного сервера для выполнения программ в docker
+
+- Покупаем себе сервер VPS, например, вот [тут](https://ruvds.com/ru-rub/my/orders), выбирая в качестве ОС, например, Debian 12.
+- Ждем, пока завершится установка, видим в [списке](https://ruvds.com/ru-rub/my/servers) новый сервер, его IP, просматриваем и копируем пароль.
+
+![ruvds](images/ruvds.png)
+
+- На рисунке показан существующий сервер 195.133.13.56 и его можно использовать. Из Windows PowerShell подключаемся к нему удаленно под пользователем root.
+  ```bash
+  ssh root@195.133.13.56
+  ```
+- Стандартные команды проверки последних обновлений для Ubuntu/Debian после установки:
+  ```bash
+  apt-get update
+  apt-get upgrade
+  apt install htop nano
+  ```
+- Создаем нового пользователя student с собственным каталогом и задаем ему пароль.
+  ```bash
+  useradd -m student -s /bin/bash
+  passwd student
+  ```
+- Добавляем его в группу, которая может подключаться по ssh к серверу (см. [ссылку](https://ostechnix.com/allow-deny-ssh-access-particular-user-group-linux/)).
+  ```bash
+  nano /etc/ssh/sshd_config
+  ```
+  в конце файла добавляем
+  ```bash
+  AllowUsers student root
+  ```
+  Cохраняем файл ```Ctrl+O```, выходим ```Ctrl+X```.
+  Перезапускаем службу ssh
+  ```bash
+  systemctl restart sshd
+  ```
+  Пробуем из второго окна Windows PowerShell подключиться с указанными учетными данными
+  ```bash
+  ssh student@195.133.13.56
+  ```
+  Иногда проявляется ошибка в подключении к серверу по ssh (долгое ожидание сообщение о невозможности подключения). В таком случае следует [воспользоваться](https://serverfault.com/a/918810) или [вот этим](https://www.seei.biz/ssh-fails-to-connect-with-debug1-expecting-ssh2_msg_kex_ecdh_reply/)
+- В первом окне Windows PowerShell из-под учетной записи root устанавливаем [docker engine](https://docs.docker.com/engine/install/debian/)
+  ```bash
+  apt-get install ca-certificates curl
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  apt-get update
+  apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  ```
+  Проверяем работу под root (после указанной команды ошибок быть не должно)
+  ```bash
+  docker run hello-world
+  ```
+  Добавляем группу docker
+  ```bash
+  groupadd docker
+  ```
+  Добавляем в эту группу student'а
+  ```bash
+  usermod -aG docker student
+  ```
+  В окне с учетной записью student сначала переобновляем свои данные в группе
+  ```bash
+  newgrp docker
+  ```
+  потом проверяем работу (после указанной команды ошибок быть не должно)
+  ```bash
+  docker run hello-world
+  ```
+- Устанавливаем *python* из учетной записи *root*.
+  ```bash
+  apt install python3 python3-pip python3-venv
+  ```
+  Затем снимаем запрет student'у устанавливать пакеты через pip
+  ```bash
+  rm /usr/lib/python3.11/EXTERNALLY-MANAGED
+  ```
+- Добавьте последний файл в новую ветку.
+- Зафиксируйте изменения.
+- Объедините изменения в новой ветке с основной.
+
+## 🧪 Приложение №2 (Справочное) Регистрация собственного бота MAX
+
+Откройте мессенджер MAX, найдите пользователя **MasterBot** (поиск формирует несколько аналогов, нужен именно @MasterBot).
+
+![MasterBot](images/BotFather.png)
+
+Он принимает специальные команды.
+
+Отправьте команду `/create` для создания нового бота.
+
+![Регистрация бота MAX](images/BotRegistration.png)
+
+Чтобы получить учетную запись бота, отправьте ему команду `/create`. 
+Он задаст пару вопросов (ник и имя бота). 
+В конце процесса вам будет предоставлен токен, имеющий вид аналогичный 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ. 
+Этот токен вам потребуется для работы программы на python. Скопируйте его в текстовый файл. 
+
+![Создание бота MAX](images/BotCreation.png)
+
+> 📌 Для подробностей см. [статью на Хабре](https://habr.com/ru/articles/930230/) и [Wiki библиотеки maxapi](https://github.com/love-apples/maxapi/wiki).
+
+## 🧪 Приложение №3 (Справочное) Основные команды Docker
+
+  - Остановка контейнера
+  ```bash
+  docker stop 50046704457e9745897ba2c36e99e9c115ef89f3c41fa443beca5a7668668342
+  ```
+  - Удаление контейнера
+  ```bash
+  docker rm 50046704457e9745897ba2c36e99e9c115ef89f3c41fa443beca5a7668668342
+  ```
+  - Удаление образа image
+  ```bash
+  docker image rm 000000
+  ```
+
 ---
 
 ## 📌 Подготовить отчет о выполненной работе
-В т.ч. ответить на следующие вопросы:
-  - Чем отличается построение графиков с помощью matplotlib и pandas?
-  - Какое значение параметра kind нужно задать функции plot для вывода графика типа «Диаграмма с областями»?

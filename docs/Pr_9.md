@@ -1,10 +1,11 @@
-# Практическая работа №9 Машинное обучение. Density-Based Clustering
+# Практическая работа №9
+# Практическая работа №8 Машинное обучение. K-Nearest Neighbors
 
 ---
 
 ## 🎯 Цель работы.
 
-Получить теоретические знания и практические навыки постановки и решения задачи кластеризации методом Density-Based Clustering
+Получить теоретические знания и практические навыки постановки и решения задачи классификации методом K-Nearest Neighbors
 
 ---
 
@@ -14,21 +15,23 @@
 
 ## 📚 Основные идеи и теоретические основы.
 
-Методы кластеризации, таких как метод k-средних, иерархическая и нечеткая кластеризация, используют для группировки данных.
+📚 Классификация — это процесс отнесения объекта к одной из заранее известных категорий (классов) на основе его признаков, 
+используя данные, где правильные метки уже известны. 
+Это вид _обучения с учителем_, где алгоритм учится находить закономерности в размеченных данных, чтобы затем предсказывать класс для новых, 
+неизвестных объектов, например, сортировать новые электронные письма как "спам" или "не спам".  
 
-При применении к задачам с кластерами сложной формы, например, при наличии кластера внутри другого кластера, традиционные методы могут не дать хороших результатов:
-элементы в одном кластере могут иметь недостаточное сходство или точность / скорость могут быть низкими.
+📚 В этой практической работе вы загрузите набор данных клиентов, подготовите данные и воспользуетесь методом K-Nearest Neighbors (K-ближайших соседей) для прогнозирования отношения новой точки данных к тому или иному классу. 
 
-📚 Кластеризация Density-Based Clustering находит области с высокой плотностью, которые отделены друг от друга областями с низкой плотностью. 
-Плотность в данном контексте определяется как количество точек в пределах заданного радиуса.
+📚 В алгоритме K-ближайших соседей модель - это и есть данные. Разработчик подбирает k, а для каждой новой точки определяется k _ближайших_ точек из исходного набора и, 
+в зависимости от того, точек какого класса из всех k больше, к тому классу и относится новая точка.
 
-📚 Используемый в данной работе алгоритм DBSCAN является вариантом базового и расшифровывается как Density-Based Spatial Clustering of Applications with Noise (пространственная кластеризация приложений с учетом плотности). 
-Этот метод — один из наиболее распространённых алгоритмов кластеризации, основанный на плотности объектов. 
+Предположим, у нас есть точки данных классов A и B. Мы хотим предсказать, к какому классу будет относится новая точка данных. 
 
-📚 Идея заключается в том, что если определённая точка принадлежит кластеру, она должна находиться рядом с большим количеством других точек этого кластера.
-Алгоритм работает на основе двух параметров: Epsilon и Minimum Points
-Epsilon определяет заданный радиус, который, если включает в себя достаточное количество точек, называется _плотной областью_.
-Minimum Points определяет минимальное количество точек данных, которое мы хотим получить в окрестности для определения такой совокупности точек, как _кластера_.
+Если мы примем значение k, равное 3 (три ближайшие точки данных), мы можем, например, получить прогноз: новая точка относится к классу B. 
+
+Если же мы примем значение k, равное 6, то ситуация может измениться и мы получим прогноз в виде класса A (а может и не измениться).
+
+Именно подбор наиболее адекватного значения k - задача разработчика/исследователя.
 
 ---
 
@@ -44,9 +47,23 @@ Minimum Points определяет минимальное количество 
   - [scikit-learn](https://scikit-learn.org/)
   - [pandas](https://pandas.pydata.org/)
 - Датасет:
-  - набор случайных данных
-  - специальный датасет ["Weather Station"](https://www.kaggle.com/code/lykin22/weather-station-clustering-using-dbscan/output)
+  - специальный датасет ["Telecommunications dataset"](https://www.kaggle.com/code/dinaouahbi/k-nearest-neighbors-telecommunications-dataset)
 
+**О наборе данных**
+
+Представьте себе, что поставщик телекоммуникационных услуг сегментировал свою клиентскую базу по характеру использования услуг, разделив клиентов на четыре группы. 
+Если демографические данные позволяют прогнозировать принадлежность к группам, компания может персонализировать предложения для отдельных потенциальных клиентов. 
+Это и есть задача классификации. То есть, имея набор данных с предопределёнными метками, нам необходимо построить модель, которая будет использоваться для прогнозирования класса нового или неизвестного случая.
+
+В примере основное внимание уделяется использованию демографических данных, таких как регион, возраст и семейное положение, для разработки прогнозных моделей.
+
+Целевое поле, называемое **custcat**, имеет четыре возможных значения, которые соответствуют четырем группам клиентов, а именно: 
+  1 — Базовое обслуживание 
+  2 — Электронное обслуживание 
+  3 — Дополнительное обслуживание 
+  4 — Полное обслуживание
+
+Наша цель — построить классификатор, который предскажет класс неизвестных случаев. И для этого мы будем использовать метод K ближайших соседей.
  
 ---
 
@@ -68,300 +85,123 @@ Minimum Points определяет минимальное количество 
 
 **Работать в новой вкладке вида**
 
-![Владка Notebook](../images/notebook_clear_window.png)
+![Владка Notebook](images/notebook_clear_window.png)
 
 **Импорт необходимых библиотек**
 
 ```python
-import numpy as np 
-from sklearn.cluster import DBSCAN 
-# https://stackoverflow.com/questions/65898399/no-module-named-sklearn-datasets-samples-generator
-from sklearn.datasets import make_blobs 
-from sklearn.preprocessing import StandardScaler 
-import matplotlib.pyplot as plt 
-%matplotlib inline
-import warnings
-warnings.filterwarnings('ignore')
+import itertools
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import NullFormatter
 import pandas as pd
+import numpy as np
+import matplotlib.ticker as ticker
+from sklearn import preprocessing
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn import metrics
+%matplotlib inline
 ```
 
 ---
 
-### 🧪 Density-Based Clustering на случайно сгенерированном наборе данных
+### 🧪 Выполнение работы
 
-1. 🧪 **Генерация набора случайных данных**
-  - Функция, представленная ниже сгенерирует точки данных, если ей задать следующие входные данные:
-    - ```centroidLocation``` - координаты центров, вокруг которых будут генерироваться случайные данные
-    - ```numSamples``` - количество точек данных, которые мы хотим сгенерировать, разделенное на количество центров (количество центров определено в centroidLocation)
-    - ```clusterDeviation``` - стандартное отклонение между кластерами; чем больше число, тем больше расстояние между ними
+1. 🧪 **Загрузка данных из CSV-файла**
+```python
+df = pd.read_csv('/shared/data/teleCust1000t.csv')
+df['income']=df['income']*np.random.rand()
+df.head()
+```
+
+2. 🧪 **Визуализация и экспертный анализ данных**
+  - посмотрим, сколько представителей каждого класса присутствует в нашем наборе данных
     ```python
-    def createDataPoints(centroidLocation, numSamples, clusterDeviation):
-      X, y = make_blobs(n_samples=numSamples, centers=centroidLocation, 
-                                  cluster_std=clusterDeviation)
-      
-      X = StandardScaler().fit_transform(X)
-      return X, y
-    
-    X, y = createDataPoints([[4,3], [2,-1], [-1,4]] , 1500, 0.5)
+    df['custcat'].value_counts()
+    ```
+    _281 клиент Plus Service, 266 клиентов Basic-service, 236 клиентов Total Service и 217 клиентов E-Service_
+  - Используем методы визуализации:
+    ```python
+    df.hist(column='income', bins=50)
+    ```
+  - Посмотрим, какие у нас есть признаки для классификации:
+    ```python
+    df.columns
+    ```
+  - Данные имеют различные типы, поэтому, чтобы использовать библиотеку scikit-learn, нам нужно преобразовать фрейм данных Pandas в массив Numpy:
+    ```python
+    X = df[['region', 'tenure','age', 'marital', 'address', 'income', 'ed', 'employ','retire', 'gender', 'reside']].values  #.astype(float)
+    X[0:5]
+    ```
+  - Построим, какие у нас есть варианты классов
+    ```python
+    y = df['custcat'].values
+    y[0:5]
     ```
 
-2. 🧪 **Настройка (обучение) модели K-Means**
+3. 🧪 **Нормализация данных**
 
+Нормализация данных обеспечивает нулевое среднее значение и единичную дисперсию данных (т.е. изменение в пределах от -1 до +1). 
+Это хорошая практика, особенно для таких алгоритмов, как KNN, которые основаны на расстоянии
 ```python
-epsilon = 0.3
-minimumSamples = 7
-db = DBSCAN(eps=epsilon, min_samples=minimumSamples).fit(X)
-labels = db.labels_
-labels
+X = preprocessing.StandardScaler().fit(X).transform(X.astype(float))
+X[0:5]
 ```
 
-3. 🧪 **Выбросы**
+4. 🧪 **Разделение тестовых данных**
 
-Выбросы - это точки, которые явно ошибочно были отнесены к тому или иному классу. 
-Заменим все элементы в core_samples_mask, которые находятся в кластере, на «True», а если точки являются выбросами - на «False».
+Качество работы модели определяется тем, на сколько высока ее _Точность вне выборки_ — процент верных прогнозов, которые модель делает на данных, на которых она НЕ обучалась, т.е. которые ранее не видела.
+Обучение и тестирование на одном и том же наборе данных, скорее всего, будут иметь низкую _точность вне выборки_ из-за вероятности [переобучения](https://wiki.loginom.ru/articles/overtraining.html).
 
-```python
-core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-core_samples_mask[db.core_sample_indices_] = True
-core_samples_mask
-```
+Важно, чтобы наши модели обладали высокой точностью вне выборки, поскольку цель любой модели, конечно же, заключается в том, чтобы делать правильные прогнозы на неизвестных данных. 
+Как же можно повысить точность вне выборки? Один из способов — использовать метод оценки, называемый разделением на обучающий и тестовый наборы (датасеты). 
+Такое разделение буквально подразумевает разделение набора данных на обучающий и тестовый наборы, которые не пересекаются. 
+После этого обучение выполняется на обучающем наборе, а тестирование — на тестовом.
 
-```python
-n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-n_clusters_
-```
+Это обеспечивает более точную оценку точности вне выборки, поскольку тестовый набор данных не является частью набора данных, использованного для обучения. 
+Такой подход фактически имитирует реальную ситуацию.
 
-```python
-unique_labels = set(labels)
-unique_labels
-```
-
-4. **Визуализация данных**
+Хорошей практикой является разделение данных не 50 / 50, а 80 / 20, где 80 - доля обучающих данных, а 20 - доля тестовых.
 
 ```python
-colors = plt.cm.Spectral(np.linspace(0, 1, len(unique_labels)))
-colors
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split( X, y, test_size=0.2, random_state=4)
+print ('Train set:', X_train.shape,  y_train.shape)
+print ('Test set:', X_test.shape,  y_test.shape)
 ```
 
-```python
-for k, col in zip(unique_labels, colors):
-    if k == -1:
-        # Black used for noise.
-        col = 'k'
+5. 🧪 **Обучение модели классификации**
 
-    class_member_mask = (labels == k)
+Обучение будет выполнять алгоритм, наша задача подобрать оптимальный k 
+  - Начнем с k=4
+  ```python
+  k = 4
+  neigh = KNeighborsClassifier(n_neighbors = k).fit(X_train,y_train)
+  neigh
+  ```
+  - Прогнозирование. Используем модель для прогнозирования меток для точек _тестового набора_
+  ```python
+  yhat = neigh.predict(X_test)
+  yhat[0:5]
+  ```
+  - Оценка точности
 
-    # Plot the datapoints that are clustered
-    xy = X[class_member_mask & core_samples_mask]
-    plt.scatter(xy[:, 0], xy[:, 1],s=50, c=col, marker=u'o', alpha=0.5)
-
-    # Plot the outliers
-    xy = X[class_member_mask & ~core_samples_mask]
-    plt.scatter(xy[:, 0], xy[:, 1],s=50, c=col, marker=u'o', alpha=0.5)
-```
-
- 
-
+  В многоклассовой классификации (когда классов больше 2, как в нашей задаче) показатель точности классификации — это одна из функций, например, функция jaccard_similarity_score.
+  По сути, она вычисляет степень соответствия фактических и прогнозируемых меток в тестовом наборе.
+  ```python
+  print("Train set Accuracy: ", metrics.accuracy_score(y_train, neigh.predict(X_train)))
+  print("Test set Accuracy: ", metrics.accuracy_score(y_test, yhat))
+  ```
 --- 
 
-### 📌 Задание №1
+### 📌 Задание
 
-- Попробуйте кластеризовать указанный выше набор данных методом [k-средних](Pr_7.md), не создавая данные заново
+- Постройте модели для ```k=[1;9]```
+- Оцените точность каждой модели по
+  - использованной выше метрике [Accuracy](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.accuracy_score.html),
+  - метрике [F1_score](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.f1_score.html),
+- Проведите анализ метрик и сделайте вывод об оптимальном значении k
 
 ---
 
-### 🧪 Кластеризация метеостанций
-
-DBSCAN особенно хорош для таких задач, где важен пространственный контекст. 
-Преимущество алгоритма DBSCAN заключается в том, что он может находить кластеры любой произвольной формы, не подвергаясь влиянию шума. 
-Например, в следующем примере кластеризуется местоположение метеостанций в Канаде.
-Результаты решения такой задачи можно использовать, например, для поиска группы станций с одинаковыми погодными условиями. 
-Алгоритм не только находит различные кластеры произвольной формы, но и может находить более плотные части выборок с центрированными данными, игнорируя менее плотные области или шумы.
-
-Давайте начнём работать с данными. Мы будем работать по следующей схеме:
-
-1. 🧪 **Загружаем данные из CSV-файла**
-
-```python
-filename='/shared/data/weather-stations20140101-20141231.csv'
-pdf = pd.read_csv(filename)
-pdf.head(5)
-```
-
-2. 🧪 **Предварительная обработка**
-
-Удалим строки, в поле Tm которых нет значений
-
-```python
-pdf = pdf[pd.notnull(pdf["Tm"])]
-pdf = pdf.reset_index(drop=True)
-pdf.head(5)
-```
-
-3. 🧪 **Визуализация данных**
-
-Визуализацию станций на карте выполним с помощью пакета basemap. 
-Набор инструментов [matplotlib basemap](https://matplotlib.org/basemap/stable/) — это библиотека для построения двумерных данных на картах в Python. 
-Basemap сам по себе не выполняет построение, но предоставляет возможности преобразования координат в картографические проекции.
-Обратите внимание, что размер каждой точки данных представляет собой среднее значение максимальной температуры для каждой станции за год.
-```python
-from mpl_toolkits.basemap import Basemap
-import matplotlib.pyplot as plt
-from pylab import rcParams
-
-rcParams['figure.figsize'] = (14,10)
-
-llon=-140
-ulon=-50
-llat=40
-ulat=65
-
-pdf=pdf[(pdf['Long']>llon)&(pdf['Long']<ulon)&(pdf['Lat']>llat)&(pdf['Lat'] < ulat)]
-
-my_map = Basemap(projection='merc',
-            resolution = 'l', area_thresh = 1000.0,
-            llcrnrlon=llon, llcrnrlat=llat,
-            urcrnrlon=ulon, urcrnrlat=ulat) 
-
-my_map.drawcoastlines()
-my_map.drawcountries()
-my_map.fillcontinents(color = 'white', alpha = 0.3)
-my_map.shadedrelief()       
-
-xs,ys = my_map(np.asarray(pdf.Long), np.asarray(pdf.Lat))
-pdf['xm']= xs.tolist()
-pdf['ym'] =ys.tolist()
-
-for index,row in pdf.iterrows():
-   my_map.plot(row.xm, row.ym,markerfacecolor =([1,0,0]),  
-               marker='o', markersize= 5, alpha = 0.75)
-plt.show()
-```
-
-4. 🧪 **Группировка станций по их местоположению, т. е. широте и долготе**
-
-Библиотека DBSCAN из sklearn может запускать кластеризацию DBSCAN на основе векторного массива или матрицы расстояний.
-В нашем случае мы передаем ей массив Numpy Clus_dataSet для поиска керновых образцов высокой плотности и расширяем кластеры на их основе.
-
-```python
-from sklearn.cluster import DBSCAN
-import sklearn.utils
-from sklearn.preprocessing import StandardScaler
-sklearn.utils.check_random_state(1000)
-Clus_dataSet = pdf[['xm','ym']]
-Clus_dataSet = np.nan_to_num(Clus_dataSet)
-Clus_dataSet = StandardScaler().fit_transform(Clus_dataSet)
-
-db = DBSCAN(eps=0.15, min_samples=10).fit(Clus_dataSet)
-core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-core_samples_mask[db.core_sample_indices_] = True
-labels = db.labels_
-pdf["Clus_Db"]=labels
-
-realClusterNum=len(set(labels)) - (1 if -1 in labels else 0)
-clusterNum = len(set(labels)) 
-
-pdf[["Stn_Name","Tx","Tm","Clus_Db"]].head(5)
-```
-
-С помощью команды ```set(labels)``` можно убедиться, что для выбросов метка кластера равна -1.
-    
-5. 🧪 **Визуализация кластеров на основе местоположения**
-```python
-from mpl_toolkits.basemap import Basemap
-import matplotlib.pyplot as plt
-from pylab import rcParams
-%matplotlib inline
-rcParams['figure.figsize'] = (14,10)
-
-my_map = Basemap(projection='merc',
-            resolution = 'l', area_thresh = 1000.0,
-            #min longitude (llcrnrlon) and latitude (llcrnrlat)
-            llcrnrlon=llon, llcrnrlat=llat, 
-            #max longitude (urcrnrlon) and latitude (urcrnrlat)
-            urcrnrlon=ulon, urcrnrlat=ulat) 
-
-my_map.drawcoastlines()
-my_map.drawcountries()
-#my_map.drawmapboundary()
-my_map.fillcontinents(color = 'white', alpha = 0.3)
-my_map.shadedrelief()
-
-colors = plt.get_cmap('jet')(np.linspace(0.0, 1.0, clusterNum))
-
-for clust_number in set(labels):
-    c=(([0.4,0.4,0.4]) if clust_number == -1 else colors[np.int64(clust_number)])
-    clust_set = pdf[pdf.Clus_Db == clust_number]                    
-    my_map.scatter(clust_set.xm, clust_set.ym, color =c,  
-                   marker='o', s= 20, alpha = 0.85)
-    if clust_number != -1:
-        cenx=np.mean(clust_set.xm) 
-        ceny=np.mean(clust_set.ym) 
-        plt.text(cenx,ceny,str(clust_number), fontsize=25, color='red',)
-        print ("Cluster "+str(clust_number)+', Avg Temp: '+ str(np.mean(clust_set.Tm)))
-```
-
-6. 🧪 **Группировка станций на основе их местоположения, средней, максимальной и минимальной температуры**
-```python
-from sklearn.cluster import DBSCAN
-import sklearn.utils
-from sklearn.preprocessing import StandardScaler
-sklearn.utils.check_random_state(1000)
-Clus_dataSet = pdf[['xm','ym','Tx','Tm','Tn']]
-Clus_dataSet = np.nan_to_num(Clus_dataSet)
-Clus_dataSet = StandardScaler().fit_transform(Clus_dataSet)
-
-db = DBSCAN(eps=0.3, min_samples=10).fit(Clus_dataSet)
-core_samples_mask = np.zeros_like(db.labels_, dtype=bool)
-core_samples_mask[db.core_sample_indices_] = True
-labels = db.labels_
-pdf["Clus_Db"]=labels
-
-realClusterNum=len(set(labels)) - (1 if -1 in labels else 0)
-clusterNum = len(set(labels)) 
-
-pdf[["Stn_Name","Tx","Tm","Clus_Db"]].head(5)
-```
-
-7. 🧪 **Визуализация кластеров на основе местоположения и температуры**
-```python
-from mpl_toolkits.basemap import Basemap
-import matplotlib.pyplot as plt
-from pylab import rcParams
-%matplotlib inline
-rcParams['figure.figsize'] = (14,10)
-
-my_map = Basemap(projection='merc',
-            resolution = 'l', area_thresh = 1000.0,
-            #min longitude (llcrnrlon) and latitude (llcrnrlat)
-            llcrnrlon=llon, llcrnrlat=llat, 
-            #max longitude (urcrnrlon) and latitude (urcrnrlat)
-            urcrnrlon=ulon, urcrnrlat=ulat) 
-
-my_map.drawcoastlines()
-my_map.drawcountries()
-#my_map.drawmapboundary()
-my_map.fillcontinents(color = 'white', alpha = 0.3)
-my_map.shadedrelief()
-
-colors = plt.get_cmap('jet')(np.linspace(0.0, 1.0, clusterNum))
-
-for clust_number in set(labels):
-    c=(([0.4,0.4,0.4]) if clust_number == -1 else colors[np.int64(clust_number)])
-    clust_set = pdf[pdf.Clus_Db == clust_number]                    
-    my_map.scatter(clust_set.xm, clust_set.ym, color =c,  
-                   marker='o', s= 20, alpha = 0.85)
-    if clust_number != -1:
-        cenx=np.mean(clust_set.xm) 
-        ceny=np.mean(clust_set.ym) 
-        plt.text(cenx,ceny,str(clust_number), fontsize=25, color='red',)
-        print ("Cluster "+str(clust_number)+', Avg Temp: '+ str(np.mean(clust_set.Tm)))
-```
-
---- 
-
-### 📌 Задание №2
-
-Проведите анализ полученных визуализаций, сделайте выводы об их корректности, сформулируйте основные сомнения и предложения по доработке (например, необходимости дополнительных данных) 
-
-### 📌 Подготовить отчет о выполненных Заданиях
+### 📌 Подготовить отчет о выполненном Задании
