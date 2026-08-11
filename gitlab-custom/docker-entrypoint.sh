@@ -33,7 +33,7 @@ echo "GitLab config generated at /etc/gitlab/gitlab.rb"
 # Устанавливаем через Rails console после reconfigure.
 export GITLAB_POST_RECONFIGURE_SCRIPT='
 echo "Setting require_admin_approval_after_user_signup = false via Rails console..."
-/opt/gitlab/embedded/bin/rails runner "
+gitlab-rails runner "
   s = ApplicationSetting.first_or_create
   if s.require_admin_approval_after_user_signup != false
     s.require_admin_approval_after_user_signup = false
