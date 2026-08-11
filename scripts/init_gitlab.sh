@@ -184,6 +184,8 @@ echo "  → notebooks/.gitkeep"
 create_gitkeep "notebooks" "notebooks/.gitkeep"
 echo "  → reports/.gitkeep"
 create_gitkeep "reports" "reports/.gitkeep"
+echo "  → docs/images/.gitkeep"
+create_gitkeep "docs/images" "docs/images/.gitkeep"
 
 # 3. Создаём README.md
 README_CONTENT=$(base64 -w 0 << 'READMEEOF'
@@ -292,8 +294,11 @@ TMP_DIR=$(mktemp -d)
 if git clone http://oauth2:$ROOT_TOKEN@localhost/students/project.git "$TMP_DIR" 2>&1; then
     # Копируем docs
     cp "$DOCS_DIR"/*.md "$TMP_DIR/docs/"
-    # Копируем images
-    cp -r "$DOCS_DIR/../images" "$TMP_DIR/" 2>/dev/null || true
+    # Копируем images в docs/images/
+    mkdir -p "$TMP_DIR/docs/images"
+    for ext in png jpg jpeg gif svg webp bmp; do
+        cp "$DOCS_DIR/../images"/*."$ext" "$TMP_DIR/docs/images/" 2>/dev/null || true
+    done
 
     # Commit + push
     cd "$TMP_DIR"
