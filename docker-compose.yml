@@ -240,8 +240,6 @@ services:
 volumes:
   jupyterhub-data:
   llm-models:
-    external: true
-    name: ${PROJECT_VOLUME_PREFIX}_llm-models
   shared-data:
     external: true
     name: ${PROJECT_VOLUME_PREFIX}_shared-data
