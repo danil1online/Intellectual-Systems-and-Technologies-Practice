@@ -712,7 +712,25 @@ elif [[ "$LLM_CI_TYPE" == "local" ]]; then
 fi
 
 if [[ -n "$LLM_PROFILE_FLAG" ]]; then
-    docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard llm gitlab-runner
+    LLM_SERVICE_NAME=""
+    if [[ "$LLM_USE_LOCAL" == "true" ]]; then
+        if [[ "$LLM_IMAGE" == *"gigachat"* ]]; then
+            LLM_SERVICE_NAME="llm-gigachat"
+        elif [[ "$LLM_IMAGE" == *"qwen"* ]]; then
+            LLM_SERVICE_NAME="llm-qwen"
+        fi
+    elif [[ "$LLM_CI_TYPE" == "local" ]]; then
+        if [[ "$LLM_CI_IMAGE" == *"gigachat"* ]]; then
+            LLM_SERVICE_NAME="llm-gigachat"
+        elif [[ "$LLM_CI_IMAGE" == *"qwen"* ]]; then
+            LLM_SERVICE_NAME="llm-qwen"
+        fi
+    fi
+    if [[ -n "$LLM_SERVICE_NAME" ]]; then
+        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard "$LLM_SERVICE_NAME" gitlab-runner
+    else
+        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard gitlab-runner
+    fi
 else
     docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner
 fi
