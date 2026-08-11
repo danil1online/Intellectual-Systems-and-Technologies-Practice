@@ -189,6 +189,39 @@ Notebook-based (Pr_2 — Pr_21)
 
 ---
 
+## LLM-образы с встроенными моделями (ДОПОЛНИТЕЛЬНОЕ ОБНОВЛЕНИЕ)
+
+### Контекст
+Переход от модели "модель в volume" к "модель встроена в образ".
+
+### Что сделано
+1. `.gitignore` — добавлены `llm/*.gguf` и `llm/*.bin`
+2. Модели скопированы в `llm/`:
+   - `GigaChat3.1-10B-A1.8B-q4_K_M.gguf` (6.1 ГБ)
+   - `qwen2.5-3b-instruct-q4_k_m.gguf` (2.0 ГБ)
+3. Созданы `Dockerfile.gigachat` и `Dockerfile.qwen` (контекст `.`)
+4. `docker-compose.yml` — добавлены сервисы `llm-gigachat` и `llm-qwen`
+5. `scripts/setup.sh` — выбор модели вместо пути к .gguf
+6. Старый `Dockerfile` помечен как устаревший
+
+### Сборка образов
+```bash
+docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest .
+docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest .
+```
+
+### Push в GHCR (вручную)
+```bash
+docker login ghcr.io
+docker tag istp-llm-gigachat:latest ghcr.io/danil1online/istp-llm-gigachat:latest
+docker push ghcr.io/danil1online/istp-llm-gigachat:latest
+
+docker tag istp-llm-qwen:latest ghcr.io/danil1online/istp-llm-qwen:latest
+docker push ghcr.io/danil1online/istp-llm-qwen:latest
+```
+
+---
+
 ## Примечания
 
 - Все .md-файлы используют эмодзи-заголовки (🎯, 📌, 📁, 🧪, 📝)

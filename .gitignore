@@ -37,6 +37,10 @@ shared/logs/
 opencode.json
 .opencode.json.swp
 
+# --- LLM models in llm/ directory (embedded in Docker images) ---
+llm/*.gguf
+llm/*.bin
+
 # --- Data files (large archives, datasets) ---
 data/
 data.zip*

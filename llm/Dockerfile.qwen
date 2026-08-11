@@ -1,0 +1,16 @@
+# Qwen2.5-3B-Instruct встроенный LLM-образ
+# База: ghcr.io/ggml-org/llama.cpp:server-cuda12
+# Размер: ~3.5 ГБ (база + модель 2.0 ГБ)
+# Контекст сборки: корень проекта (.)
+
+FROM ghcr.io/ggml-org/llama.cpp:server-cuda12
+
+# Скрипт запуска сервера (контекст: корень проекта)
+COPY llm/start-server.sh /usr/local/bin/start-server.sh
+RUN chmod +x /usr/local/bin/start-server.sh
+
+# Модель встраивается на этапе сборки
+COPY llm/qwen2.5-3b-instruct-q4_k_m.gguf /models/model.gguf
+
+WORKDIR /app
+ENTRYPOINT ["/usr/local/bin/start-server.sh"]

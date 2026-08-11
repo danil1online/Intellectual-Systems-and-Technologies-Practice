@@ -92,7 +92,7 @@ Docker Compose-развёртывание полного учебного кла
 ## Структура проекта
 
 ```
-├── docker-compose.yml           # Оркестрация 9 сервисов
+├── docker-compose.yml           # Оркестрация сервисов (8 базовых + 1 из 3 LLM-профилей)
 ├── .env.example                 # Шаблон переменных окружения
 ├── .env                         # Генерируется setup.sh (не коммитить)
 │
@@ -112,8 +112,12 @@ Docker Compose-развёртывание полного учебного кла
 │       └── generate_ssh_keys.py # SSH-генерация при первом входе
 │
 ├── llm/
-│   ├── Dockerfile               # ghcr.io/ggml-org/llama.cpp:server-cuda12
-│   └── start-server.sh          # Запуск llama-server
+│   ├── Dockerfile               # Legacy: ghcr.io/ggml-org/llama.cpp:server-cuda12
+│   ├── Dockerfile.gigachat      # GigaChat3.1-10B-A1.8B (~7.5 ГБ, встроенная модель)
+│   ├── Dockerfile.qwen          # Qwen2.5-3B-Instruct (~3.5 ГБ, встроенная модель)
+│   ├── start-server.sh          # Запуск llama-server
+│   ├── GigaChat3.1-10B-A1.8B-q4_K_M.gguf
+│   └── qwen2.5-3b-instruct-q4_k_m.gguf
 │
 ├── runner/
 │   ├── Dockerfile.python310     # Python 3.10 + nbconvert
@@ -132,8 +136,11 @@ Docker Compose-развёртывание полного учебного кла
 │
 
 ├── docs/
-│   ├── Pr_1.md                  # Инструкция по SSH и регистрации
-│   └── ...                      # Остальные практические
+│   ├── README.md                # Индекс практических работ
+│   ├── MD_Instructions.md       # Справочник по Markdown
+│   ├── Pr_0.md                  # Предварительная настройка комплекса
+│   ├── Pr_1.md                  # Основы Git и GitLab
+│   ├── Pr_2.md — Pr_21.md       # Практические (Python, ML, визуализация, MAX)
 │
 ├── shared/                      # Volumes mount point
 │   ├── data/                    # Материалы преподавателя
@@ -181,11 +188,23 @@ Packages: jupyterhub, jupyterlab, nativeauthenticator, jupyter-ai
 RAM: ~500 MB на спавн
 ```
 
-#### LLM (опционально)
+#### LLM (опционально, 3 взаимозаменяемых профиля)
 ```
-Base: ghcr.io/ggml-org/llama.cpp:server-cuda12
-Build: Dockerfile → start-server.sh, initialize.sh
-RAM: ~2 GB + VRAM (зависит от модели)
+Профиль 1 — legacy (local-llm):
+  Base: ghcr.io/ggml-org/llama.cpp:server-cuda12
+  Build: Dockerfile → start-server.sh, initialize.sh
+  Volume: /models (GGUF модель)
+  RAM: ~2 GB + VRAM
+
+Профиль 2 — GigaChat (local-llm-gigachat):
+  Image: istp-llm-gigachat:latest (~7.5 ГБ)
+  Model: GigaChat3.1-10B-A1.8B (встроена в образ)
+  RAM: ~2 GB + VRAM
+
+Профиль 3 — Qwen (local-llm-qwen):
+  Image: istp-llm-qwen:latest (~3.5 ГБ)
+  Model: Qwen2.5-3B-Instruct (встроена в образ)
+  RAM: ~2 GB + VRAM
 ```
 
 #### Admin Dashboard
@@ -224,9 +243,9 @@ sudo ./scripts/setup.sh
 1. Внешний адрес сервера (IP или домен)
 2. Порт JupyterHub (по умолчанию: `8000`)
 3. Порт Admin Dashboard (по умолчанию: `9000`)
-4. LLM для ментора: OpenAI API / локальный контейнер (+ имя модели)
-5. LLM для CI/CD: OpenAI API / локальный контейнер (+ имя модели)
-6. Путь к `.gguf` модели (если локальный режим, будет переименована в model.gguf)
+4. Выбор источника учебных данных (ссылка GitHub / локальный файл)
+5. LLM для ментора: OpenAI API / встроенный образ (GigaChat3.1 / Qwen2.5-3B)
+6. LLM для CI/CD: OpenAI API / встроенный образ (GigaChat3.1 / Qwen2.5-3B)
 7. SSH-ключ для GitLab Runner
 
 ### 4. Доступы
@@ -289,12 +308,17 @@ cat shared/data/runner-keys/runner_ed25519.pub
 ШАГ 3/11: LLM для ИИ-Ментора
   → Выбор: OpenAI API / Локальный контейнер
   → Если OpenAI: endpoint IP:port + API ключ + имя модели
-  → Если локальный: путь к .gguf (2 попытки, иначе выход)
-  → Модель будет переименована в model.gguf перед записью в volume
+  → Если локальный: выбор встроенного образа
+    · [1] GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)
+    · [2] Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)
+  → Модель встроена в образ (не нужен путь к .gguf)
 
 ШАГ 4/11: LLM для CI/CD
-  → Выбор: OpenAI API / Локальный
-  → Если обе локальные: предупреждение, одна модель
+  → Выбор: OpenAI API / Локальный контейнер
+  → Если ментор тоже локальный: предупреждение, один LLM-контейнер для обоих
+  → Если ментор OpenAI, CI/CD локальный: выбор встроенного образа
+    · [1] GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)
+    · [2] Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)
   → Если OpenAI: endpoint IP:port + API ключ + имя модели
 
 ШАГ 5/11: SSH-ключ для GitLab Runner
@@ -315,7 +339,9 @@ cat shared/data/runner-keys/runner_ed25519.pub
   → Удаление Docker томов (кроме llm-models)
 
 ШАГ 10/11: Предзагрузка Docker-образов
-  → Загрузка всех образов (GPU-образ может занять 5-10 минут)
+  → Загрузка базовых образов (GitLab, Runner, Registry, Python)
+  → Проверка встроенных LLM-образов (GigaChat3.1 / Qwen2.5-3B)
+  → Если образ не найден — предлагается команда ручной сборки
 
 ШАГ 11/11: Запуск сервисов
   → docker compose up -d
@@ -337,8 +363,12 @@ nano .env
 
 # 3. Поднимите сервисы
 docker compose up -d gitlab admin-dashboard
-# Для локальной LLM:
-docker compose --profile local-llm up -d llm
+# Для локальной LLM (выберите ОДИН профиль):
+docker compose --profile local-llm-gigachat up -d llm-gigachat
+# или
+docker compose --profile local-llm-qwen up -d llm-qwen
+# legacy-профиль (требует GGUF модель в volume):
+# docker compose --profile local-llm up -d llm
 
 # 4. Дождитесь готовности
 sleep 300
@@ -392,16 +422,34 @@ Spawner: LocalProcessSpawner
 - **pre_spawn_hook** — создание системного пользователя, копирование шаблонов `.ipynb`, генерация SSH-ключей
 - **Изоляция** — каждый студент имеет собственный `/home/{username}` с собственными правами
 
-### 4. LLM (опционально)
+### 4. LLM (опционально, 3 взаимозаменяемых профиля)
 
+**Профиль A — legacy (local-llm)**
 ```yaml
 Build: ./llm (ghcr.io/ggml-org/llama.cpp:server-cuda12)
-Port: 8080 (internal only)
-Model: model.gguf (универсальное имя, переименовывается из оригинала)
+Port: 8080 (internal only, expose)
+Volume: llm-models:/models
+Model: model.gguf (загружается из volume)
 Args: -ngl 99 -c 65536
 ```
 
-**Роль:** Локальный инференс LLM через OpenAI-совместимый API.
+**Профиль B — GigaChat (local-llm-gigachat)**
+```yaml
+Image: istp-llm-gigachat:latest (~7.5 ГБ)
+Port: 8080 (internal only, expose)
+Model: GigaChat3.1-10B-A1.8B-q4_K_M.gguf (встроена в образ, → /models/model.gguf)
+Args: /usr/local/bin/start-server.sh (llama-server -ngl 99 -c 65536)
+```
+
+**Профиль C — Qwen (local-llm-qwen)**
+```yaml
+Image: istp-llm-qwen:latest (~3.5 ГБ)
+Port: 8080 (internal only, expose)
+Model: qwen2.5-3b-instruct-q4_k_m.gguf (встроена в образ, → /models/model.gguf)
+Args: /usr/local/bin/start-server.sh (llama-server -ngl 99 -c 65536)
+```
+
+**Роль:** Локальный инференс LLM через OpenAI-совместимый API. Профили B и C взаимозаменяемы — используется только один образ с встроенной моделью.
 
 **API Endpoints:**
 ```
@@ -777,7 +825,7 @@ curl -O http://<IP>:9000/api/export?date_from=2025-09-01
   └→ Отчёт: Pr_1_<группа>_<номер>.md → reports/ → git push
   └→ LLM_Help.ipynb → reports/practice1/
 
-Шаг 6. Практическая 3+ (ipynb)
+Шаг 6. Практические 2+ (ipynb)
   ├── ИИ-Ментор: %%ask_mentor в ячейках
   ├── Отчёт: practiceN.ipynb → git push
   └── CI/CD: Runner автоматически оценивает (0-5)
@@ -856,36 +904,53 @@ curl http://<IP>:9000/api/stats
 | `DASHBOARD_PORT` | Порт Dashboard | `9000` |
 | `LLM_MENTOR_TYPE` | Тип LLM для ментора | `local` |
 | `LLM_MENTOR_BASE_URL` | Endpoint LLM ментора | `http://llm:8080/v1` |
+| `LLM_MENTOR_API_KEY` | API ключ для ментора | `local-api-key` |
+| `LLM_MENTOR_MODEL` | Модель для ментора | `gpt-4o` |
 | `LLM_CI_TYPE` | Тип LLM для CI/CD | `local` |
 | `LLM_CI_BASE_URL` | Endpoint LLM CI/CD | `http://llm:8080/v1` |
-| `GGUF_PATH` | Путь к модели | `/models/model.gguf` |
+| `LLM_CI_API_KEY` | API ключ для CI/CD | `local-api-key` |
+| `LLM_CI_MODEL` | Модель для CI/CD | `gpt-4o` |
 | `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `REGISTRY_PORT` | Порт Docker Registry | `5050` |
 | `JH_API_TOKEN` | JupyterHub API token | auto-generated |
 | `GITLAB_HOST` | IP/домен GitLab | `10.8.1.3` (или другой) |
-| `GITLAB_URL` | URL GitLab для Dashboard API | `http://gitlab:80` |
 | `GITLAB_ADMIN_TOKEN` | PAT для доступа к GitLab API | `glpat-placeholder` |
 
 ### docker-compose profile
+
+Профили LLM взаимозаменяемы — используется только один.
 
 ```bash
 # Без LLM (OpenAI API)
 docker compose up -d
 
-# С локальной LLM
+# С локальной LLM — GigaChat3.1 (рекомендуется для ментора)
+docker compose --profile local-llm-gigachat up -d
+
+# С локальной LLM — Qwen2.5-3B (легче, подходит для CI/CD)
+docker compose --profile local-llm-qwen up -d
+
+# legacy-профиль (требует GGUF модель в Docker volume)
 docker compose --profile local-llm up -d
 
 # Остановить все сервисы (включая LLM)
-docker compose --profile local-llm down -v
+docker compose --profile local-llm-gigachat down -v
 
 # Остановить только LLM
-docker compose --profile local-llm down llm
-
-# Ручная очистка (если docker compose down не остановил llm)
+docker compose --profile local-llm-gigachat down llm-gigachat
+# или
 docker stop llm && docker rm llm
 docker compose down
 ```
+
+> **Важно:** Профили `local-llm-gigachat` и `local-llm-qwen` используют образы с встроенными моделями. Если образ не установлен, его нужно собрать:
+> ```bash
+> # GigaChat3.1-10B (~7.5 ГБ)
+> docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest .
+> # Qwen2.5-3B-Instruct (~3.5 ГБ)
+> docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest .
+> ```
 
 ---
 
@@ -937,6 +1002,23 @@ docker exec llm ls -la /models/
 curl http://llm:8080/v1/models
 ```
 
+### LLM-образ не найден
+
+```bash
+# Проверка установленного образа
+docker image inspect istp-llm-gigachat:latest
+# или
+docker image inspect istp-llm-qwen:latest
+
+# Сборка образа (если не установлен)
+docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest .
+# или
+docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest .
+
+# Перезапуск с правильным профилем
+docker compose --profile local-llm-gigachat up -d
+```
+
 ### Dashboard не показывает логи
 
 ```bash
@@ -953,8 +1035,8 @@ head -5 /home/{user}/.logs/grading_log.json
 ### Full restart
 
 ```bash
-# Остановить всё (включая LLM в профиле local-llm)
-docker compose --profile local-llm down -v
+# Остановить всё (включая LLM в выбранном профиле)
+docker compose --profile local-llm-gigachat down -v
 
 # Очистить volumes (⚠️ удалит все данные!)
 docker volume prune -f
@@ -966,10 +1048,14 @@ sudo ./scripts/setup.sh
 ### Остановка LLM
 
 ```bash
-# LLM находится в профиле local-llm, обычный down не стопит его
+# Для профиля GigaChat:
+docker compose --profile local-llm-gigachat down llm-gigachat
+# Для профиля Qwen:
+docker compose --profile local-llm-qwen down llm-qwen
+# Для legacy-профиля:
 docker compose --profile local-llm down llm
 
-# Ручная остановка
+# Ручная остановка (универсально)
 docker stop llm && docker rm llm
 ```
 

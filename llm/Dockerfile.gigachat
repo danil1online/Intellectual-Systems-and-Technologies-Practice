@@ -1,0 +1,16 @@
+# GigaChat3.1-10B-A1.8B встроенный LLM-образ
+# База: ghcr.io/ggml-org/llama.cpp:server-cuda12
+# Размер: ~7.5 ГБ (база + модель 6.1 ГБ)
+# Контекст сборки: корень проекта (.)
+
+FROM ghcr.io/ggml-org/llama.cpp:server-cuda12
+
+# Скрипт запуска сервера (контекст: корень проекта)
+COPY llm/start-server.sh /usr/local/bin/start-server.sh
+RUN chmod +x /usr/local/bin/start-server.sh
+
+# Модель встраивается на этапе сборки
+COPY llm/GigaChat3.1-10B-A1.8B-q4_K_M.gguf /models/model.gguf
+
+WORKDIR /app
+ENTRYPOINT ["/usr/local/bin/start-server.sh"]

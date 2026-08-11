@@ -1,3 +1,9 @@
+# ⚠️ УСТАРЕЛО — используйте Dockerfile.gigachat или Dockerfile.qwen
+# Старый подход: модель загружается в volume. Новый: модель встроена в образ.
+#
+# Для встроенных образов:
+#   docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest .
+#   docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest .
 #FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 FROM ghcr.io/ggml-org/llama.cpp:server-cuda12
 

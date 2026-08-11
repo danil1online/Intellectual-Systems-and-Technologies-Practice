@@ -93,6 +93,7 @@ services:
       start_period: 90s
 
   # --- LOCAL LLM (optional, profile: local-llm) ---
+  # Устаревший подход: модель загружается в volume. Оставлен для обратной совместимости.
   llm:
     build:
       context: ./llm
@@ -121,6 +122,68 @@ services:
     command: ["/app/llama-server", "-m", "/models/model.gguf", "-ngl", "99", "-c", "65536", "--host", "0.0.0.0", "--port", "8080", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
     profiles:
       - local-llm
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/models || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+
+  # --- LOCAL LLM GIGACHAT (optional, profile: local-llm-gigachat) ---
+  # Модель GigaChat3.1-10B встроена в образ, volume /models не требуется.
+  llm-gigachat:
+    image: istp-llm-gigachat:latest
+    container_name: llm
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    environment:
+      NGPU_LAYERS: "99"
+      CONTEXT_SIZE: "65536"
+      LLM_HOST: "0.0.0.0"
+      LLM_PORT: "8080"
+    expose:
+      - "8080"
+    networks:
+      - internal
+    command: ["/usr/local/bin/start-server.sh"]
+    profiles:
+      - local-llm-gigachat
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/models || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 300s
+
+  # --- LOCAL LLM QWEN (optional, profile: local-llm-qwen) ---
+  # Модель Qwen2.5-3B встроена в образ, volume /models не требуется.
+  llm-qwen:
+    image: istp-llm-qwen:latest
+    container_name: llm
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    environment:
+      NGPU_LAYERS: "99"
+      CONTEXT_SIZE: "65536"
+      LLM_HOST: "0.0.0.0"
+      LLM_PORT: "8080"
+    expose:
+      - "8080"
+    networks:
+      - internal
+    command: ["/usr/local/bin/start-server.sh"]
+    profiles:
+      - local-llm-qwen
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/models || exit 1"]
       interval: 10s

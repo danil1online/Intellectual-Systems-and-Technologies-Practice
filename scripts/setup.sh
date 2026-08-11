@@ -336,92 +336,26 @@ if [[ "$LLM_MENTOR_TYPE" == "1" ]]; then
     LLM_MENTOR_TYPE="openai"
     print_success "Ментор: OpenAI API → $LLM_MENTOR_BASE_URL (модель: $LLM_MENTOR_MODEL)"
 else
-    print_step "Локальная модель для ментора:"
-    print_warn "Скачайте модель *.gguf заранее и укажите путь (установлен по умолчанию)."
-    print_warn "Модель будет переименована в model.gguf перед записью в volume."
-    GGUF_PATH=""
-
-    for attempt in 1 2; do
-        GGUF_PATH=$(ask "Путь к .gguf файлу" "/home/user1/Downloads/qwen2.5-coder-7b-instruct-q4_k_m.gguf")
-
-        if [[ -f "$GGUF_PATH" ]]; then
-            print_success "Модель найдена: $GGUF_PATH"
-            break
-        else
-            print_error "Файл не найден: $GGUF_PATH"
-            if [[ "$attempt" -eq 1 ]]; then
-                print_warn "Повторная попытка. Укажите правильный путь."
-            else
-                print_error "Вторая попытка не удалась. Модель не найдена."
-                echo ""
-                echo "Невозможно продолжить без модели."
-                echo "Скачайте любую .gguf модель, например:"
-                echo "  https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
-                echo "И запустите setup.sh заново."
-                exit 1
-            fi
-        fi
-    done
-
-    GGUF_PATH="$(realpath "$GGUF_PATH")"
+    print_step "Выбор встроенного LLM-образа:"
+    echo "  1. GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)"
+    echo "  2. Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)"
     
-    print_step "Копирование модели в хранилище системы..."
-    mkdir -p "$PROJECT_DIR/shared/data/llm-models"
-    MODEL_FILE="model.gguf"
-    MODEL_DEST="$PROJECT_DIR/shared/data/llm-models/model.gguf"
-    
-    if [[ -f "$MODEL_DEST" ]] && files_identical "$GGUF_PATH" "$MODEL_DEST"; then
-        MODEL_SIZE=$(du -h "$MODEL_DEST" | cut -f1)
-        print_success "Модель уже в хранилище (совпадает, ${MODEL_SIZE})"
+    LLM_MODEL_CHOICE=$(ask_choice \
+        "Выберите модель (1 или 2)" \
+        "1" "GigaChat3.1-10B-A1.8B" \
+        "2" "Qwen2.5-3B-Instruct" \
+        "1")
+
+    if [[ "$LLM_MODEL_CHOICE" == "1" ]]; then
+        LLM_IMAGE="istp-llm-gigachat:latest"
+        LLM_PROFILE="local-llm-gigachat"
+        print_success "Выбрана: GigaChat3.1-10B-A1.8B"
     else
-        print_step "Копирование $GGUF_PATH -> $MODEL_DEST ..."
-        cp "$GGUF_PATH" "$MODEL_DEST"
-        
-        if [[ -f "$MODEL_DEST" ]]; then
-            MODEL_SIZE=$(du -h "$MODEL_DEST" | cut -f1)
-            print_success "Модель скопирована (${MODEL_SIZE})"
-        else
-            print_error "Не удалось скопировать модель!"
-            exit 1
-        fi
+        LLM_IMAGE="istp-llm-qwen:latest"
+        LLM_PROFILE="local-llm-qwen"
+        print_success "Выбрана: Qwen2.5-3B-Instruct"
     fi
-    
-    # Копирование модели в Docker volume (с правильным префиксом)
-    print_step "Запись модели в Docker volume..."
-    PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
-    FULL_VOLUME_NAME="${PROJECT_VOLUME_PREFIX}_llm-models"
-    
-    SOURCE_HASH=$(file_hash "$MODEL_DEST")
-    
-    if docker volume inspect "$FULL_VOLUME_NAME" >/dev/null 2>&1; then
-        print_step "Volume $FULL_VOLUME_NAME уже существует, проверяем содержимое..."
-        VOLUME_HASH=$(docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "sha256sum /models/$MODEL_FILE | cut -d' ' -f1" 2>/dev/null)
-        if [[ -n "$VOLUME_HASH" && "$VOLUME_HASH" == "$SOURCE_HASH" ]]; then
-            print_success "Модель в Docker volume (совпадает)"
-        else
-            print_step "Модель в Docker volume отличается — перезаписываю..."
-            docker run --rm -v "$FULL_VOLUME_NAME":/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
-            if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "sha256sum /models/$MODEL_FILE | cut -d' ' -f1" 2>/dev/null | grep -q "$SOURCE_HASH"; then
-                print_success "Модель записана в Docker volume"
-                print_warn "Оригинал в $GGUF_PATH можно удалить"
-            else
-                print_error "Не удалось записать модель в Docker volume"
-                exit 1
-            fi
-        fi
-    else
-        print_step "Создание Docker volume $FULL_VOLUME_NAME..."
-        docker volume create "$FULL_VOLUME_NAME"
-        print_step "Копирование модели в Docker volume..."
-        docker run --rm -v "$FULL_VOLUME_NAME":/models -v "$PROJECT_DIR/shared/data/llm-models":/source:ro alpine sh -c "cp /source/$MODEL_FILE /models/"
-        if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "sha256sum /models/$MODEL_FILE | cut -d' ' -f1" 2>/dev/null | grep -q "$SOURCE_HASH"; then
-            print_success "Модель записана в Docker volume"
-        else
-            print_error "Не удалось записать модель в Docker volume"
-            exit 1
-        fi
-    fi
-    
+
     LLM_MENTOR_TYPE="local"
     LLM_MENTOR_BASE_URL="http://llm:8080/v1"
     LLM_MENTOR_API_KEY="local-api-key"
@@ -452,23 +386,29 @@ if [[ "$LLM_CI_TYPE" == "1" ]]; then
     print_success "CI/CD LLM: OpenAI API → $LLM_CI_BASE_URL (модель: $LLM_CI_MODEL)"
 else
     if [[ "$LLM_MENTOR_TYPE" == "local" ]]; then
-        print_warn "Вы выбрали локальную модель и для ментора, и для CI/CD."
-        print_warn "Будет использоваться та же модель ($GGUF_PATH) через один LLM-контейнер."
+        print_warn "Локальная модель будет использоваться и для ментора, и для CI/CD через один LLM-контейнер."
         LLM_CI_BASE_URL="http://llm:8080/v1"
         LLM_CI_API_KEY="local-api-key"
         LLM_CI_MODEL="model.gguf"
     else
-        print_step "Локальная модель для CI/CD:"
-        print_warn "Скачайте модель заранее и укажите путь."
-        GGUF_PATH_CI=$(ask "Путь к .gguf файлу" "/home/user1/Downloads/qwen2.5-coder-7b-instruct-q4_k_m.gguf")
+        print_step "Выбор встроенного LLM-образа для CI/CD:"
+        echo "  1. GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)"
+        echo "  2. Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)"
 
-        if [[ -f "$GGUF_PATH_CI" ]]; then
-            print_success "Модель найдена: $GGUF_PATH_CI"
-            GGUF_PATH_CI="$(realpath "$GGUF_PATH_CI")"
+        LLM_CI_MODEL_CHOICE=$(ask_choice \
+            "Выберите модель (1 или 2)" \
+            "1" "GigaChat3.1-10B-A1.8B" \
+            "2" "Qwen2.5-3B-Instruct" \
+            "1")
+
+        if [[ "$LLM_CI_MODEL_CHOICE" == "1" ]]; then
+            LLM_CI_IMAGE="istp-llm-gigachat:latest"
+            LLM_CI_PROFILE="local-llm-gigachat"
+            print_success "Выбрана: GigaChat3.1-10B-A1.8B для CI/CD"
         else
-            print_error "Файл не найден: $GGUF_PATH_CI"
-            print_warn "Будет использован путь для ментора ($GGUF_PATH)."
-            GGUF_PATH_CI="$GGUF_PATH"
+            LLM_CI_IMAGE="istp-llm-qwen:latest"
+            LLM_CI_PROFILE="local-llm-qwen"
+            print_success "Выбрана: Qwen2.5-3B-Instruct для CI/CD"
         fi
 
         LLM_CI_BASE_URL="http://llm:8080/v1"
@@ -664,7 +604,7 @@ for vol in hf-cache pip-cache; do
 done
 
 # Предварительная загрузка Docker-образов (уменьшает время build)
-if [[ "$LLM_USE_LOCAL" == "true" ]]; then
+if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MENTOR_TYPE" != "local" ]]; then
     print_header "ШАГ 10/11: Предзагрузка Docker-образов"
     
     print_step "Загрузка базовых образов..."
@@ -676,6 +616,40 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     print_step "Загрузка LLM образа (может занять 5-10 минут)..."
     print_step "Если образ уже есть — пропустит."
     docker pull ghcr.io/ggml-org/llama.cpp:server-cuda12 2>/dev/null || true
+    
+    # Проверка встроенных LLM-образов для ментора
+    if [[ "$LLM_USE_LOCAL" == "true" ]]; then
+        print_step "Проверка встроенного LLM-образа для ментора..."
+        if docker image inspect "$LLM_IMAGE" >/dev/null 2>&1; then
+            print_success "Встроенный LLM-образ $LLM_IMAGE уже установлен"
+        else
+            print_warn "Встроенный LLM-образ $LLM_IMAGE не найден."
+            print_warn "Его нужно собрать вручную:"
+            if [[ "$LLM_IMAGE" == "istp-llm-gigachat:latest" ]]; then
+                print_warn "  docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest ."
+            else
+                print_warn "  docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest ."
+            fi
+            print_warn "После сборки запустите setup.sh заново."
+        fi
+    fi
+    
+    # Проверка встроенных LLM-образов для CI/CD
+    if [[ "$LLM_CI_TYPE" == "local" ]] && [[ "$LLM_MENTOR_TYPE" != "local" ]]; then
+        print_step "Проверка встроенного LLM-образа для CI/CD..."
+        if docker image inspect "$LLM_CI_IMAGE" >/dev/null 2>&1; then
+            print_success "Встроенный LLM-образ $LLM_CI_IMAGE уже установлен"
+        else
+            print_warn "Встроенный LLM-образ $LLM_CI_IMAGE не найден."
+            print_warn "Его нужно собрать вручную:"
+            if [[ "$LLM_CI_IMAGE" == "istp-llm-gigachat:latest" ]]; then
+                print_warn "  docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest ."
+            else
+                print_warn "  docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest ."
+            fi
+            print_warn "После сборки запустите setup.sh заново."
+        fi
+    fi
     
     print_success "Все образы загружены"
     echo ""
@@ -698,28 +672,49 @@ EOF
     print_success "Создан .env.jupyterhub"
 fi
 
-LLM_PROFILES=""
-if [[ "$LLM_USE_LOCAL" == "true" ]]; then
-    LLM_PROFILES="--profile local-llm"
-fi
+LLM_PROFILE_FLAG=""
+LLM_START_PROFILE=""
 
-if [[ -n "$LLM_PROFILES" ]]; then
-    docker compose $LLM_PROFILES up -d --force-recreate gitlab admin-dashboard llm gitlab-runner
-else
-    docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner
-fi
-
-# Проверка модели в Docker volume для LLM
 if [[ "$LLM_USE_LOCAL" == "true" ]]; then
-    print_step "Проверка модели в Docker volume..."
-    FULL_VOLUME_NAME="${PROJECT_VOLUME_PREFIX}_llm-models"
-    if docker run --rm -v "$FULL_VOLUME_NAME":/models alpine sh -c "test -f /models/$MODEL_FILE" 2>/dev/null; then
-        print_success "Модель $MODEL_FILE найдена в Docker volume"
+    LLM_PROFILE_FLAG="--profile $LLM_PROFILE"
+    LLM_START_PROFILE="$LLM_IMAGE"
+    
+    # Проверка наличия LLM-образа
+    if docker image inspect "$LLM_IMAGE" >/dev/null 2>&1; then
+        print_success "LLM образ для ментора $LLM_IMAGE найден"
     else
-        print_error "Модель $MODEL_FILE НЕ найдена в Docker volume $FULL_VOLUME_NAME!"
-        print_error "LLM контейнер не запустится. Запустите ШАГ 3/11 повторно."
+        print_error "LLM образ для ментора $LLM_IMAGE не найден!"
+        print_error "Соберите его вручную:"
+        if [[ "$LLM_IMAGE" == "istp-llm-gigachat:latest" ]]; then
+            print_error "  docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest ."
+        else
+            print_error "  docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest ."
+        fi
         exit 1
     fi
+elif [[ "$LLM_CI_TYPE" == "local" ]]; then
+    LLM_PROFILE_FLAG="--profile $LLM_CI_PROFILE"
+    LLM_START_PROFILE="$LLM_CI_IMAGE"
+    
+    # Проверка наличия LLM-образа
+    if docker image inspect "$LLM_CI_IMAGE" >/dev/null 2>&1; then
+        print_success "LLM образ для CI/CD $LLM_CI_IMAGE найден"
+    else
+        print_error "LLM образ для CI/CD $LLM_CI_IMAGE не найден!"
+        print_error "Соберите его вручную:"
+        if [[ "$LLM_CI_IMAGE" == "istp-llm-gigachat:latest" ]]; then
+            print_error "  docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest ."
+        else
+            print_error "  docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest ."
+        fi
+        exit 1
+    fi
+fi
+
+if [[ -n "$LLM_PROFILE_FLAG" ]]; then
+    docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard llm gitlab-runner
+else
+    docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner
 fi
 
 print_step "Ожидание запуска GitLab..."
@@ -735,10 +730,10 @@ for i in $(seq 1 60); do
     sleep 10
 done
 
-if [[ "$LLM_USE_LOCAL" == "true" ]]; then
+if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" ]]; then
     print_step "Ожидание запуска LLM контейнера..."
     for i in $(seq 1 30); do
-        if docker logs llm 2>&1 | grep -q "llama_server"; then
+        if docker exec llm curl -sf http://localhost:8080/v1/models > /dev/null 2>&1; then
             print_success "LLM контейнер запущен"
             break
         fi
