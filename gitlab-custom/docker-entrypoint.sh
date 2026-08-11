@@ -14,7 +14,6 @@ gitlab_rails['gitlab_shell_ssh_port'] = 2222
 
 # Включаем саморегистрацию пользователей
 gitlab_rails['sign_up_enabled'] = true
-gitlab_rails['require_admin_approval_after_user_signup'] = false
 gitlab_rails['require_user_email_confirmed'] = false
 gitlab_rails['auto_verify_email_domains'] = ['*']
 gitlab_rails['gitlab_email_enabled'] = false
@@ -29,6 +28,22 @@ prometheus_monitoring['enable'] = false
 RBEOF
 
 echo "GitLab config generated at /etc/gitlab/gitlab.rb"
+
+# require_admin_approval_after_user_signup не маппится из gitlab.rb в БД ApplicationSettings.
+# Устанавливаем через Rails console после reconfigure.
+export GITLAB_POST_RECONFIGURE_SCRIPT='
+echo "Setting require_admin_approval_after_user_signup = false via Rails console..."
+/opt/gitlab/embedded/bin/rails runner "
+  s = ApplicationSetting.first_or_create
+  if s.require_admin_approval_after_user_signup != false
+    s.require_admin_approval_after_user_signup = false
+    s.save!
+    puts \"require_admin_approval_after_user_signup set to false\"
+  else
+    puts \"require_admin_approval_after_user_signup already false\"
+  end
+" 2>&1
+'
 
 # Delegate to original GitLab entrypoint
 exec /assets/init-container "$@"
