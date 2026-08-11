@@ -944,11 +944,17 @@ docker stop llm && docker rm llm
 docker compose down
 ```
 
-> **Важно:** Профили `local-llm-gigachat` и `local-llm-qwen` используют образы с встроенными моделями. Если образ не установлен, его нужно собрать:
+> **Важно:** Профили `local-llm-gigachat` и `local-llm-qwen` используют образы с встроенными моделями. Образы доступны в GHCR:
 > ```bash
-> # GigaChat3.1-10B (~7.5 ГБ)
+> # Вариант 1: setup.sh сам загрузит образы при запуске
+> # Вариант 2: загрузить вручную
+> docker pull ghcr.io/danil1online/istp-llm-gigachat:latest
+> docker tag ghcr.io/danil1online/istp-llm-gigachat:latest istp-llm-gigachat:latest
+> # или
+> docker pull ghcr.io/danil1online/istp-llm-qwen:latest
+> docker tag ghcr.io/danil1online/istp-llm-qwen:latest istp-llm-qwen:latest
+> # Вариант 3: собрать локально (если нет доступа к GHCR)
 > docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest .
-> # Qwen2.5-3B-Instruct (~3.5 ГБ)
 > docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest .
 > ```
 
@@ -1010,13 +1016,22 @@ docker image inspect istp-llm-gigachat:latest
 # или
 docker image inspect istp-llm-qwen:latest
 
-# Сборка образа (если не установлен)
+# Загрузка с GHCR (если есть доступ к интернету)
+docker pull ghcr.io/danil1online/istp-llm-gigachat:latest
+docker tag ghcr.io/danil1online/istp-llm-gigachat:latest istp-llm-gigachat:latest
+# или
+docker pull ghcr.io/danil1online/istp-llm-qwen:latest
+docker tag ghcr.io/danil1online/istp-llm-qwen:latest istp-llm-qwen:latest
+
+# Сборка образа (если нет доступа к GHCR)
 docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest .
 # или
 docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest .
 
 # Перезапуск с правильным профилем
 docker compose --profile local-llm-gigachat up -d
+# или
+docker compose --profile local-llm-qwen up -d
 ```
 
 ### Dashboard не показывает логи

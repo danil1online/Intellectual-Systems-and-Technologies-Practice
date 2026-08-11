@@ -613,42 +613,38 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     docker pull registry:2 2>/dev/null || true
     docker pull python:3.10-slim 2>/dev/null || true
     
-    print_step "Загрузка LLM образа (может занять 5-10 минут)..."
-    print_step "Если образ уже есть — пропустит."
-    docker pull ghcr.io/ggml-org/llama.cpp:server-cuda12 2>/dev/null || true
-    
-    # Проверка встроенных LLM-образов для ментора
+    # Определяем какие образы нужны
+    NEEDED_IMAGES=""
     if [[ "$LLM_USE_LOCAL" == "true" ]]; then
-        print_step "Проверка встроенного LLM-образа для ментора..."
-        if docker image inspect "$LLM_IMAGE" >/dev/null 2>&1; then
-            print_success "Встроенный LLM-образ $LLM_IMAGE уже установлен"
-        else
-            print_warn "Встроенный LLM-образ $LLM_IMAGE не найден."
-            print_warn "Его нужно собрать вручную:"
-            if [[ "$LLM_IMAGE" == "istp-llm-gigachat:latest" ]]; then
-                print_warn "  docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest ."
-            else
-                print_warn "  docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest ."
-            fi
-            print_warn "После сборки запустите setup.sh заново."
-        fi
+        NEEDED_IMAGES="$LLM_IMAGE"
+    elif [[ "$LLM_CI_TYPE" == "local" ]]; then
+        NEEDED_IMAGES="$LLM_CI_IMAGE"
     fi
     
-    # Проверка встроенных LLM-образов для CI/CD
-    if [[ "$LLM_CI_TYPE" == "local" ]] && [[ "$LLM_MENTOR_TYPE" != "local" ]]; then
-        print_step "Проверка встроенного LLM-образа для CI/CD..."
-        if docker image inspect "$LLM_CI_IMAGE" >/dev/null 2>&1; then
-            print_success "Встроенный LLM-образ $LLM_CI_IMAGE уже установлен"
-        else
-            print_warn "Встроенный LLM-образ $LLM_CI_IMAGE не найден."
-            print_warn "Его нужно собрать вручную:"
-            if [[ "$LLM_CI_IMAGE" == "istp-llm-gigachat:latest" ]]; then
-                print_warn "  docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest ."
+    if [[ -n "$NEEDED_IMAGES" ]]; then
+        print_step "Предзагрузка встроенных LLM-образов из GHCR..."
+        for IMG in $NEEDED_IMAGES; do
+            GCR_IMAGE="ghcr.io/danil1online/$IMG"
+            if docker image inspect "$IMG" >/dev/null 2>&1; then
+                print_success "Образ $IMG уже установлен"
             else
-                print_warn "  docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest ."
+                print_step "Загрузка $IMG с GHCR (может занять 5-15 минут)..."
+                if docker pull "$GCR_IMAGE" 2>/dev/null; then
+                    docker tag "$GCR_IMAGE" "$IMG" 2>/dev/null
+                    print_success "Загружен и про tagged: $GCR_IMAGE → $IMG"
+                else
+                    print_error "Не удалось загрузить $IMG с GHCR"
+                    print_error "Соберите образ вручную:"
+                    if [[ "$IMG" == *"gigachat"* ]]; then
+                        print_error "  docker build -f llm/Dockerfile.gigachat -t istp-llm-gigachat:latest ."
+                    else
+                        print_error "  docker build -f llm/Dockerfile.qwen -t istp-llm-qwen:latest ."
+                    fi
+                    print_error "Или выполните: docker pull $GCR_IMAGE && docker tag $GCR_IMAGE $IMG"
+                    exit 1
+                fi
             fi
-            print_warn "После сборки запустите setup.sh заново."
-        fi
+        done
     fi
     
     print_success "Все образы загружены"
