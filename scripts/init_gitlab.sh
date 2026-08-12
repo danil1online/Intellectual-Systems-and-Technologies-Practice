@@ -297,7 +297,7 @@ if git clone http://oauth2:$ROOT_TOKEN@localhost/students/project.git "$TMP_DIR"
     # Копируем images в docs/images/
     mkdir -p "$TMP_DIR/docs/images"
     for ext in png jpg jpeg gif svg webp bmp; do
-        cp "$DOCS_DIR/../images"/*."$ext" "$TMP_DIR/docs/images/" 2>/dev/null || true
+        cp "$DOCS_DIR/images"/*."$ext" "$TMP_DIR/docs/images/" 2>/dev/null || true
     done
 
     # Commit + push
