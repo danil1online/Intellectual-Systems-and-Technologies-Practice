@@ -172,7 +172,7 @@ echo -e "  - Для git clone/push/pull"
 echo -e "  - Для GitLab external_url и callback URL"
 echo -e "  - GitLab external_url (критично!)"
 echo -e ""
-echo -e "  ${BOLD}Важно:${NC} VPN IP недоступен из Docker-контейнеров и не может быть использован."
+echo -e "  ${BOLD}Важно:${NC} VPN IP недоступен из Docker-контейнеров и не рекомендуется к использованию."
 echo -e "  Укажите локальный IP из доступных:"
 echo "$LOCAL_IPS" | head -5 | while read ip; do
     print_step "    - $ip"
@@ -194,14 +194,14 @@ while true; do
     fi
     
     # Проверка что IP из допустимого списка
-    if ! echo "$LOCAL_IPS" | grep -q "^${EXTERNAL_IP}$"; then
-        print_error "IP $EXTERNAL_IP не найден в допустимых локальных IP!"
-        print_step "Допустимые IP:"
-        echo "$LOCAL_IPS" | head -5 | while read ip; do
-            print_step "  - $ip"
-        done
-        continue
-    fi
+    #if ! echo "$LOCAL_IPS" | grep -q "^${EXTERNAL_IP}$"; then
+    #    print_error "IP $EXTERNAL_IP не найден в допустимых локальных IP!"
+    #    print_step "Допустимые IP:"
+    #    echo "$LOCAL_IPS" | head -5 | while read ip; do
+    #        print_step "  - $ip"
+    #    done
+    #    continue
+    #fi
     
     print_success "Внешний IP: $EXTERNAL_IP"
     break
