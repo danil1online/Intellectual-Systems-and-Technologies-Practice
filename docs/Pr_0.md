@@ -180,15 +180,18 @@ git config --global user.name "Your Name"
 ## 6. Отчёт по работе
 
 1. В JupyterLab слева войдите в каталог `reports`
-2. Нажав "+" создайте новое окно Launcher'а JupyterLab и в нем выберите `MarkDown file`. Работа с данным форматом документов описана в [отдельном файле](MD_Instructions.md)
-3. Опишите в файле ход выполнения данной работы.
-4. Выберите `File` (слева вверху) - `Save Markdown File`
-5. Сохраните отчёт как `Pr_0_<группа>_<номер>.md`
-6. Отправьте репозиторий на сервер. Вернитесь в открытое окно терминала.
-   
-<img src="./images/2026-08-13_02-18-11.png" width="50%">
+2. Создайте новый каталог `Pr_0`.
+<img src="./images/2026-08-13_14-11-03.png" width="50%">
+3. Cоздайте новое окно Launcher'а JupyterLab и в нем выберите `MarkDown file`. Работа с данным форматом документов описана в [отдельном файле](MD_Instructions.md)
+<img src="./images/2026-08-13_14-11-53.png" width="50%">
+4. Опишите в файле ход выполнения данной работы.
+5. Выберите `File` (слева вверху) - `Save Markdown File`
+6. Сохраните отчёт как `Pr_0_<группа>_<номер>.md`
+<img src="./images/2026-08-13_14-12-15.png" width="50%">
 
-7. Наберите
+7. Отправьте репозиторий на сервер. Вернитесь в открытое окно терминала (обратите внимание: слева от поля ввода указан путь, д.б. `xxxxx@xxxxxx:~/project$`, т.е. терминал работает в каталоге `project`).
+
+8. Наберите
 ```bash
 git add .
 git commit -m "Pr_0 report"
@@ -197,9 +200,9 @@ git push
 
 <img src="./images/2026-08-13_02-23-46.png" width="50%">
 
-8. Проверьте, что файл `Pr_0 report` появился в Вашем репозитории
+9. Проверьте, что файл `Pr_0 report` появился в Вашем репозитории
 
-<img src="./images/2026-08-13_02-24-16.png" width="50%">
+<img src="./images/2026-08-13_14-22-35.png" width="50%">
 
 ---
 
@@ -208,13 +211,13 @@ git push
 Для запуска автоматической оценки создайте триггер-файл и отправьте его в репозиторий:
 
 ```bash
-cd reports
-touch .grade-trigger
-git add .grade-trigger
+cd ~/project
+touch ./reports/Pr_0/.grade-trigger
+git add ./reports/Pr_0/.grade-trigger
 git commit -m "Grade trigger"
 git push
 ```
-<img src="./images/2026-08-13_02-33-19.png" width="50%">
+<img src="./images/2026-08-13_14-25-48.png" width="50%">
 > ⏳ Оценка запустится автоматически в GitLab CI. Результат появится в разделе **CI/CD → Pipelines**.
 
 ---
