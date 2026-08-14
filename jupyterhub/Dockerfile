@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 # Установка Node.js для configurable-http-proxy
 RUN apt-get update --allow-unauthenticated && \
-    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/*.list 2>/dev/null || true && \
+    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list && \
     apt-get install -y --no-install-recommends \
         curl \
         git \
@@ -40,7 +40,7 @@ RUN pip install --no-cache-dir \
 
 # Научные пакеты
 RUN apt-get update --allow-unauthenticated && \
-    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/*.list 2>/dev/null || true && \
+    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list && \
     apt-get install -y --no-install-recommends \
         libgeos-dev libproj-dev \
         texlive-latex-recommended \
