@@ -33,7 +33,7 @@ services:
 
   # --- GITLAB RUNNER ---
   gitlab-runner:
-    image: gitlab/gitlab-runner:latest
+    image: gitlab/gitlab-runner:18.10.4
     container_name: gitlab-runner
     restart: always
     volumes:
@@ -52,9 +52,10 @@ services:
 
   # --- JUPYTERHUB ---
   jupyterhub:
-    build:
-      context: ./jupyterhub
-      dockerfile: Dockerfile
+    #build:
+    #  context: ./jupyterhub
+    #  dockerfile: Dockerfile
+    image: ghcr.io/danil1online/istp-jupyterhub:latest
     container_name: jupyterhub
     restart: unless-stopped
     ports:
