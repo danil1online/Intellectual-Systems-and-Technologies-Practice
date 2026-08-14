@@ -490,7 +490,7 @@ echo -e "  ${BOLD}Локальный IP (для доступа с сервера
 echo -e "  ${BOLD}Интерфейс:${NC} $PRIMARY_IFACE"
 echo ""
 echo -e "  ${GREEN}✓${NC} Внешний и локальный IP совпадают или находятся в одной подсети — DNAT не нужен"
-echo -e "  ${GREEN}✓${NC} Docker-контейнеры видят $PRIMARY_LOCAL_IP (не VPN IP)"
+echo -e "  ${GREEN}✓${NC} Docker-контейнеры используют Docker DNS для связи с GitLab"
 echo ""
 print_success "Сеть проверена"
 
