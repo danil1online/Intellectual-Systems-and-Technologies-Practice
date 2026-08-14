@@ -1,12 +1,10 @@
-FROM python:3.10-slim
+FROM python:3.10-slim-bookworm
 
 # Системные зависимости
-RUN apt-get update --allow-unauthenticated && \
-    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list && \
-    apt-get install -y --no-install-recommends \
-        git \
-        openssh-client \
-        jq \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    openssh-client \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Python зависимости для CI/CD
