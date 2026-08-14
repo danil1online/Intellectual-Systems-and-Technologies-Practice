@@ -203,19 +203,19 @@ README_CONTENT=$(base64 -w 0 << 'READMEEOF'
 
 ### Клонирование (HTTP)
 ```bash
-git clone http://10.8.1.3/students/project.git
+git clone http://<server-ip>/students/project.git
 ```
 
 ### SSH
 ```bash
-git clone git@gitlab.10.8.1.3:students/project.git
+git clone git@gitlab.<server-ip>:students/project.git
 ```
 
 ## Полезные ссылки
 
-- **JupyterHub:** http://10.8.1.3:8000 — ИИ-ментор (`%%ask_mentor`)
+- **JupyterHub:** http://<server-ip>:8000 — ИИ-ментор (`%%ask_mentor`)
 - **Методички:** файлы в `docs/`
-- **Dashboard:** http://10.8.1.3:9000 — панель преподавателя
+- **Dashboard:** http://<server-ip>:9000 — панель преподавателя
 READMEEOF
 )
 

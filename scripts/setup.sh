@@ -854,7 +854,7 @@ shutdown_request_timeout = 0
 
 [[runners]]
   name = "academic-runner"
-  url = "http://$GITLAB_HOST"
+  url = "http://gitlab:80"
   token = "$RUNNER_TOKEN"
   executor = "docker"
   tag_list = ["istp-runner"]
