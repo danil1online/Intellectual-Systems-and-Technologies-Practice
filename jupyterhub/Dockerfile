@@ -1,12 +1,14 @@
 FROM python:3.10-slim
 
 # Установка Node.js для configurable-http-proxy
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    git \
-    openssh-client \
-    procps \
-    build-essential \
+RUN apt-get update --allow-unauthenticated && \
+    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/*.list 2>/dev/null || true && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        git \
+        openssh-client \
+        procps \
+        build-essential \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -37,13 +39,15 @@ RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu
 
 # Научные пакеты
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgeos-dev libproj-dev \
-    texlive-latex-recommended \
-    texlive-fonts-recommended \
-    texlive-xetex \
-    texlive-luatex \
-    cm-super \
+RUN apt-get update --allow-unauthenticated && \
+    sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/*.list 2>/dev/null || true && \
+    apt-get install -y --no-install-recommends \
+        libgeos-dev libproj-dev \
+        texlive-latex-recommended \
+        texlive-fonts-recommended \
+        texlive-xetex \
+        texlive-luatex \
+        cm-super \
     && pip install --no-cache-dir \
     numpy scipy pandas scikit-learn matplotlib \
     transformers datasets==3.5.1 \
