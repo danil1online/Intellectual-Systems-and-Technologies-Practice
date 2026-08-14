@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.10-slim-bookworm
 
 RUN pip install --no-cache-dir \
     flask==3.1.0 \
