@@ -210,9 +210,9 @@ git checkout feature-1
 **Создание файла, добавление и фиксация:**
 
 ```bash
-echo "# Practice 1" > test.md
-git add test.md
-git commit -m "Add test.md"
+echo "# Practice 1" > reports/Pr_1/test.md
+git add reports/Pr_1/test.md
+git commit -m "Add test.md to Practice 1"
 ```
 
 **Откат изменений:**
