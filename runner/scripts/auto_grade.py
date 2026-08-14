@@ -24,7 +24,7 @@ def find_notebooks(repo_dir):
     """Найти .ipynb файлы в репозитории."""
     notebooks = []
     for p in Path(repo_dir).rglob("*.ipynb"):
-        if ".ipynb_checkpoints" not in str(p):
+        if ".ipynb_checkpoints" not in str(p) and "docs" not in str(p):
             notebooks.append(str(p))
     return notebooks
 
@@ -32,8 +32,8 @@ def find_notebooks(repo_dir):
 def find_md_reports(repo_dir):
     """Найти md-отчёты в репозитории."""
     reports = []
-    for p in Path(repo_dir).rglob("Pr_*.md"):
-        if p.name != "Pr_1.md" and "docs" not in str(p):
+    for p in Path(repo_dir).rglob("Pr_1_report.md"):
+        if "reports" in str(p):
             reports.append(str(p))
     return reports
 

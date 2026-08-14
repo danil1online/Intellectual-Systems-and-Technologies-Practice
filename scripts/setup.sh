@@ -847,7 +847,7 @@ docker run --rm \
 cat > "$RUNNER_CONFIG" << RUNNEREOF
 concurrent = 4
 check_interval = 0
-shutdown_request_timeout = 0s
+shutdown_request_timeout = 0
 
 [session_server]
   session_timeout = 1800
