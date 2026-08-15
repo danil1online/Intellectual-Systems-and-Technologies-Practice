@@ -608,7 +608,7 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     
     print_step "Загрузка базовых образов..."
     docker pull gitlab/gitlab-ce:18.10.4-ce.0 2>/dev/null || true
-    docker pull gitlab/gitlab-runner:18.10.4 2>/dev/null || true
+    docker pull gitlab/gitlab-runner:alpine-v18.10.1 2>/dev/null || true
     docker pull registry:2 2>/dev/null || true
     docker pull python:3.10-slim 2>/dev/null || true
     
