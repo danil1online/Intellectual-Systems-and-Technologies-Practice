@@ -610,7 +610,10 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     docker pull gitlab/gitlab-ce:18.10.4-ce.0 2>/dev/null || true
     docker pull gitlab/gitlab-runner:alpine-v18.10.1 2>/dev/null || true
     docker pull registry:2 2>/dev/null || true
+    docker pull ghcr.io/danil1online/istp-jupyterhub:latest || true
     docker pull python:3.10-slim 2>/dev/null || true
+    docker pull ghcr.io/danil1online/istp-ci:latest || true
+    docker tag ghcr.io/danil1online/istp-ci:latest istp-ci:latest 2>/dev/null || true
     
     # Определяем какие образы нужны
     NEEDED_IMAGES=""
@@ -727,7 +730,12 @@ if [[ -n "$LLM_PROFILE_FLAG" ]]; then
         docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard gitlab-runner
     fi
 else
-    docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner
+     docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner
+fi
+
+if ! docker network inspect "${PROJECT_VOLUME_PREFIX}_internal" >/dev/null 2>&1; then
+    print_error "Сеть ${PROJECT_VOLUME_PREFIX}_internal не найдена — build-контейнеры раннера не смогут клонировать репозиторий и обращаться к LLM"
+    exit 1
 fi
 
 print_step "Ожидание запуска GitLab..."
@@ -869,7 +877,8 @@ shutdown_request_timeout = 0
   [runners.custom_build_dir]
   [runners.cache]
   [runners.docker]
-    image = "python:3.10"
+    image = "istp-ci:latest"
+    network_mode = "${PROJECT_VOLUME_PREFIX}_internal"
     privileged = false
     disable_entrypoint_overrides = false
     pull_policy = "if-not-present"

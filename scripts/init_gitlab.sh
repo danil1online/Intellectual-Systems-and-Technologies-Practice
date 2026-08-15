@@ -248,11 +248,11 @@ grade:
   tags:
     - istp-runner
   variables:
-    GIT_CONFIG_COUNT: 1
-    GIT_CONFIG_KEY_0: url.http://gitlab:80/.insteadOf
-    GIT_CONFIG_VALUE_0: "${CI_SERVER_URL}/"
+    GIT_STRATEGY: none
   before_script:
-    - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
+    - rm -rf /builds/${CI_PROJECT_PATH}
+    - git clone --depth 20 http://job_token:${CI_JOB_TOKEN}@gitlab:80/${CI_PROJECT_PATH}.git /builds/${CI_PROJECT_PATH}
+    - cd /builds/${CI_PROJECT_PATH}
   script:
     - python /runner/scripts/auto_grade.py
   after_script:
