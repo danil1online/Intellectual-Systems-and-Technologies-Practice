@@ -836,6 +836,15 @@ fi
 echo "Runner ID: $RUNNER_ID"
 echo "Runner Token: $RUNNER_TOKEN"
 
+# Устанавливаем теги runner'а через API (config.toml не сохраняет теги при API-регистрации)
+print_step "Установка тегов runner'а..."
+curl -s -X PUT \
+  --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{"tag_list": ["istp-runner"]}' \
+  "http://localhost/api/v4/runners/$RUNNER_ID" 2>/dev/null
+print_success "Теги runner'а установлены"
+
 RUNNER_CONFIG="$PROJECT_DIR/shared/data/runner-config/config.toml"
 
 # Создаем папку и выдаем права текущему пользователю через Docker
