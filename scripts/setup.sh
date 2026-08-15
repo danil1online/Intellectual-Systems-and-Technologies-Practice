@@ -486,7 +486,6 @@ print_header "ШАГ 7/11: Проверка сети"
 
 echo ""
 echo -e "  ${BOLD}Внешний IP (для доступа из VPN/лабсети):${NC} $EXTERNAL_IP"
-echo -e "  ${BOLD}Локальный IP (для доступа с сервера):${NC} $PRIMARY_LOCAL_IP"
 echo -e "  ${BOLD}Интерфейс:${NC} $PRIMARY_IFACE"
 echo ""
 echo -e "  ${GREEN}✓${NC} Внешний и локальный IP совпадают или находятся в одной подсети — DNAT не нужен"
@@ -608,8 +607,8 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     print_header "ШАГ 10/11: Предзагрузка Docker-образов"
     
     print_step "Загрузка базовых образов..."
-    docker pull gitlab/gitlab-ce:latest 2>/dev/null || true
-    docker pull gitlab/gitlab-runner:latest 2>/dev/null || true
+    docker pull gitlab/gitlab-ce:18.10.4-ce.0 2>/dev/null || true
+    docker pull gitlab/gitlab-runner:18.10.4 2>/dev/null || true
     docker pull registry:2 2>/dev/null || true
     docker pull python:3.10-slim 2>/dev/null || true
     
