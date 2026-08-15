@@ -5,6 +5,10 @@ grade:
   stage: grade
   tags:
     - istp-runner
+  variables:
+    GIT_CONFIG_COUNT: 1
+    GIT_CONFIG_KEY_0: url.http://gitlab:80/.insteadOf
+    GIT_CONFIG_VALUE_0: "${CI_SERVER_URL}/"
   before_script:
     - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
   script:
