@@ -8,6 +8,7 @@ import csv
 import datetime
 import io
 import base64
+import urllib.parse
 import requests
 from flask import Blueprint, jsonify, request, render_template, Response, abort, redirect
 
@@ -60,6 +61,256 @@ def gitlab_api_request(endpoint):
         return resp.json() if resp.status_code == 200 else []
     except Exception:
         return []
+
+_STUDENT_CACHE = {}
+_NO_NAME = "—"
+_WINDOW_MIN = 120  # окно «вопрос → выгрузка отчёта», минут
+
+
+def _parse_ts(value):
+    """ISO/'YYYY-MM-DD HH:MM:SS' → datetime (naive/aware) или None."""
+    if not value or not isinstance(value, str):
+        return None
+    s = value.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        return datetime.datetime.fromisoformat(s)
+    except ValueError:
+        pass
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _to_naive_local(dt):
+    """aware → local → naive; naive → как есть (для честного сравнения окон)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone().replace(tzinfo=None)
+    return dt
+
+
+def _fmt_ts(dt):
+    return dt.strftime("%Y-%m-%d %H:%M:%S") if dt else "—"
+
+
+def student_identity(username):
+    """Имя/фамилия из GitLab (users?username=) + логины. Кэш по логину (case-insens)."""
+    key = (username or "").strip().lower()
+    if not key or key in ("unknown", "none", "local_user"):
+        return {"first_name": _NO_NAME, "last_name": _NO_NAME,
+                "gitlab_username": username or _NO_NAME,
+                "jupyter_username": username or _NO_NAME,
+                "display": _NO_NAME}
+    if key in _STUDENT_CACHE:
+        return _STUDENT_CACHE[key]
+    first, last = _NO_NAME, _NO_NAME
+    if GITLAB_TOKEN:
+        try:
+            users = gitlab_api_request("users?" + urllib.parse.urlencode({"username": username}))
+            if isinstance(users, list) and users and users[0]:
+                name = (users[0].get("name") or "").strip()
+                parts = name.split(None, 1)
+                if parts:
+                    first = parts[0]
+                if len(parts) > 1:
+                    last = parts[1]
+        except Exception:
+            pass
+    ident = {
+        "first_name": first,
+        "last_name": last,
+        "gitlab_username": username,
+        "jupyter_username": username,
+        "display": ((first + " " + last).strip() or _NO_NAME),
+    }
+    _STUDENT_CACHE[key] = ident
+    return ident
+
+
+def _q_category(entry):
+    cat = (entry.get("category") or "").lower()
+    if cat in ("lazy", "smart"):
+        return cat
+    if entry.get("is_lazy"):
+        return "lazy"
+    return "other"
+
+
+def _q_prompt(entry):
+    p = entry.get("prompt") or entry.get("question") or entry.get("text") or ""
+    p = str(p).strip()
+    if len(p) > 120:
+        p = p[:119] + "…"
+    return p or "(пустой вопрос)"
+
+
+def _log_question(entry):
+    return {
+        "timestamp": entry.get("timestamp", "—"),
+        "prompt": _q_prompt(entry),
+        "category": entry.get("category") or ("lazy" if entry.get("is_lazy") else "other"),
+        "penalty": entry.get("penalty", 0),
+    }
+
+
+def _attribute_logs(student_logs, reports):
+    """reports: [{"dt": naive|None, ...}]. Каждый log → ближайшему ПОСЛЕДУЮЩЕМУ отчёту
+    в пределах _WINDOW_MIN минут (дедуп: вопрос считается один раз).
+    Возвращает (by_report[i], unattributed)."""
+    by_report = [[] for _ in reports]
+    unattributed = []
+    order = sorted(range(len(reports)), key=lambda i: reports[i]["dt"] or datetime.datetime.min)
+    for e in student_logs:
+        ldt = _to_naive_local(_parse_ts(e.get("timestamp")))
+        if ldt is None:
+            unattributed.append(e)
+            continue
+        chosen = None
+        for i in order:
+            rdt = reports[i]["dt"]
+            if rdt is None or rdt < ldt:
+                continue
+            if (rdt - ldt) > datetime.timedelta(minutes=_WINDOW_MIN):
+                break
+            chosen = i
+            break
+        if chosen is None:
+            unattributed.append(e)
+        else:
+            by_report[chosen].append(e)
+    return by_report, unattributed
+
+
+def _make_row(u, practice, score, max_score, feedback, rdt, lazy, smart,
+              is_orphan, has_jupyter_logs):
+    ident = student_identity(u)
+    if is_orphan:
+        gitlab_user, jupyter_user = _NO_NAME, u
+    else:
+        gitlab_user = u
+        jupyter_user = u if has_jupyter_logs else _NO_NAME
+    lazy_q = [_log_question(e) for e in lazy]
+    smart_q = [_log_question(e) for e in smart]
+    return {
+        "student": u,
+        "first_name": ident["first_name"],
+        "last_name": ident["last_name"],
+        "gitlab_username": gitlab_user,
+        "jupyter_username": jupyter_user,
+        "display": ident["display"],
+        "practice": practice,
+        "score": None if score is None else score,
+        "max_score": max_score,
+        "feedback": feedback or "—",
+        "lazy_count": len(lazy_q),
+        "lazy_questions": lazy_q,
+        "smart_count": len(smart_q),
+        "smart_questions": smart_q,
+        "report_dt": rdt,
+        "report_time": _fmt_ts(rdt),
+        "orphan": is_orphan,
+    }
+
+
+def _row_matches(r, student, practice, date_from, date_to, time_from, time_to):
+    if student and r["student"] != student:
+        return False
+    if practice not in (None, ""):
+        try:
+            p = int(practice)
+        except (TypeError, ValueError):
+            p = practice
+        if r["practice"] is None or str(r["practice"]) != str(p):
+            return False
+    rdt = r["report_dt"]
+    want_dt = bool(date_from or date_to or (time_from and time_to))
+    if want_dt and rdt is None:
+        return False
+    if date_from:
+        try:
+            if rdt.date() < datetime.datetime.strptime(date_from, "%Y-%m-%d").date():
+                return False
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            if rdt.date() > datetime.datetime.strptime(date_to, "%Y-%m-%d").date():
+                return False
+        except ValueError:
+            pass
+    if time_from and time_to and date_from and date_to and date_from == date_to:
+        try:
+            tf = datetime.datetime.strptime(time_from, "%H:%M").time()
+            tt = datetime.datetime.strptime(time_to, "%H:%M").time()
+            if not (tf <= rdt.time() <= tt):
+                return False
+        except ValueError:
+            pass
+    return True
+
+
+def build_results(student=None, practice=None, date_from=None, date_to=None,
+                  time_from=None, time_to=None):
+    """Единая таблица: строки (student × практика-отчёт) + orphan-строки ментора.
+    Lazy/Smart — вопросы из ментор-логов того же логина, приписанные к ближайшему
+    последующему отчёту (≤ _WINDOW_MIN минут)."""
+    grades = read_grades()
+    logs = read_logs()
+
+    logs_by_student = {}
+    for l in logs:
+        if l.get("student"):
+            logs_by_student.setdefault(l["student"], []).append(l)
+
+    reports_by_student = {}
+    for g in grades:
+        if g.get("student"):
+            reports_by_student.setdefault(g["student"], []).append(g)
+
+    rows = []
+    for u in set(reports_by_student) | set(logs_by_student):
+        reps = reports_by_student.get(u, [])
+        stlogs = logs_by_student.get(u, [])
+        has_logs = bool(stlogs)
+
+        rinfo = [{"dt": _to_naive_local(_parse_ts(g.get("timestamp"))), "rec": g} for g in reps]
+        by_report, _unattrib = _attribute_logs(stlogs, rinfo)
+
+        for ri, rep in enumerate(rinfo):
+            rec = rep["rec"]
+            bucket = by_report[ri]
+            lazy = [e for e in bucket if _q_category(e) == "lazy"]
+            smart = [e for e in bucket if _q_category(e) == "smart"]
+            rows.append(_make_row(
+                u, rec.get("practice"), rec.get("score"), rec.get("max_score", 5),
+                rec.get("reason") or rec.get("feedback") or "—", rep["dt"],
+                lazy, smart, is_orphan=False, has_jupyter_logs=has_logs,
+            ))
+
+        if not reps and stlogs:
+            ts_list = [t for t in (_to_naive_local(_parse_ts(e.get("timestamp"))) for e in stlogs) if t]
+            last = max(ts_list) if ts_list else None
+            orphan_lazy = [e for e in stlogs if _q_category(e) == "lazy"]
+            orphan_smart = [e for e in stlogs if _q_category(e) == "smart"]
+            rows.append(_make_row(
+                u, None, None, 5, "—", last, orphan_lazy, orphan_smart,
+                is_orphan=True, has_jupyter_logs=True,
+            ))
+
+    rows = [r for r in rows
+            if _row_matches(r, student, practice, date_from, date_to, time_from, time_to)]
+    rows.sort(key=lambda r: (r["student"],
+                             r["practice"] if r["practice"] is not None else 9999,
+                             r["orphan"],
+                             r["report_dt"] or datetime.datetime.min))
+    return rows
 
 
 def read_logs():
@@ -199,38 +450,45 @@ def get_stats():
 
 @api_bp.route("/api/export")
 @auth_required
-def export_logs():
-    """Экспорт логов в CSV."""
-    logs = read_logs()
-
-    # Применяем те же фильтры
-    student = request.args.get("student")
-    if student:
-        logs = [l for l in logs if l.get("student") == student]
-
-    date_from = request.args.get("date_from")
-    date_to = request.args.get("date_to")
-    if date_from:
-        logs = [l for l in logs if l.get("timestamp", "") >= date_from]
-    if date_to:
-        logs = [l for l in logs if l.get("timestamp", "") <= date_to]
+def export_results():
+    """CSV: единая таблица (студент, практика, оценка, feedback, lazy/smart, время отчёта)."""
+    rows = build_results(
+        student=request.args.get("student", "").strip() or None,
+        practice=request.args.get("practice", "").strip() or None,
+        date_from=request.args.get("date_from", "").strip() or None,
+        date_to=request.args.get("date_to", "").strip() or None,
+        time_from=request.args.get("time_from", "").strip() or None,
+        time_to=request.args.get("time_to", "").strip() or None,
+    )
 
     out = io.StringIO()
     w = csv.writer(out, lineterminator="\n", delimiter=";")
-    w.writerow(["timestamp", "student", "category", "penalty", "reason", "prompt"])
-    for log in logs:
+    w.writerow(["Студент", "gitlab", "jupyter", "Практика", "Оценка", "Feedback",
+                "#Lazy", "Lazy-Вопросы", "#Smart", "Smart-Вопросы", "Время отчёта"])
+
+    def jlist(qs):
+        return " | ".join(f"[{q['timestamp']}] {q['prompt']}".replace("\n", " ") for q in qs)
+
+    for r in rows:
+        name = (r["first_name"] + " " + r["last_name"]).strip() or r["student"]
         w.writerow([
-            log.get("timestamp", ""),
-            log.get("student", ""),
-            log.get("category", ""),
-            log.get("penalty", False),
-            str(log.get("reason", "")).replace("\n", " "),
-            str(log.get("prompt", "")).replace("\n", " ")[:500],
+            name,
+            r["gitlab_username"],
+            r["jupyter_username"],
+            r["practice"] if r["practice"] is not None else "—",
+            r["score"] if r["score"] is not None else "—",
+            str(r["feedback"]).replace("\n", " "),
+            r["lazy_count"],
+            jlist(r["lazy_questions"]),
+            r["smart_count"],
+            jlist(r["smart_questions"]),
+            r["report_time"],
         ])
-    csv_bytes = "\ufeff".encode("utf-8") + out.getvalue().encode("utf-8")
+
+    csv_bytes = "﻿".encode("utf-8") + out.getvalue().encode("utf-8")
     return Response(csv_bytes, 200, {
         "Content-Type": "text/csv; charset=utf-8; delimiter=;",
-        "Content-Disposition": f'attachment; filename="grading_logs_{datetime.date.today()}.csv"',
+        "Content-Disposition": f'attachment; filename="istp_results_{datetime.date.today()}.csv"',
     })
 
 
@@ -360,6 +618,40 @@ def get_gitlab_stats():
         "total_projects": len(projects),
         "total_users": len(users),
     })
+
+
+@api_bp.route("/api/results")
+@auth_required
+def get_results():
+    """Единая таблица: результаты по (студент × практика) + lazy/smart из ментор-логов.
+
+    Фильтры: student, practice, date_from, date_to (+ time_from/time_to на один день).
+    Логин «сломался» (jupyter != gitlab) → отдельная orphan-строка, без ошибки.
+    """
+    rows = build_results(
+        student=request.args.get("student", "").strip() or None,
+        practice=request.args.get("practice", "").strip() or None,
+        date_from=request.args.get("date_from", "").strip() or None,
+        date_to=request.args.get("date_to", "").strip() or None,
+        time_from=request.args.get("time_from", "").strip() or None,
+        time_to=request.args.get("time_to", "").strip() or None,
+    )
+    return jsonify(rows)
+
+
+@api_bp.route("/api/students")
+@auth_required
+def get_students_list():
+    """Список студентов (union: gitlab-отчёты + ментор-логи) с first/last из GitLab."""
+    students = sorted(set((g.get("student") for g in read_grades()) |
+                          (l.get("student") for l in read_logs())))
+    students = [s for s in students if s]
+    out = []
+    for u in students:
+        ident = student_identity(u)
+        out.append({"student": u, "first_name": ident["first_name"],
+                    "last_name": ident["last_name"], "display": ident["display"]})
+    return jsonify(out)
 
 
 def create_api_blueprint():

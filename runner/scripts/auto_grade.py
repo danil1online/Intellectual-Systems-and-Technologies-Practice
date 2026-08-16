@@ -14,7 +14,8 @@ auto_grade.py — CI/CD пайплайн автоматической оценк
   5. Персист — POST /api/grade в admin-dashboard (пишет /home/<user>/.grades/).
   6. Отладочный ai_report.json — список всех практик (GitLab artifact).
 
-Env (CI-переменные): STUDENT_ID (default CI_PROJECT), DASHBOARD_API_URL
+Env (CI-переменные): STUDENT_ID (default: CI_PROJECT_NAMESPACE = логин/неймспейс форка),
+DASHBOARD_API_URL
 (default http://admin-dashboard:5000), DASHBOARD_USER, DASHBOARD_PASS,
 LLM_CI_BASE_URL/KEY/MODEL.
 """
@@ -196,9 +197,30 @@ def grade_file(repo_dir, n, path):
     return {"score": 0, "feedback": "grader без ai_report.json"}
 
 
+def resolve_student():
+    """Студент = логин = неймспейс форка (testuser/project → testuser).
+
+    Порядок: STUDENT_ID → CI_PROJECT_NAMESPACE → parent(CI_PROJECT_PATH) →
+    CI_PROJECT → basename(CI_PROJECT_PATH) → "unknown".
+    """
+    ns = os.environ.get("CI_PROJECT_NAMESPACE", "").strip()
+    path = os.environ.get("CI_PROJECT_PATH", "").strip().rstrip("/")
+    candidates = [
+        os.environ.get("STUDENT_ID"),
+        ns,
+        path.rsplit("/", 1)[0] if path else "",
+        os.environ.get("CI_PROJECT"),
+        os.path.basename(path) if path else "",
+    ]
+    for cand in candidates:
+        if cand and str(cand).strip():
+            return str(cand).strip()
+    return "unknown"
+
+
 def write_debug_report(repo_dir, results, commit):
     out = {
-        "student": os.environ.get("CI_PROJECT", "unknown"),
+        "student": resolve_student(),
         "commit": commit,
         "updated": now_iso(),
         "practices": results,
@@ -215,13 +237,7 @@ def main():
     print(f"=== Auto-grade: repo={repo_dir} ===")
     print(f"Дата: {now_iso()}")
 
-    student = (
-        os.environ.get("STUDENT_ID")
-        or os.environ.get("CI_PROJECT_NAME")
-        or os.environ.get("CI_PROJECT")
-        or os.path.basename(os.environ.get("CI_PROJECT_PATH", "").rstrip("/"))
-        or "unknown"
-    )
+    student = resolve_student()
     project_id = os.environ.get("CI_PROJECT_ID", "")
 
     if not (Path(repo_dir) / ".grade-trigger").exists():

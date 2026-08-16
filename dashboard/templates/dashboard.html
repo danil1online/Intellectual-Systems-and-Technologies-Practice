@@ -1,458 +1,347 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-        }
-        .header {
-            background: #1a1a2e;
-            color: white;
-            padding: 16px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header h1 { font-size: 20px; font-weight: 600; }
-        .header a {
-            color: #4fc3f7;
-            text-decoration: none;
-            font-size: 14px;
-        }
-        .header a.logout-btn {
-            color: #f44336 !important;
-            margin-right: 16px;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 24px;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .stat-card .label { font-size: 13px; color: #666; margin-bottom: 4px; }
-        .stat-card .value { font-size: 28px; font-weight: 700; }
-        .stat-card.lazy .value { color: #e53935; }
-        .stat-card.smart .value { color: #43a047; }
-        .stat-card.penalty .value { color: #ff9800; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISTP · Результаты</title>
+<style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;line-height:1.5;min-height:100vh}
+    .container{max-width:1500px;margin:0 auto;padding:20px}
 
-        .filters {
-            background: white;
-            border-radius: 8px;
-            padding: 16px 20px;
-            margin-bottom: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .filters label { font-size: 13px; color: #555; }
-        .filters select, .filters input {
-            padding: 6px 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .filters button {
-            padding: 6px 16px;
-            background: #1a1a2e;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .filters .export-btn {
-            background: #43a047;
-            margin-left: auto;
-        }
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding:20px 24px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+    .brand h1{font-size:1.35rem;font-weight:700;color:#1a1a2e}
+    .brand p{font-size:.85rem;color:#6b7280;margin-top:2px}
+    .refresh-btn{background:#2563eb;color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:.9rem;cursor:pointer;transition:.2s}
+    .refresh-btn:hover{background:#1d4ed8}
 
-        .table-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            overflow-x: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th {
-            background: #f8f8f8;
-            padding: 12px 16px;
-            text-align: left;
-            font-size: 13px;
-            font-weight: 600;
-            color: #555;
-            border-bottom: 2px solid #eee;
-        }
-        td {
-            padding: 10px 16px;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 14px;
-        }
-        tr:hover { background: #fafafa; }
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .badge-lazy { background: #ffebee; color: #c62828; }
-        .badge-smart { background: #e8f5e9; color: #2e7d32; }
-        .penalty-flag {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            text-align: center;
-            line-height: 24px;
-            border-radius: 50%;
-            font-size: 14px;
-        }
+    .panel{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:20px}
 
-        #auto-refresh-info {
-            font-size: 12px;
-            color: #999;
-            margin-left: 8px;
-        }
-    </style>
+    .filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:16px;padding:14px;background:#f9fafb;border-radius:10px}
+    .filter{display:flex;flex-direction:column;gap:4px}
+    .filter label{font-size:.72rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.3px}
+    .filters input,.filters select{padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;background:#fff;min-width:130px}
+    .btn{background:#2563eb;color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:.85rem;cursor:pointer;transition:.2s;text-decoration:none;display:inline-block}
+    .btn:hover{background:#1d4ed8}
+    .btn-ghost{background:#fff;color:#374151;border:1px solid #d1d5db}
+    .btn-ghost:hover{background:#f3f4f6}
+    .inline{display:flex;gap:6px;align-items:center}
+    @media(max-width:760px){.filters{flex-direction:column;align-items:stretch}.filters input,.filters select{min-width:0;width:100%}}
+
+    .tbl-wrap{overflow-x:auto;border:1px solid #e5e7eb;border-radius:10px}
+    table.results{width:100%;border-collapse:collapse;font-size:.85rem;min-width:960px}
+    table.results th{background:#111827;color:#fff;text-align:left;padding:11px 12px;font-size:.74rem;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;position:sticky;top:0}
+    table.results td{padding:10px 12px;border-top:1px solid #f1f5f9;vertical-align:top}
+    table.results tbody tr:hover{background:#f9fafb}
+    .stu-name{font-weight:600;color:#111827}
+    .stu-logs{font-size:.74rem;color:#6b7280;white-space:nowrap}
+    .muted{color:#9ca3af}
+    .score{font-weight:700;font-size:1rem}
+    .score.hi{color:#059669}.score.mid{color:#d97706}.score.lo{color:#dc2626}
+    .fb{max-width:360px;cursor:help}
+
+    .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600;white-space:nowrap}
+    .badge.pr{background:#eff6ff;color:#1d4ed8}
+    .badge.mentor{background:#f3e8ff;color:#7c3aed}
+    .badge.lazy{background:#fef2f2;color:#dc2626}
+    .badge.smart{background:#ecfdf5;color:#047857}
+
+    .qlist-toggle{background:#fff;border:1px solid #d1d5db;color:#374151;padding:3px 10px;border-radius:6px;font-size:.76rem;cursor:pointer}
+    .qlist-toggle:hover{background:#f3f4f6}
+    .qlist{display:none;margin-top:8px;font-size:.76rem;max-width:440px}
+    .qlist.open{display:block}
+    .qlist ul{list-style:none;max-height:220px;overflow:auto}
+    .qlist li{padding:5px 0;border-top:1px dashed #eef2f7}
+    .qlist li .ts{color:#9ca3af;font-size:.7rem;white-space:nowrap}
+    .qlist li .pen{color:#dc2626;font-size:.7rem}
+    .cnt{font-variant-numeric:tabular-nums}
+
+    tr.orphan td{background:#faf5ff}
+
+    .gitlab-panel{margin-top:16px}
+    .gitlab-panel h2{font-size:1rem;margin-bottom:12px;color:#111827}
+    .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+    .stat{background:#f9fafb;border-radius:10px;padding:14px;text-align:center}
+    .stat-value{display:block;font-size:1.6rem;font-weight:700;color:#2563eb}
+    .stat-label{font-size:.78rem;color:#6b7280}
+
+    .toolbar-note{font-size:.78rem;color:#9ca3af;margin-top:10px}
+
+    .empty{text-align:center;padding:48px 16px;color:#9ca3af}
+    .empty p{font-size:1.1rem;font-weight:600}
+    .loading{text-align:center;padding:60px 0;color:#6b7280}
+
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .fade-in{animation:fadeIn .3s ease}
+
+    .hidden{display:none !important}
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1>🎓 Панель преподавателя — Monitoring</h1>
-        <div>
-            <a href="/logout" class="logout-btn">🚪 Выйти</a>
-            <a href="/api/export?{{ request.query_string.decode() }}">📥 Экспорт CSV</a>
+<div class="container">
+    <header>
+        <div class="brand">
+            <h1>ISTP · Результаты</h1>
+            <p>Оценки практик + lazy/smart-вопросы ИИ-ментора (студент × практика)</p>
         </div>
-    </div>
+        <button class="refresh-btn" id="refreshBtn">↻ Обновить</button>
+    </header>
 
-    <div class="container">
-        <!-- Stats -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="label">Всего запросов</div>
-                <div class="value" id="total-requests">—</div>
-            </div>
-            <div class="stat-card lazy">
-                <div class="label">LAZY запросы</div>
-                <div class="value" id="total-lazy">—</div>
-            </div>
-            <div class="stat-card smart">
-                <div class="label">SMART запросы</div>
-                <div class="value" id="total-smart">—</div>
-            </div>
-            <div class="stat-card penalty">
-                <div class="label">Штрафов</div>
-                <div class="value" id="total-penalties">—</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Студентов</div>
-                <div class="value" id="total-students">—</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Групп GitLab</div>
-                <div class="value" id="total-groups">—</div>
-            </div>
-            <div class="stat-card">
-                <div class="label">Проектов</div>
-                <div class="value" id="total-projects">—</div>
-            </div>
-        </div>
-
-        <!-- Filters -->
+    <div class="panel hidden" id="mainContainer">
         <div class="filters">
-            <label>Студент:</label>
-            <select id="filter-student">
-                <option value="">Все</option>
-            </select>
-
-            <label>Практика:</label>
-            <select id="filter-practice">
-                <option value="">Все</option>
-                <option value="1">Pr_1</option>
-                <option value="3">Pr_3</option>
-                <option value="4">Pr_4</option>
-                <option value="5">Pr_5</option>
-                <option value="6">Pr_6</option>
-                <option value="7">Pr_7</option>
-                <option value="8">Pr_8</option>
-                <option value="9">Pr_9</option>
-                <option value="10">Pr_10</option>
-                <option value="11">Pr_11</option>
-                <option value="12">Pr_12</option>
-                <option value="13">Pr_13</option>
-                <option value="14">Pr_14</option>
-                <option value="15">Pr_15</option>
-                <option value="16">Pr_16</option>
-                <option value="17">Pr_17</option>
-                <option value="18">Pr_18</option>
-                <option value="19">Pr_19</option>
-                <option value="20">Pr_20</option>
-            </select>
-
-            <label>Категория:</label>
-            <select id="filter-category">
-                <option value="">Все</option>
-                <option value="LAZY">LAZY</option>
-                <option value="SMART">SMART</option>
-            </select>
-
-            <label>С:</label>
-            <input type="date" id="filter-date-from">
-
-            <label>По:</label>
-            <input type="date" id="filter-date-to">
-
-            <button onclick="loadLogs()">🔍 Фильтровать</button>
-            <button class="export-btn" onclick="exportCSV()">📥 CSV</button>
-            <span id="auto-refresh-info">Auto-refresh: 5s</span>
+            <div class="filter">
+                <label>Студент</label>
+                <select id="studentFilter"><option value="">Все</option></select>
+            </div>
+            <div class="filter">
+                <label>Практика</label>
+                <select id="practiceFilter"><option value="">Все</option></select>
+            </div>
+            <div class="filter">
+                <label>Дата от</label>
+                <input type="date" id="dateFrom">
+            </div>
+            <div class="filter">
+                <label>Дата до</label>
+                <input type="date" id="dateTo">
+            </div>
+            <div class="filter" id="timeWrap" style="display:none">
+                <label>Время (день)</label>
+                <div class="inline">
+                    <input type="time" id="timeFrom" step="60">
+                    <span class="muted">—</span>
+                    <input type="time" id="timeTo" step="60">
+                </div>
+            </div>
+            <button class="btn" id="applyBtn">Применить</button>
+            <button class="btn btn-ghost" id="resetBtn">Сбросить</button>
+            <a class="btn btn-ghost" id="csvLink" href="#">📥 Экспорт CSV</a>
         </div>
 
-        <!-- Grades Table -->
-        <div class="table-container" style="margin-top:24px">
-            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">📊 Оценки студентов</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Студент</th>
-                        <th>Практика</th>
-                        <th>Оценка</th>
-                        <th>Feedback</th>
-                        <th>Время</th>
-                    </tr>
-                </thead>
-                <tbody id="grades-tbody">
-                    <tr><td colspan="5" style="text-align:center;color:#999">Загрузка...</td></tr>
-                </tbody>
-            </table>
+        <div id="contentWrapper">
+            <div class="tbl-wrap">
+                <table class="results" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th>Студент</th>
+                            <th>Практика</th>
+                            <th>Оценка</th>
+                            <th>Feedback на оценку</th>
+                            <th>Кол-во Lazy</th>
+                            <th>Lazy-Вопросы</th>
+                            <th>Кол-во Smart</th>
+                            <th>Smart-Вопросы</th>
+                            <th>Время отчёта</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+            <div id="emptyState" class="empty hidden">
+                <p>Данные не найдены</p>
+                <div id="emptyMsg" class="muted">Измените фильтры или дождитесь отчётов.</div>
+            </div>
+
+            <div class="toolbar-note">
+                Lazy/Smart — вопросы из ментор-логов того же логина, привязанные к ближайшему
+                отчёту в пределах 120&nbsp;минут. Расхождение логина (jupyter&nbsp;≠&nbsp;gitlab)
+                показывается отдельной строкой <span class="badge mentor">mentor-лог</span> без ошибки.
+            </div>
         </div>
 
-        <!-- Logs Table -->
-        <div class="table-container" style="margin-top:24px">
-            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">📝 Логи ИИ-ментора</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Время</th>
-                        <th>Студент</th>
-                        <th>Категория</th>
-                        <th>Штраф</th>
-                        <th>Причина</th>
-                        <th>Запрос</th>
-                    </tr>
-                </thead>
-                <tbody id="logs-tbody">
-                    <tr><td colspan="6" style="text-align:center;color:#999">Загрузка...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- GitLab Groups -->
-        <div class="table-container" style="margin-top:24px">
-            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">Группы GitLab</h3>
-            <table>
-                <thead><tr><th>Название</th><th>Путь</th><th>Видимость</th><th>Проектов</th></tr></thead>
-                <tbody id="gitlab-groups-tbody"><tr><td colspan="4" style="text-align:center;color:#999">Загрузка...</td></tr></tbody>
-            </table>
-        </div>
-
-        <!-- GitLab Projects -->
-        <div class="table-container" style="margin-top:24px">
-            <h3 style="padding:16px 20px;border-bottom:1px solid #eee">Проекты GitLab</h3>
-            <table>
-                <thead><tr><th>Имя</th><th>Группа</th><th>Видимость</th><th>Последний коммит</th></tr></thead>
-                <tbody id="gitlab-projects-tbody"><tr><td colspan="4" style="text-align:center;color:#999">Загрузка...</td></tr></tbody>
-            </table>
+        <div class="gitlab-panel">
+            <h2>GitLab</h2>
+            <div class="stats-grid">
+                <div class="stat"><span class="stat-value" id="gitlabGroups">—</span><span class="stat-label">группы</span></div>
+                <div class="stat"><span class="stat-value" id="gitlabProjects">—</span><span class="stat-label">проекты</span></div>
+                <div class="stat"><span class="stat-value" id="gitlabUsers">—</span><span class="stat-label">пользователи</span></div>
+            </div>
         </div>
     </div>
 
-    <script>
-        let currentFilters = {};
+    <div class="loading hidden" id="loading">Загрузка данных…</div>
+</div>
 
-        async function loadStats() {
-            try {
-                const res = await fetch('/api/summary');
-                const data = await res.json();
+<script>
+function el(id){return document.getElementById(id)}
+function val(id){const e=el(id);return e?e.value.trim():''}
+function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
-                document.getElementById('total-requests').textContent = data.total_requests || 0;
-                document.getElementById('total-lazy').textContent = data.lazy || 0;
-                document.getElementById('total-smart').textContent = data.smart || 0;
-                document.getElementById('total-penalties').textContent = data.penalties || 0;
-                document.getElementById('total-students').textContent = data.unique_students || 0;
+async function fetchJson(path){
+    const r=await fetch(path,{credentials:'include',headers:{'Accept':'application/json'}});
+    if (r.status===401){
+        const pw=prompt('🔒 Введите пароль дашборда (Basic auth)');
+        if (pw!==null){location.reload();}
+        return null;
+    }
+    if (!r.ok) return null;
+    return r.json();
+}
 
-                // Populate student filter from stats
-                const statsRes = await fetch('/api/stats');
-                const stats = await statsRes.json();
-                const sel = document.getElementById('filter-student');
-                const current = sel.value;
-                sel.innerHTML = '<option value="">Все</option>';
-                if (stats) {
-                    Object.keys(stats).sort().forEach(student => {
-                        const opt = document.createElement('option');
-                        opt.value = student;
-                        opt.textContent = student;
-                        if (student === current) opt.selected = true;
-                        sel.appendChild(opt);
-                    });
-                }
-            } catch (e) {
-                console.log('Stats load error:', e);
-            }
-        }
+function currentParams(){
+    const p=new URLSearchParams();
+    const s=val('studentFilter'),pr=val('practiceFilter'),df=val('dateFrom'),dt=val('dateTo');
+    if (s) p.set('student',s);
+    if (pr) p.set('practice',pr);
+    if (df) p.set('date_from',df);
+    if (dt) p.set('date_to',dt);
+    if (df&&df===dt){
+        const tf=val('timeFrom'),tt=val('timeTo');
+        if (tf) p.set('time_from',tf);
+        if (tt) p.set('time_to',tt);
+    }
+    return p;
+}
 
-        async function loadLogs() {
-            const student = document.getElementById('filter-student').value;
-            const category = document.getElementById('filter-category').value;
-            const dateFrom = document.getElementById('filter-date-from').value;
-            const dateTo = document.getElementById('filter-date-to').value;
+function scoreClass(s){ if(s==null)return''; const v=s/5; if(v>=0.8)return'hi'; if(v>=0.5)return'mid'; return'lo' }
 
-            let url = '/api/logs?';
-            if (student) url += `student=${student}&`;
-            if (category) url += `category=${category}&`;
-            if (dateFrom) url += `date_from=${dateFrom}&`;
-            if (dateTo) url += `date_to=${dateTo}&`;
+function questionListHtml(qs){
+    if(!qs||!qs.length) return '<span class="muted">—</span>';
+    const lis=qs.map(q=>{
+        const pen=(q.penalty&&q.penalty>0)?` <span class="pen">−${escapeHtml(q.penalty)}</span>`:'';
+        return `<li><span class="ts">${escapeHtml(q.timestamp)}</span>${pen} — ${escapeHtml(q.prompt)}</li>`;
+    }).join('');
+    return `<ul>${lis}</ul>`;
+}
 
-            try {
-                const res = await fetch(url);
-                const logs = await res.json();
+function renderRow(r){
+    const stuName=escapeHtml(r.display||'—');
+    const git=escapeHtml(r.gitlab_username||'—'),jup=escapeHtml(r.jupyter_username||'—');
+    const prac=r.practice!=null
+        ? `<span class="badge pr">Pr_${escapeHtml(r.practice)}</span>`
+        : `<span class="badge mentor">mentor-лог</span>`;
+    const score=r.score!=null
+        ? `<span class="score ${scoreClass(r.score)}">${escapeHtml(r.score)}<span class="muted">/${escapeHtml(r.max_score)}</span></span>`
+        : `<span class="muted">—</span>`;
+    const fb=escapeHtml(r.feedback||'—');
+    const cls=r.orphan?' class="orphan"':'';
+    return `<tr${cls}>
+        <td>
+            <div class="stu-name">${stuName}</div>
+            <div class="stu-logs">gitlab: ${git} · jupyter: ${jup}</div>
+        </td>
+        <td>${prac}</td>
+        <td>${score}</td>
+        <td><div class="fb" title="${fb}">${fb}</div></td>
+        <td><span class="badge lazy cnt">${r.lazy_count}</span></td>
+        <td>
+            <button class="qlist-toggle" data-act="lazy">${r.lazy_count?`показать (${r.lazy_count})`:'—'}</button>
+            <div class="qlist">${questionListHtml(r.lazy_questions)}</div>
+        </td>
+        <td><span class="badge smart cnt">${r.smart_count}</span></td>
+        <td>
+            <button class="qlist-toggle" data-act="smart">${r.smart_count?`показать (${r.smart_count})`:'—'}</button>
+            <div class="qlist">${questionListHtml(r.smart_questions)}</div>
+        </td>
+        <td>${escapeHtml(r.report_time||'—')}</td>
+    </tr>`;
+}
 
-                const tbody = document.getElementById('logs-tbody');
-                if (!logs || logs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999">Нет записей</td></tr>';
-                    return;
-                }
+function renderRows(rows){
+    const body=el('resultsBody'),table=el('resultsTable'),empty=el('emptyState');
+    body.className='fade-in';
+    body.innerHTML=rows.map(renderRow).join('');
+    if(!rows.length){
+        table.classList.add('hidden');
+        empty.classList.remove('hidden');
+        el('emptyMsg').textContent=`Получено строк: 0`;
+    }else{
+        table.classList.remove('hidden');
+        empty.classList.add('hidden');
+    }
+}
 
-                tbody.innerHTML = logs.map(log => {
-                    const catClass = log.category === 'LAZY' ? 'badge-lazy' : 'badge-smart';
-                    const penaltyIcon = log.penalty ? '<span class="penalty-flag" title="Штраф">⚠️</span>' : '<span style="color:#ccc">—</span>';
-                    const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '—';
-                    const promptPreview = (log.prompt || '').substring(0, 80) + '...';
+function populateStudents(list){
+    const sel=el('studentFilter');
+    sel.innerHTML='<option value="">Все</option>';
+    (list||[]).forEach(s=>{
+        const named=(s.first_name&&s.first_name!=='—')||(s.last_name&&s.last_name!=='—');
+        const label=named?`${s.display} (${s.student})`:s.student;
+        const opt=new Option(label,s.student);
+        sel.appendChild(opt);
+    });
+}
 
-                    return `<tr>
-                        <td style="white-space:nowrap">${timestamp}</td>
-                        <td><strong>${log.student || '—'}</strong></td>
-                        <td><span class="badge ${catClass}">${log.category || '—'}</span></td>
-                        <td>${penaltyIcon}</td>
-                        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${(log.reason||'').replace(/"/g,'&quot;')}">${log.reason || '—'}</td>
-                        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis" title="${(log.prompt||'').replace(/"/g,'&quot;')}">${promptPreview}</td>
-                    </tr>`;
-                }).join('');
-            } catch (e) {
-                console.log('Logs load error:', e);
-            }
-        }
+function populatePractices(set){
+    const sel=el('practiceFilter');
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Все</option>';
+    [...set].sort((a,b)=>a-b).forEach(p=>sel.appendChild(new Option('Pr_'+p,p)));
+    if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
 
-        function exportCSV() {
-            const student = document.getElementById('filter-student').value;
-            const category = document.getElementById('filter-category').value;
-            const dateFrom = document.getElementById('filter-date-from').value;
-            const dateTo = document.getElementById('filter-date-to').value;
+function syncTimeVisibility(){
+    const df=val('dateFrom'),dt=val('dateTo');
+    el('timeWrap').style.display=(df&&df===dt)?'flex':'none';
+}
 
-            let url = '/api/export?';
-            if (student) url += `student=${student}&`;
-            if (category) url += `category=${category}&`;
-            if (dateFrom) url += `date_from=${dateFrom}&`;
-            if (dateTo) url += `date_to=${dateTo}&`;
+function updateCsvLink(){ el('csvLink').href='/api/export?'+currentParams().toString(); }
 
-            window.open(url, '_blank');
-        }
+async function renderGitLabStats(){
+    const s=await fetchJson('/api/gitlab/stats');
+    if(!s)return;
+    el('gitlabGroups').textContent=s.total_groups??'—';
+    el('gitlabProjects').textContent=s.total_projects??'—';
+    el('gitlabUsers').textContent=s.total_users??'—';
+}
 
-        async function loadGrades() {
-            const student = document.getElementById('filter-student').value;
-            const practice = document.getElementById('filter-practice').value;
-            const dateFrom = document.getElementById('filter-date-from').value;
-            const dateTo = document.getElementById('filter-date-to').value;
+async function loadResults(){
+    const rows=await fetchJson('/api/results?'+currentParams().toString());
+    renderRows(rows||[]);
+    updateCsvLink();
+}
 
-            let url = '/api/grades?';
-            if (student) url += `student=${student}&`;
-            if (practice) url += `practice=${practice}&`;
-            if (dateFrom) url += `date_from=${dateFrom}&`;
-            if (dateTo) url += `date_to=${dateTo}&`;
+async function loadMeta(){
+    const [studList,full]=await Promise.all([fetchJson('/api/students'),fetchJson('/api/results')]);
+    populateStudents(studList||[]);
+    const set=new Set((full||[]).map(r=>r.practice).filter(p=>p!=null));
+    populatePractices(set);
+    syncTimeVisibility();
+}
 
-            try {
-                const res = await fetch(url);
-                const grades = await res.json();
+function resetFilters(){
+    el('studentFilter').value='';
+    el('practiceFilter').value='';
+    el('dateFrom').value='';
+    el('dateTo').value='';
+    el('timeFrom').value='';
+    el('timeTo').value='';
+    syncTimeVisibility();
+}
 
-                const tbody = document.getElementById('grades-tbody');
-                if (!grades || grades.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#999">Нет оценок</td></tr>';
-                    return;
-                }
+function wireEvents(){
+    el('applyBtn').addEventListener('click',loadResults);
+    el('resetBtn').addEventListener('click',()=>{resetFilters();loadResults()});
+    el('refreshBtn').addEventListener('click',async()=>{
+        el('loading').classList.remove('hidden');
+        await loadMeta();await loadResults();await renderGitLabStats();
+        el('loading').classList.add('hidden');
+    });
+    el('dateFrom').addEventListener('change',()=>{syncTimeVisibility();loadResults()});
+    el('dateTo').addEventListener('change',()=>{syncTimeVisibility();loadResults()});
+    el('timeFrom').addEventListener('change',loadResults);
+    el('timeTo').addEventListener('change',loadResults);
+    // collapsed lazy/smart lists (delegation)
+    el('resultsBody').addEventListener('click',e=>{
+        const btn=e.target.closest('.qlist-toggle');
+        if(!btn) return;
+        const list=btn.nextElementSibling;
+        if(list&&list.classList.contains('qlist')) list.classList.toggle('open');
+    });
+}
 
-                tbody.innerHTML = grades.map(g => {
-                    const score = g.score !== undefined ? g.score : '—';
-                    const scoreColor = score >= 4 ? '#43a047' : score >= 3 ? '#ff9800' : '#e53935';
-                    const practiceNum = g.practice || '—';
-                    const feedback = (g.feedback || '').substring(0, 60) + '...';
-                    const timestamp = g.timestamp ? new Date(g.timestamp).toLocaleString('ru-RU') : '—';
-
-                    return `<tr>
-                        <td><strong>${g.student || '—'}</strong></td>
-                        <td>Pr_${practiceNum}</td>
-                        <td><strong style="color:${scoreColor};font-size:18px">${score}/5</strong></td>
-                        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${(g.feedback||'').replace(/"/g,'&quot;')}">${feedback}</td>
-                        <td style="white-space:nowrap">${timestamp}</td>
-                    </tr>`;
-                }).join('');
-            } catch (e) {
-                console.log('Grades load error:', e);
-            }
-        }
-
-        // Auto-refresh every 5 seconds
-        function refresh() {
-            loadLogs();
-            loadStats();
-            loadGitLabData();
-            loadGrades();
-        }
-
-        async function loadGitLabData() {
-            try {
-                const groupsRes = await fetch('/api/gitlab/groups');
-                const groups = await groupsRes.json();
-                const groupsTbody = document.getElementById('gitlab-groups-tbody');
-                if (groups && groups.length > 0) {
-                    groupsTbody.innerHTML = groups.map(g =>
-                        `<tr><td><strong>${g.name}</strong></td><td>${g.full_path}</td><td>${g.visibility}</td><td>${g.projects_count || '—'}</td></tr>`
-                    ).join('');
-                    document.getElementById('total-groups').textContent = groups.length;
-                }
-            } catch(e) { console.log('GitLab groups error:', e); }
-
-            try {
-                const projectsRes = await fetch('/api/gitlab/projects');
-                const projects = await projectsRes.json();
-                const projectsTbody = document.getElementById('gitlab-projects-tbody');
-                if (projects && projects.length > 0) {
-                    projectsTbody.innerHTML = projects.slice(0, 20).map(p =>
-                        `<tr><td><strong>${p.name}</strong></td><td>${p.namespace?.full_path || '-'}</td><td>${p.visibility}</td><td>${p.last_activity_at || '-'}</td></tr>`
-                    ).join('');
-                    document.getElementById('total-projects').textContent = projects.length;
-                }
-            } catch(e) { console.log('GitLab projects error:', e); }
-        }
-
-        refresh();
-        setInterval(refresh, 5000);
-    </script>
+async function init(){
+    wireEvents();
+    const probe=await fetchJson('/api/students');
+    if(probe===null){return;} // 401: браузер показал запрос пароля
+    el('loading').classList.remove('hidden');
+    el('mainContainer').classList.remove('hidden');
+    await loadMeta();
+    await loadResults();
+    await renderGitLabStats();
+    el('loading').classList.add('hidden');
+}
+document.addEventListener('DOMContentLoaded',init);
+</script>
 </body>
 </html>

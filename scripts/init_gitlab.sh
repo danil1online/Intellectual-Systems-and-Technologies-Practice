@@ -52,6 +52,30 @@ fi
 echo "✓ Root token получен: $ROOT_TOKEN"
 
 echo ""
+echo "=== GitLab: GITLAB_ADMIN_TOKEN → .env + перезапуск admin-dashboard ==="
+# setup.sh пишет в .env placeholder ДО того, как появится рабочий токен. Здесь
+# подставляем setup-token и force-recreate'им дашборд, чтобы он начал дёргать
+# GitLab API (first/last name студентов) уже с валидным токеном. ШАГ НЕФАТАЛЬНЫЙ:
+# при сбое установка не прерывается, имена студентов просто останутся "—".
+if [[ -n "$ROOT_TOKEN" && "$ROOT_TOKEN" != "placeholder" ]]; then
+    if grep -qE '^GITLAB_ADMIN_TOKEN=' .env 2>/dev/null; then
+        sed -i.bak "s|^GITLAB_ADMIN_TOKEN=.*|GITLAB_ADMIN_TOKEN=${ROOT_TOKEN}|" .env || true
+    else
+        echo "GITLAB_ADMIN_TOKEN=${ROOT_TOKEN}" >> .env
+    fi
+    rm -f .env.bak
+    chmod 600 .env 2>/dev/null || true
+    echo "✓ GITLAB_ADMIN_TOKEN обновлён в .env (len=${#ROOT_TOKEN})"
+    if docker compose up -d --force-recreate admin-dashboard >/dev/null 2>&1; then
+        echo "  ✓ admin-dashboard пересоздан — подхватил новый токен"
+    else
+        echo "  ⚠ Не удалось пересоздать admin-dashboard сейчас (подхватит при следующем compose up)"
+    fi
+else
+    echo "⚠ ROOT_TOKEN пуст/placeholder — GITLAB_ADMIN_TOKEN не изменён (имена студентов: —)"
+fi
+
+echo ""
 echo "=== GitLab: instance CI/CD variables (DASHBOARD_USER / DASHBOARD_PASS) ==="
 # auto_grade.py читает DASHBOARD_USER/DASHBOARD_PASS, чтобы POST-ить оценки в dashboard.
 # В этой сборке GitLab НЕТ REST-маршрута /api/v4/ci/variables (возвращает 404),
