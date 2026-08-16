@@ -215,7 +215,13 @@ def main():
     print(f"=== Auto-grade: repo={repo_dir} ===")
     print(f"Дата: {now_iso()}")
 
-    student = os.environ.get("STUDENT_ID") or os.environ.get("CI_PROJECT", "unknown")
+    student = (
+        os.environ.get("STUDENT_ID")
+        or os.environ.get("CI_PROJECT_NAME")
+        or os.environ.get("CI_PROJECT")
+        or os.path.basename(os.environ.get("CI_PROJECT_PATH", "").rstrip("/"))
+        or "unknown"
+    )
     project_id = os.environ.get("CI_PROJECT_ID", "")
 
     if not (Path(repo_dir) / ".grade-trigger").exists():
