@@ -86,22 +86,52 @@ def get_md_content(md_file):
         return ""
 
 
-def build_prompt(git_log, md_content, practice_num):
-    """Сформировать промпт для оценки."""
-    checklist = PRACTICE_CHECKLIST.get(practice_num, [])
-
+def build_prompt(git_log, md_content, practice_num, requirement=None):
+    """Промпт для оценки. Если передано requirement (docs/Pr_N.md) — оцениваем
+    соответствие именно этому требованию; иначе — fallback на чеклист операций."""
     git_summary = ""
     if git_log.get("error"):
         git_summary = f"Ошибка чтения git: {git_log['error']}"
     else:
-        git_summary = f"Коммитов: {len(git_log.get('commits', []))}\nВеток: {len(git_log.get('branches', []))}\n"
-        for line in git_log.get("commits", [])[:10]:
+        commits = git_log.get("commits", [])
+        git_summary = f"Коммитов: {len(commits)}\nВеток: {len(git_log.get('branches', []))}\n"
+        for line in commits[:15]:
             git_summary += f"  {line}\n"
-        for branch in git_log.get("branches", []):
+        for branch in git_log.get("branches", [])[:10]:
             git_summary += f"  Branch: {branch}\n"
+        if git_log.get("remote"):
+            git_summary += f"\nRemotes:\n{git_log['remote']}\n"
 
-    md_preview = md_content[:2000] if md_content else "(файл не найден или пуст)"
+    md_preview = md_content[:12000] if md_content else "(файл отчёта не найден или пуст)"
 
+    if requirement:
+        prompt = f"""Ты — строгий преподаватель курса ISTP (интеллектуальные системы и технологии).
+Оцени работу студента по ПРАКТИКЕ {practice_num}.
+
+=== ТРЕБОВАНИЯ ПО ПРАКТИКЕ (docs/Pr_{practice_num}.md) ===
+{requirement[:12000]}
+
+=== ДЕЙСТВИЯ СТУДЕНТА (git log) ===
+{git_summary}
+
+=== СОДЕРЖИМОЕ ОТЧЁТА СТУДЕНТА ===
+{md_preview}
+
+ЗАДАЧА: оцени, насколько выполненные действия студента СОТВЕТСТВУЮТ ТРЕБОВАНИЯМ из раздела выше.
+Шкала (0-5):
+5 — все требования полностью выполнены
+4 — выполнено в основном, есть незначительные пробелы
+3 — выполнено больше половины требований
+2 — выполнено меньше половины
+1 — выполнено меньше 20%
+0 — не выполнялось
+Отвечай СТРОГО в формате JSON:
+{{"score": <0-5>, "feedback": "<1-2 предложения>", "issues": ["..."], "recommendations": ["..."]}}
+"""
+        return prompt
+
+    # Fallback: чеклист операций (когда requirement-док не передан)
+    checklist = PRACTICE_CHECKLIST.get(practice_num, [])
     prompt = f"""Оцени практическую работу студента по Git.
 
 Информация о репозитории (git log):
@@ -180,15 +210,25 @@ def evaluate_with_llm(prompt):
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: grade_md.py <repo_dir> <practice_number> [md_file]")
+    args = sys.argv[1:]
+    requirement = None
+    if "--requirement" in args:
+        idx = args.index("--requirement")
+        if idx + 1 < len(args):
+            requirement = args[idx + 1]
+        del args[idx:idx + 2]
+
+    if len(args) < 2:
+        print("Usage: grade_md.py <repo_dir> <practice_number> [md_file] [--requirement <path>]")
         sys.exit(1)
 
-    repo_dir = sys.argv[1]
-    practice_num = int(sys.argv[2])
-    md_file = sys.argv[3] if len(sys.argv) > 3 else None
+    repo_dir = args[0]
+    practice_num = int(args[1])
+    md_file = args[2] if len(args) > 2 else None
 
     print(f"Оцениваю Pr_{practice_num} в репозитории: {repo_dir}")
+    if requirement:
+        print(f"  requirement-док: {requirement}")
 
     # Читаем git log
     git_log = get_git_log(repo_dir)
@@ -208,7 +248,7 @@ def main():
             print("  ⚠ Отчёт .md не найден")
 
     # Формируем промпт
-    prompt = build_prompt(git_log, md_content, practice_num)
+    prompt = build_prompt(git_log, md_content, practice_num, requirement=requirement)
     result = evaluate_with_llm(prompt)
 
     # Формируем отчёт
@@ -221,6 +261,7 @@ def main():
         "markdown_cells": 0,
         "git_commits": len(git_log.get("commits", [])),
         "git_branches": len(git_log.get("branches", [])),
+        "practice_requirement": requirement or "",
         **result,
     }
 

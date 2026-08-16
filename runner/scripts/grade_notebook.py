@@ -47,46 +47,53 @@ def load_notebook(filepath):
     return nb, cells
 
 
-def build_evaluation_prompt(cells):
-    """Сформировать промпт для оценки ноутбука."""
+def build_evaluation_prompt(cells, requirement=None):
+    """Промпт для оценки ноутбука. Если requirement (docs/Pr_N.md) — оцениваем
+    соответствие этому требованию; иначе общий критерий (исполнение/пояснения)."""
     code_cells = [c for c in cells if c["type"] == "code"]
     md_cells = [c for c in cells if c["type"] == "markdown"]
 
     code_summary = ""
-    for i, cell in enumerate(code_cells):
-        code_summary += f"\n--- Ячейка кода {i+1} ---\n{cell['source'][:500]}\n"
+    for i, cell in enumerate(code_cells[:40]):
+        code_summary += f"\n--- Ячейка кода {i+1} ---\n{cell['source'][:1500]}\n"
 
     md_summary = ""
-    for i, cell in enumerate(md_cells):
-        md_summary += f"\n--- Ячейка Markdown {i+1} ---\n{cell['source'][:500]}\n"
+    for i, cell in enumerate(md_cells[:20]):
+        md_summary += f"\n--- Ячейка Markdown {i+1} ---\n{cell['source'][:800]}\n"
 
     has_output = any(len(c.get("outputs", [])) > 0 for c in code_cells)
 
-    prompt = f"""Оцени Jupyter Notebook студента по следующим критериям:
+    if requirement:
+        req_section = f"""
+=== ТРЕБОВАНИЯ ПО ПРАКТИКЕ (docs/Pr_N.md) ===
+{requirement[:12000]}
 
-1. {code_summary}
+Оценивай, соответствует ли работа студента ЭТИМ требованиям.
+"""
+        basis = "по требованиям практической работы (см. раздел выше)"
+    else:
+        req_section = ""
+        basis = "по общим критериям (исполнение кода, пояснения, полнота)"
 
-Markdown пояснения:{md_summary}
+    prompt = f"""Ты — строгий преподаватель курса ISTP. Оцени Jupyter Notebook студента {basis}:
+{req_section}
+=== КОД СТУДЕНТА ===
+{code_summary}
 
-Исполнение кода: {'Есть вывод' if has_output else 'Нет вывода'}
+=== Markdown-пояснения ===
+{md_summary}
 
-Шкала оценки (0-5):
-5 — все задания выполнены верно, код работает, есть пояснения
+Исполнение кода: {'Выполнялся (есть вывод)' if has_output else 'НЕ выполнялся (нет вывода в ячейках)'}
+
+Шкала 0-5:
+5 — все задания выполнены, код работает, есть пояснения
 4 — выполнено с небольшими ошибками
 3 — выполнено не полностью, но основное есть
 2 — выполнено меньше половины
 1 — выполнено меньше 20%
 0 — не выполнялось
-
-Отвечай СТРОГО в формате JSON:
-{{
-    "executes": true/false,
-    "has_explanation": true/false,
-    "score": число от 0 до 5,
-    "feedback": "детальный отзыв",
-    "issues": ["список проблем"],
-    "recommendations": ["список рекомендаций"]
-}}
+Отвечай СТРОГО JSON:
+{{"executes": true/false, "has_explanation": true/false, "score": <0-5>, "feedback": "<1-2 предложения>", "issues": ["..."], "recommendations": ["..."]}}
 """
     return prompt
 
@@ -145,14 +152,24 @@ def evaluate_with_llm(prompt):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: grade_notebook.py <notebook.ipynb> [output.json]")
+    args = sys.argv[1:]
+    requirement = None
+    if "--requirement" in args:
+        idx = args.index("--requirement")
+        if idx + 1 < len(args):
+            requirement = args[idx + 1]
+        del args[idx:idx + 2]
+
+    if len(args) < 1:
+        print("Usage: grade_notebook.py <notebook.ipynb> [output.json] [--requirement <path>]")
         sys.exit(1)
 
-    notebook_path = sys.argv[1]
-    output_path = sys.argv[2] if len(sys.argv) > 2 else "ai_report.json"
+    notebook_path = args[0]
+    output_path = args[1] if len(args) > 1 else "ai_report.json"
 
     print(f"Оцениваю: {notebook_path}")
+    if requirement:
+        print(f"  requirement-док: {requirement}")
 
     # Загрузка ноутбука
     try:
@@ -170,7 +187,7 @@ def main():
         return
 
     # Оценка через LLM
-    prompt = build_evaluation_prompt(cells)
+    prompt = build_evaluation_prompt(cells, requirement=requirement)
     result = evaluate_with_llm(prompt)
 
     # Формируем финальный отчёт
@@ -180,6 +197,7 @@ def main():
         "cells_analyzed": len(cells),
         "code_cells": len([c for c in cells if c["type"] == "code"]),
         "markdown_cells": len([c for c in cells if c["type"] == "markdown"]),
+        "practice_requirement": requirement or "",
         **result,
     }
 

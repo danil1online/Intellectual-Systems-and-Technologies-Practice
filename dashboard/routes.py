@@ -86,27 +86,29 @@ def read_logs():
 
 
 def read_grades():
-    """Читать все ai_report.json из репозиториев студентов."""
+    """Читать все оценки из /home/*/.grades/pr_*.json (per-practice upsert от CI)."""
     import glob
+    import re
     grades = []
-    # Ищем ai_report.json в репозиториях студентов
-    grade_files = glob.glob("/home/*/*/ai_report.json")
+    grade_files = glob.glob("/home/*/.grades/pr_*.json")
     for gf in sorted(grade_files):
         try:
             with open(gf, "r", encoding="utf-8") as f:
-                report = json.load(f)
-                # Извлекаем student из пути
-                parts = gf.split("/")
-                student = "unknown"
-                for i, p in enumerate(parts):
-                    if p == "home" and i + 1 < len(parts):
-                        student = parts[i + 1]
-                        break
-                report["student"] = student
-                report["source_file"] = gf
-                grades.append(report)
+                record = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
-            pass
+            continue
+        parts = gf.split("/")
+        student = "unknown"
+        for i, p in enumerate(parts):
+            if p == "home" and i + 1 < len(parts):
+                student = parts[i + 1]
+                break
+        m = re.match(r"pr_(\d+)\.json$", gf.rsplit("/", 1)[-1])
+        practice = int(m.group(1)) if m else record.get("practice", 0)
+        record["student"] = student
+        record["practice"] = practice
+        record["source_file"] = gf
+        grades.append(record)
 
     return grades
 
@@ -299,25 +301,37 @@ def get_grades():
 @api_bp.route("/api/grade", methods=["POST"])
 @auth_required
 def post_grade():
-    """Runner отправляет оценку."""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No JSON data"}), 400
+    """Runner отправляет оценку → upsert в /home/<student>/.grades/pr_<N>.json."""
+    data = request.get_json(silent=True) or {}
+    student = data.get("student")
+    if not student or student == "unknown":
+        return jsonify({"error": "field 'student' is required"}), 400
 
-    student = data.get("student", "unknown")
-    practice = data.get("practice", 0)
-    score = data.get("score", 0)
+    try:
+        practice = int(data.get("practice", 0))
+    except (TypeError, ValueError):
+        practice = 0
 
-    # Сохраняем отчёт в /home/{student}/ai_report.json
-    report_dir = f"/home/{student}"
-    os.makedirs(report_dir, exist_ok=True)
-    report_path = os.path.join(report_dir, "ai_report.json")
+    grades_dir = os.path.join("/home", str(student), ".grades")
+    os.makedirs(grades_dir, exist_ok=True)
+    report_path = os.path.join(grades_dir, f"pr_{practice}.json")
 
-    data["timestamp"] = datetime.datetime.now().isoformat()
+    existing = {}
+    if os.path.exists(report_path):
+        try:
+            with open(report_path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+
+    now = datetime.datetime.now().isoformat()
+    record = {**existing, **data, "student": student, "practice": practice,
+              "timestamp": now, "graded_at": now}
     with open(report_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(record, f, ensure_ascii=False, indent=2)
 
-    return jsonify({"status": "ok", "saved": report_path})
+    return jsonify({"status": "ok", "saved": report_path, "student": student,
+                    "practice": practice, "score": data.get("score")})
 
 
 @api_bp.route("/api/gitlab/groups")

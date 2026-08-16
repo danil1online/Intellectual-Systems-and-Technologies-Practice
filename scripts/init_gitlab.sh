@@ -250,6 +250,7 @@ grade:
   variables:
     GIT_STRATEGY: none
   before_script:
+    - cd /
     - rm -rf /builds/${CI_PROJECT_PATH}
     - git clone --depth 20 http://job_token:${CI_JOB_TOKEN}@gitlab:80/${CI_PROJECT_PATH}.git /builds/${CI_PROJECT_PATH}
     - cd /builds/${CI_PROJECT_PATH}
