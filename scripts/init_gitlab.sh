@@ -52,37 +52,34 @@ fi
 echo "✓ Root token получен: $ROOT_TOKEN"
 
 echo ""
-echo "=== GitLab: instance CI/CD variables для dashboard-оценки ==="
-# auto_grade.py использует DASHBOARD_USER/DASHBOARD_PASS для POST /api/grade.
-# Без этих переменных persist в dashboard отключён (job лишь пишет debug-отчёт).
-# Создаём/обновляем идемпотентно, чтобы значения всегда совпадали с .env.
-ci_var_upsert() {
-    local key="$1" value="$2" masked="$3"
-    local search id status
-    search=$(curl -s --max-time 30 --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-        "$GITLAB_URL/api/v4/ci/variables?search=$key" 2>/dev/null)
-    id=$(printf '%s' "$search" | jq -r --arg k "$key" '.[] | select(.key==$k) | .id' 2>/dev/null | head -1)
-    if [[ -n "${id:-}" && "$id" != "null" ]]; then
-        status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --request PUT \
-            --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-            --data-urlencode "value=$value" \
-            --data-urlencode "masked=$masked" \
-            "$GITLAB_URL/api/v4/ci/variables/$id" 2>/dev/null)
-        if [[ "$status" == "200" ]]; then echo "✓ $key обновлена"; else echo "✗ $key: PUT → HTTP $status"; fi
-    else
-        status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --request POST \
-            --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-            --data-urlencode "key=$key" \
-            --data-urlencode "value=$value" \
-            --data-urlencode "masked=$masked" \
-            --data-urlencode "protected=false" \
-            --data-urlencode "description=Auto-grading dashboard auth" \
-            "$GITLAB_URL/api/v4/ci/variables" 2>/dev/null)
-        if [[ "$status" == "200" || "$status" == "201" ]]; then echo "✓ $key создана"; else echo "✗ $key: POST → HTTP $status"; fi
-    fi
+echo "=== GitLab: instance CI/CD variables (DASHBOARD_USER / DASHBOARD_PASS) ==="
+# auto_grade.py читает DASHBOARD_USER/DASHBOARD_PASS, чтобы POST-ить оценки в dashboard.
+# В этой сборке GitLab НЕТ REST-маршрута /api/v4/ci/variables (возвращает 404),
+# поэтому создаём переменные через ORM (gitlab-rails runner) — тот же механизм, что для root token.
+# ШАГ НЕФАТАЛЬНЫЙ: при сбое установка не прерывается, persist в dashboard просто отключён.
+create_instance_ci_vars() {
+    docker exec \
+        -e CIVAR_USER="${DASHBOARD_USERNAME:-admin}" \
+        -e CIVAR_PASS="${DASHBOARD_PASSWORD:-}" \
+        gitlab gitlab-rails runner '
+          upsert = lambda do |key, val, masked|
+            iv = Ci::InstanceVariable.find_or_initialize_by(key: key)
+            iv.value = val
+            iv.masked = masked
+            iv.protected = false
+            iv.save!
+            puts "#{key} -> id=#{iv.id} masked=#{iv.masked?}"
+          end
+          upsert.call("DASHBOARD_USER", ENV.fetch("CIVAR_USER", ""), false)
+          upsert.call("DASHBOARD_PASS", ENV.fetch("CIVAR_PASS", ""), true)
+          puts "CI_VARS_OK count=#{Ci::InstanceVariable.count}"
+        '
 }
-ci_var_upsert "DASHBOARD_USER" "${DASHBOARD_USERNAME:-admin}" false
-ci_var_upsert "DASHBOARD_PASS" "${DASHBOARD_PASSWORD}" true
+if create_instance_ci_vars; then
+    echo "✓ Instance CI/CD variables для dashboard заданы"
+else
+    echo "⚠ Не удалось задать DASHBOARD_USER/DASHBOARD_PASS — persist будет отключён"
+fi
 
 echo ""
 echo "=== GitLab: создание группы students ==="
