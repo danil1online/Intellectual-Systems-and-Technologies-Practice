@@ -52,6 +52,39 @@ fi
 echo "✓ Root token получен: $ROOT_TOKEN"
 
 echo ""
+echo "=== GitLab: instance CI/CD variables для dashboard-оценки ==="
+# auto_grade.py использует DASHBOARD_USER/DASHBOARD_PASS для POST /api/grade.
+# Без этих переменных persist в dashboard отключён (job лишь пишет debug-отчёт).
+# Создаём/обновляем идемпотентно, чтобы значения всегда совпадали с .env.
+ci_var_upsert() {
+    local key="$1" value="$2" masked="$3"
+    local search id status
+    search=$(curl -s --max-time 30 --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+        "$GITLAB_URL/api/v4/ci/variables?search=$key" 2>/dev/null)
+    id=$(printf '%s' "$search" | jq -r --arg k "$key" '.[] | select(.key==$k) | .id' 2>/dev/null | head -1)
+    if [[ -n "${id:-}" && "$id" != "null" ]]; then
+        status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --request PUT \
+            --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+            --data-urlencode "value=$value" \
+            --data-urlencode "masked=$masked" \
+            "$GITLAB_URL/api/v4/ci/variables/$id" 2>/dev/null)
+        if [[ "$status" == "200" ]]; then echo "✓ $key обновлена"; else echo "✗ $key: PUT → HTTP $status"; fi
+    else
+        status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 --request POST \
+            --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+            --data-urlencode "key=$key" \
+            --data-urlencode "value=$value" \
+            --data-urlencode "masked=$masked" \
+            --data-urlencode "protected=false" \
+            --data-urlencode "description=Auto-grading dashboard auth" \
+            "$GITLAB_URL/api/v4/ci/variables" 2>/dev/null)
+        if [[ "$status" == "200" || "$status" == "201" ]]; then echo "✓ $key создана"; else echo "✗ $key: POST → HTTP $status"; fi
+    fi
+}
+ci_var_upsert "DASHBOARD_USER" "${DASHBOARD_USERNAME:-admin}" false
+ci_var_upsert "DASHBOARD_PASS" "${DASHBOARD_PASSWORD}" true
+
+echo ""
 echo "=== GitLab: создание группы students ==="
 
 GROUP_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/groups" \
@@ -239,7 +272,10 @@ else
 fi
 
 # 4. Создаём .gitlab-ci.yml
-GITLAB_CI_CONTENT=$(base64 -w 0 << 'CIEOF'
+# LLM_CI_* подставляются из .env, чтобы авто-оценка работала и с локальным
+# LLM (контейнер `llm`, ключ local-api-key), и с внешним OpenAI-совместимым API для CI/CD.
+# Заглушки __LLM_CI_*__ заменяются реальными значениями из .env (с set -u безопасными default'ами).
+CI_TEXT=$(cat <<'CIEOF'
 stages:
   - grade
 
@@ -249,6 +285,9 @@ grade:
     - istp-runner
   variables:
     GIT_STRATEGY: none
+    LLM_CI_BASE_URL: "__LLM_CI_BASE_URL__"
+    LLM_CI_API_KEY: "__LLM_CI_API_KEY__"
+    LLM_CI_MODEL: "__LLM_CI_MODEL__"
   before_script:
     - cd /
     - rm -rf /builds/${CI_PROJECT_PATH}
@@ -266,6 +305,10 @@ grade:
     - main
 CIEOF
 )
+CI_TEXT="${CI_TEXT//__LLM_CI_BASE_URL__/${LLM_CI_BASE_URL:-http://llm:8080/v1}}"
+CI_TEXT="${CI_TEXT//__LLM_CI_API_KEY__/${LLM_CI_API_KEY:-local-api-key}}"
+CI_TEXT="${CI_TEXT//__LLM_CI_MODEL__/${LLM_CI_MODEL:-gpt-4o}}"
+GITLAB_CI_CONTENT=$(printf '%s' "$CI_TEXT" | base64 -w 0)
 
 HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
   "$GITLAB_URL/api/v4/projects/$TEMPLATE_ID/repository/files/.gitlab-ci.yml" \

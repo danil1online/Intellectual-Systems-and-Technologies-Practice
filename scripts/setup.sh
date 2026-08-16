@@ -612,8 +612,6 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     docker pull registry:2 2>/dev/null || true
     docker pull ghcr.io/danil1online/istp-jupyterhub:latest || true
     docker pull python:3.10-slim 2>/dev/null || true
-    docker pull ghcr.io/danil1online/istp-ci:latest || true
-    docker tag ghcr.io/danil1online/istp-ci:latest istp-ci:latest 2>/dev/null || true
     
     # Определяем какие образы нужны
     NEEDED_IMAGES=""
@@ -707,6 +705,37 @@ elif [[ "$LLM_CI_TYPE" == "local" ]]; then
         fi
         exit 1
     fi
+fi
+
+# ============================================
+# Сборка CI-образа istp-ci из исходников репозитория.
+# Критично: предсобраный GHCR-образ со старыми скриптами (нет selection
+# по Pr_<N> и нет persist в dashboard). Собираем локально, независимо от типа LLM.
+# ============================================
+if [[ -f "$PROJECT_DIR/runner/Dockerfile.python310" ]]; then
+    print_step "Сборка istp-ci:latest из runner/Dockerfile.python310 (может занять несколько минут)..."
+    if docker build -f "$PROJECT_DIR/runner/Dockerfile.python310" -t istp-ci:latest "$PROJECT_DIR" 2>&1; then
+        docker tag istp-ci:latest ghcr.io/danil1online/istp-ci:latest 2>/dev/null || true
+        print_success "istp-ci:latest собран из исходников"
+    else
+        print_warn "Сборка istp-ci не удалась."
+    fi
+fi
+
+if ! docker image inspect istp-ci:latest >/dev/null 2>&1; then
+    print_step "Подтягиваем предсобраный istp-ci с GHCR (fallback)..."
+    if docker pull ghcr.io/danil1online/istp-ci:latest 2>/dev/null; then
+        docker tag ghcr.io/danil1online/istp-ci:latest istp-ci:latest 2>/dev/null || true
+        print_success "istp-ci:latest подтянут с GHCR"
+    fi
+fi
+
+if docker image inspect istp-ci:latest >/dev/null 2>&1; then
+    print_success "Образ istp-ci:latest готов"
+else
+    print_error "Образ istp-ci:latest отсутствует — runner не сможет запускать job'ы авто-оценки."
+    print_error "Соберите вручную: docker build -f runner/Dockerfile.python310 -t istp-ci:latest ."
+    exit 1
 fi
 
 if [[ -n "$LLM_PROFILE_FLAG" ]]; then
