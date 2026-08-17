@@ -136,10 +136,10 @@ probe_remote_llm() {
         print_step "Проверка LLM: $url"
         raw=$(curl -fsS --max-time 10 "$url" 2>&1 || true)
 
-        parsed=$(printf '%s' "$raw" | python3 - <<'PY' 2>/dev/null || true
-import sys, json, re
+        parsed=$(LLM_MODELS_RESPONSE="$raw" python3 - <<'PY' 2>/dev/null || true
+import sys, os, json, re
 try:
-    data = json.load(sys.stdin)
+    data = json.loads(os.environ.get("LLM_MODELS_RESPONSE", ""))
 except Exception:
     print("ERROR|не удалось распознать JSON-ответ")
     sys.exit(0)
