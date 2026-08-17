@@ -3,6 +3,7 @@
 """
 
 import os
+import time
 import json
 import csv
 import datetime
@@ -62,9 +63,42 @@ def gitlab_api_request(endpoint):
     except Exception:
         return []
 
+def _gitlab_get_users(username):
+    if not GITLAB_TOKEN:
+        return [], False
+    try:
+        resp = requests.get(
+            f"{GITLAB_URL}/api/v4/users",
+            params={"username": username},
+            headers={"PRIVATE-TOKEN": GITLAB_TOKEN},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return [], False
+        data = resp.json()
+        if isinstance(data, list):
+            return data, True
+        return [], False
+    except Exception:
+        return [], False
+
+
 _STUDENT_CACHE = {}
 _NO_NAME = "—"
-_WINDOW_MIN = 120  # окно «вопрос → выгрузка отчёта», минут
+_WINDOW_MIN = 120
+_STUDENT_CACHE_TTL = int(os.environ.get("STUDENT_IDENTITY_TTL", "300"))
+_STUDENT_FAIL_TTL = int(os.environ.get("STUDENT_IDENTITY_FAIL_TTL", "30"))
+
+
+def _student_cache_get(key):
+    entry = _STUDENT_CACHE.get(key)
+    if not entry:
+        return None
+    age = time.time() - entry.get("ts", 0)
+    if age > entry.get("ttl", 0):
+        _STUDENT_CACHE.pop(key, None)
+        return None
+    return entry.get("ident")
 
 
 def _parse_ts(value):
@@ -101,36 +135,43 @@ def _fmt_ts(dt):
 
 
 def student_identity(username):
-    """Имя/фамилия из GitLab (users?username=) + логины. Кэш по логину (case-insens)."""
     key = (username or "").strip().lower()
+    cached = _student_cache_get(key)
+    if cached is not None:
+        return cached
+
     if not key or key in ("unknown", "none", "local_user"):
-        return {"first_name": _NO_NAME, "last_name": _NO_NAME,
-                "gitlab_username": username or _NO_NAME,
-                "jupyter_username": username or _NO_NAME,
-                "display": _NO_NAME}
-    if key in _STUDENT_CACHE:
-        return _STUDENT_CACHE[key]
+        ident = {"first_name": _NO_NAME, "last_name": _NO_NAME,
+                 "gitlab_username": username or _NO_NAME,
+                 "jupyter_username": username or _NO_NAME,
+                 "display": _NO_NAME}
+        _STUDENT_CACHE[key] = {"ident": ident, "ts": time.time(), "ttl": 0}
+        return ident
+
     first, last = _NO_NAME, _NO_NAME
-    if GITLAB_TOKEN:
-        try:
-            users = gitlab_api_request("users?" + urllib.parse.urlencode({"username": username}))
-            if isinstance(users, list) and users and users[0]:
-                name = (users[0].get("name") or "").strip()
-                parts = name.split(None, 1)
-                if parts:
-                    first = parts[0]
-                if len(parts) > 1:
-                    last = parts[1]
-        except Exception:
-            pass
+    users, ok = _gitlab_get_users(username)
+    if ok and users and users[0]:
+        name = (users[0].get("name") or "").strip()
+        parts = name.split(None, 1)
+        if parts:
+            first = parts[0]
+        if len(parts) > 1:
+            last = parts[1]
+
+    names = [value for value in (first, last) if value and value != _NO_NAME]
+    display = " ".join(names) if names else _NO_NAME
     ident = {
         "first_name": first,
         "last_name": last,
         "gitlab_username": username,
         "jupyter_username": username,
-        "display": ((first + " " + last).strip() or _NO_NAME),
+        "display": display,
     }
-    _STUDENT_CACHE[key] = ident
+    if ok and users and names:
+        ttl = _STUDENT_CACHE_TTL
+    else:
+        ttl = _STUDENT_FAIL_TTL
+    _STUDENT_CACHE[key] = {"ident": ident, "ts": time.time(), "ttl": ttl}
     return ident
 
 

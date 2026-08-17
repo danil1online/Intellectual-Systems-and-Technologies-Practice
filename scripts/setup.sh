@@ -108,6 +108,319 @@ generate_password() {
     openssl rand -hex 16
 }
 
+LLM_REMOTE_MIN_CTX=32768
+REMOTE_LLM_BASE=""
+REMOTE_LLM_MODEL=""
+
+normalize_llm_endpoint() {
+    local endpoint="$1"
+    endpoint=$(printf '%s' "$endpoint" | tr -d '[:space:]')
+    endpoint="${endpoint%/}"
+    if [[ "$endpoint" == */v1 ]]; then
+        endpoint="${endpoint%/v1}"
+    fi
+    if [[ -z "$endpoint" ]]; then
+        printf 'http://192.168.2.75:8080\n'
+    else
+        printf '%s\n' "$endpoint"
+    fi
+}
+
+probe_remote_llm() {
+    local title="$1"
+    local endpoint url raw parsed model ctx quant params fmt again
+    while true; do
+        endpoint=$(ask "Endpoint OpenAI-compatible ($title, IP:port, без /v1/)" "http://192.168.2.75:8080")
+        endpoint=$(normalize_llm_endpoint "$endpoint")
+        url="${endpoint}/v1/models"
+        print_step "Проверка LLM: $url"
+        raw=$(curl -fsS --max-time 10 "$url" 2>&1 || true)
+
+        parsed=$(printf '%s' "$raw" | python3 - <<'PY' 2>/dev/null || true
+import sys, json, re
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print("ERROR|не удалось распознать JSON-ответ")
+    sys.exit(0)
+
+candidates = []
+if isinstance(data, list):
+    candidates.extend(data)
+else:
+    for key in ("data", "models"):
+        arr = data.get(key) if isinstance(data, dict) else None
+        if isinstance(arr, list):
+            candidates.extend(arr)
+
+if not candidates:
+    print("ERROR|список моделей пуст")
+    sys.exit(0)
+
+def _clean(v):
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return ""
+    return str(v).strip()
+
+model = ""
+ctx = None
+quant = ""
+params = ""
+fmt = ""
+
+for item in candidates:
+    if not isinstance(item, dict):
+        continue
+
+    for key in ("id", "name", "model"):
+        val = _clean(item.get(key))
+        if val:
+            model = val
+            break
+
+    for key in ("n_ctx_train", "context_size", "ctx"):
+        val = item.get(key)
+        if isinstance(val, bool):
+            continue
+        if isinstance(val, (int, float)):
+            ctx = val
+            break
+        if isinstance(val, str) and val.strip().isdigit():
+            ctx = int(val.strip())
+            break
+
+    for key in ("meta", "details"):
+        sub = item.get(key)
+        if not isinstance(sub, dict):
+            continue
+
+        for key2 in ("n_ctx_train", "context_size", "ctx"):
+            val = sub.get(key2)
+            if isinstance(val, bool):
+                continue
+            if isinstance(val, (int, float)):
+                ctx = val
+                break
+            if isinstance(val, str) and val.strip().isdigit():
+                ctx = int(val.strip())
+                break
+
+        for key2 in ("quantization_level", "quantization"):
+            val = _clean(sub.get(key2))
+            if val and not quant:
+                quant = val
+
+        for key2 in ("parameter_size", "n_params", "params"):
+            val = sub.get(key2)
+            if val not in (None, "", 0) and not params:
+                params = _clean(val)
+
+        val = _clean(sub.get("format"))
+        if val and not fmt:
+            fmt = val
+
+    for key in ("quantization_level", "quantization"):
+        val = _clean(item.get(key))
+        if val and not quant:
+            quant = val
+
+    for key in ("parameter_size", "n_params", "params"):
+        val = item.get(key)
+        if val not in (None, "", 0) and not params:
+            params = _clean(val)
+
+    val = _clean(item.get("format"))
+    if val and not fmt:
+        fmt = val
+
+    if model and ctx is not None and quant and params and fmt:
+        break
+
+if ctx is None:
+    matches = re.findall(r'"(?:n_ctx_train|context_size|ctx)"\s*:\s*(\d+)', json.dumps(data))
+    if matches:
+        ctx = int(matches[0])
+
+if isinstance(ctx, float) and ctx.is_integer():
+    ctx = int(ctx)
+
+if not model:
+    print("ERROR|не удалось определить имя модели")
+    sys.exit(0)
+
+print("OK|{model}|{ctx}|{quant}|{params}|{fmt}".format(
+    model=model,
+    ctx=ctx if ctx is not None else "",
+    quant=quant,
+    params=params,
+    fmt=fmt,
+))
+PY
+)
+
+        if [[ "$parsed" == "OK|"* ]]; then
+            IFS='|' read -r _ model ctx quant params fmt <<< "$parsed"
+
+            if [[ -z "$model" ]]; then
+                print_error "$title: не удалось определить имя модели из ответа"
+            elif [[ "$ctx" =~ ^[0-9]+$ ]] && (( ctx < LLM_REMOTE_MIN_CTX )); then
+                print_error "$title: контекст $ctx < $LLM_REMOTE_MIN_CTX — для авто-оценки может не хватить"
+            else
+                if [[ "$ctx" =~ ^[0-9]+$ ]]; then
+                    print_success "$title: LLM доступен. Модель: $model, context: $ctx, quant: ${quant:-—}, params: ${params:-—}, format: ${fmt:-—}"
+                else
+                    print_success "$title: LLM доступен. Модель: $model. Контекст не указан в /v1/models — проверьте --ctx-size вручную"
+                fi
+                REMOTE_LLM_BASE="$endpoint"
+                REMOTE_LLM_MODEL="$model"
+                return 0
+            fi
+        else
+            print_error "$title: LLM недоступен или ответ некорректен: ${parsed:-пусто}"
+        fi
+
+        again=$(ask_choice \
+            "LLM не прошёл проверку" \
+            "1" "Ввести endpoint ещё раз" \
+            "2" "Вернуться к выбору локальная/удалённая" \
+            "1")
+
+        if [[ "$again" == "2" ]]; then
+            REMOTE_LLM_BASE=""
+            REMOTE_LLM_MODEL=""
+            return 1
+        fi
+    done
+}
+
+configure_local_llm_mentor() {
+    print_step "Выбор встроенного LLM-образа:"
+    echo "  1. GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)"
+    echo "  2. Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)"
+
+    local LLM_MODEL_CHOICE
+    LLM_MODEL_CHOICE=$(ask_choice \
+        "Выберите модель (1 или 2)" \
+        "1" "GigaChat3.1-10B-A1.8B" \
+        "2" "Qwen2.5-3B-Instruct" \
+        "1")
+
+    if [[ "$LLM_MODEL_CHOICE" == "1" ]]; then
+        LLM_IMAGE="istp-llm-gigachat:latest"
+        LLM_PROFILE="local-llm-gigachat"
+        print_success "Выбрана: GigaChat3.1-10B-A1.8B"
+    else
+        LLM_IMAGE="istp-llm-qwen:latest"
+        LLM_PROFILE="local-llm-qwen"
+        print_success "Выбрана: Qwen2.5-3B-Instruct"
+    fi
+
+    LLM_MENTOR_TYPE="local"
+    LLM_MENTOR_BASE_URL="http://llm:8080/v1"
+    LLM_MENTOR_API_KEY="local-api-key"
+    LLM_MENTOR_MODEL="model.gguf"
+    LLM_USE_LOCAL="true"
+}
+
+configure_local_llm_ci() {
+    if [[ "$LLM_MENTOR_TYPE" == "local" ]]; then
+        print_warn "Локальная модель будет использоваться и для ментора, и для CI/CD через один LLM-контейнер."
+        LLM_CI_BASE_URL="http://llm:8080/v1"
+        LLM_CI_API_KEY="local-api-key"
+        LLM_CI_MODEL="model.gguf"
+        LLM_CI_IMAGE="$LLM_IMAGE"
+        LLM_CI_PROFILE="$LLM_PROFILE"
+        LLM_USE_LOCAL="true"
+    else
+        print_step "Выбор встроенного LLM-образа для CI/CD:"
+        echo "  1. GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)"
+        echo "  2. Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)"
+
+        local LLM_CI_MODEL_CHOICE
+        LLM_CI_MODEL_CHOICE=$(ask_choice \
+            "Выберите модель (1 или 2)" \
+            "1" "GigaChat3.1-10B-A1.8B" \
+            "2" "Qwen2.5-3B-Instruct" \
+            "1")
+
+        if [[ "$LLM_CI_MODEL_CHOICE" == "1" ]]; then
+            LLM_CI_IMAGE="istp-llm-gigachat:latest"
+            LLM_CI_PROFILE="local-llm-gigachat"
+            print_success "Выбрана: GigaChat3.1-10B-A1.8B для CI/CD"
+        else
+            LLM_CI_IMAGE="istp-llm-qwen:latest"
+            LLM_CI_PROFILE="local-llm-qwen"
+            print_success "Выбрана: Qwen2.5-3B-Instruct для CI/CD"
+        fi
+
+        LLM_CI_BASE_URL="http://llm:8080/v1"
+        LLM_CI_API_KEY="local-api-key"
+        LLM_CI_MODEL="model.gguf"
+        LLM_USE_LOCAL="false"
+    fi
+
+    LLM_CI_TYPE="local"
+}
+
+setup_llm_mentor() {
+    local type
+    while true; do
+        type=$(ask_choice \
+            "Как запустить LLM для ИИ-Ментора?" \
+            "1" "OpenAI API (уже существующий внешний сервис)" \
+            "2" "Локальный контейнер (загрузит свою модель)" \
+            "2")
+
+        if [[ "$type" == "1" ]]; then
+            if probe_remote_llm "ИИ-Ментора"; then
+                LLM_MENTOR_BASE_URL="${REMOTE_LLM_BASE}/v1"
+                LLM_MENTOR_API_KEY=$(ask "OpenAI API Key")
+                LLM_MENTOR_MODEL=$(ask "Имя модели для API" "$REMOTE_LLM_MODEL")
+                LLM_MENTOR_TYPE="openai"
+                LLM_USE_LOCAL="false"
+                print_success "Ментор: OpenAI API → $LLM_MENTOR_BASE_URL (модель: $LLM_MENTOR_MODEL)"
+                return 0
+            else
+                print_warn "Ментор: переключаемся на повторный выбор LLM"
+                continue
+            fi
+        else
+            configure_local_llm_mentor
+            return 0
+        fi
+    done
+}
+
+setup_llm_ci() {
+    local type
+    while true; do
+        type=$(ask_choice \
+            "Как запустить LLM для CI/CD?" \
+            "1" "OpenAI API (уже существующий внешний сервис)" \
+            "2" "Локальный контейнер (загрузит свою модель)" \
+            "2")
+
+        if [[ "$type" == "1" ]]; then
+            if probe_remote_llm "CI/CD"; then
+                LLM_CI_BASE_URL="${REMOTE_LLM_BASE}/v1"
+                LLM_CI_API_KEY=$(ask "OpenAI API Key")
+                LLM_CI_MODEL=$(ask "Имя модели для API" "$REMOTE_LLM_MODEL")
+                LLM_CI_TYPE="openai"
+                print_success "CI/CD LLM: OpenAI API → $LLM_CI_BASE_URL (модель: $LLM_CI_MODEL)"
+                return 0
+            else
+                print_warn "CI/CD: переключаемся на повторный выбор LLM"
+                continue
+            fi
+        else
+            configure_local_llm_ci
+            return 0
+        fi
+    done
+}
+
 # ============================================
 # АВТООПРЕДЕЛЕНИЕ СЕТЕВЫХ ПАРАМЕТРОВ
 # ============================================
@@ -321,103 +634,29 @@ fi
 # ============================================
 print_header "ШАГ 3/11: Настройка LLM для ИИ-Ментора"
 
-LLM_MENTOR_TYPE=$(ask_choice \
-    "Как запустить LLM для ИИ-Ментора?" \
-    "1" "OpenAI API (уже существующий внешний сервис)" \
-    "2" "Локальный контейнер (загрузит свою модель)" \
-    "2")
+LLM_USE_LOCAL="false"
+LLM_MENTOR_TYPE=""
+LLM_MENTOR_BASE_URL=""
+LLM_MENTOR_API_KEY=""
+LLM_MENTOR_MODEL=""
+LLM_IMAGE=""
+LLM_PROFILE=""
 
-if [[ "$LLM_MENTOR_TYPE" == "1" ]]; then
-    print_step "OpenAI совместимый API для ментора:"
-    MENTOR_BASE=$(ask "Endpoint (IP:port, без /v1/)" "http://192.168.2.75:8080")
-    LLM_MENTOR_BASE_URL="${MENTOR_BASE}/v1"
-    LLM_MENTOR_API_KEY=$(ask "OpenAI API Key")
-    LLM_MENTOR_MODEL=$(ask "Имя модели для API" "gpt-4o")
-    LLM_MENTOR_TYPE="openai"
-    print_success "Ментор: OpenAI API → $LLM_MENTOR_BASE_URL (модель: $LLM_MENTOR_MODEL)"
-else
-    print_step "Выбор встроенного LLM-образа:"
-    echo "  1. GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)"
-    echo "  2. Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)"
-    
-    LLM_MODEL_CHOICE=$(ask_choice \
-        "Выберите модель (1 или 2)" \
-        "1" "GigaChat3.1-10B-A1.8B" \
-        "2" "Qwen2.5-3B-Instruct" \
-        "1")
-
-    if [[ "$LLM_MODEL_CHOICE" == "1" ]]; then
-        LLM_IMAGE="istp-llm-gigachat:latest"
-        LLM_PROFILE="local-llm-gigachat"
-        print_success "Выбрана: GigaChat3.1-10B-A1.8B"
-    else
-        LLM_IMAGE="istp-llm-qwen:latest"
-        LLM_PROFILE="local-llm-qwen"
-        print_success "Выбрана: Qwen2.5-3B-Instruct"
-    fi
-
-    LLM_MENTOR_TYPE="local"
-    LLM_MENTOR_BASE_URL="http://llm:8080/v1"
-    LLM_MENTOR_API_KEY="local-api-key"
-    LLM_MENTOR_MODEL="model.gguf"
-    LLM_USE_LOCAL="true"
-fi
+setup_llm_mentor
 
 # ============================================
 # ШАГ 4/11: LLM для CI/CD
 # ============================================
 print_header "ШАГ 4/11: Настройка LLM для CI/CD"
 
-LLM_CI_TYPE=$(ask_choice \
-    "Как запустить LLM для CI/CD?" \
-    "1" "OpenAI API (уже существующий внешний сервис)" \
-    "2" "Локальный контейнер (загрузит свою модель)" \
-    "2")
-
+LLM_CI_TYPE=""
 LLM_CI_BASE_URL=""
 LLM_CI_API_KEY=""
+LLM_CI_MODEL=""
+LLM_CI_IMAGE=""
+LLM_CI_PROFILE=""
 
-if [[ "$LLM_CI_TYPE" == "1" ]]; then
-    print_step "OpenAI совместимый API для CI/CD:"
-    CI_BASE=$(ask "Endpoint (IP:port, без /v1/)" "http://192.168.2.75:8080")
-    LLM_CI_BASE_URL="${CI_BASE}/v1"
-    LLM_CI_API_KEY=$(ask "OpenAI API Key")
-    LLM_CI_MODEL=$(ask "Имя модели для API" "gpt-4o")
-    print_success "CI/CD LLM: OpenAI API → $LLM_CI_BASE_URL (модель: $LLM_CI_MODEL)"
-else
-    if [[ "$LLM_MENTOR_TYPE" == "local" ]]; then
-        print_warn "Локальная модель будет использоваться и для ментора, и для CI/CD через один LLM-контейнер."
-        LLM_CI_BASE_URL="http://llm:8080/v1"
-        LLM_CI_API_KEY="local-api-key"
-        LLM_CI_MODEL="model.gguf"
-    else
-        print_step "Выбор встроенного LLM-образа для CI/CD:"
-        echo "  1. GigaChat3.1-10B-A1.8B (~6.1 ГБ, ~7.5 ГБ образ)"
-        echo "  2. Qwen2.5-3B-Instruct (~2.0 ГБ, ~3.5 ГБ образ)"
-
-        LLM_CI_MODEL_CHOICE=$(ask_choice \
-            "Выберите модель (1 или 2)" \
-            "1" "GigaChat3.1-10B-A1.8B" \
-            "2" "Qwen2.5-3B-Instruct" \
-            "1")
-
-        if [[ "$LLM_CI_MODEL_CHOICE" == "1" ]]; then
-            LLM_CI_IMAGE="istp-llm-gigachat:latest"
-            LLM_CI_PROFILE="local-llm-gigachat"
-            print_success "Выбрана: GigaChat3.1-10B-A1.8B для CI/CD"
-        else
-            LLM_CI_IMAGE="istp-llm-qwen:latest"
-            LLM_CI_PROFILE="local-llm-qwen"
-            print_success "Выбрана: Qwen2.5-3B-Instruct для CI/CD"
-        fi
-
-        LLM_CI_BASE_URL="http://llm:8080/v1"
-        LLM_CI_API_KEY="local-api-key"
-        LLM_CI_MODEL="model.gguf"
-    fi
-
-    LLM_CI_TYPE="local"
-fi
+setup_llm_ci
 
 # ============================================
 # ШАГ 5/11: SSH-ключ для GitLab Runner
@@ -652,7 +891,7 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     
     print_header "ШАГ 11/11: Запуск сервисов"
 else
-    print_header "ШАГ 10/10: Запуск сервисов"
+    print_header "ШАГ 10/11: Запуск сервисов"
 fi
 
 print_step "Запуск docker-compose..."

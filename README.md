@@ -80,10 +80,10 @@ Docker Compose-развёртывание полного учебного кла
 
 | Функция | Описание |
 |---|---|
-| **Панель мониторинга** | Real-time дашборд с LAZY/SMART статистикой |
-| **Фильтрация логов** | По студенту, дате, категории |
+| **Панель мониторинга** | Единая таблица: оценки + LAZY/SMART по практикам |
+| **Фильтры** | По студенту, практике, дате, времени |
 | **Экспорт данных** | CSV-экспорт за заданный период |
-| **Диаграммы** | LAZY% по студентам, динамика по дням |
+| **Lazy/Smart-списки** | Развёрнутые списки вопросов по каждой (студент, практика) |
 | **Авто-оценка** | CI/CD pipeline проверяет ноутбуки автоматически |
 | **Группы студентов** | Организация по группам (pia, ista, istb, pa) |
 
@@ -120,18 +120,20 @@ Docker Compose-развёртывание полного учебного кла
 │   └── qwen2.5-3b-instruct-q4_k_m.gguf
 │
 ├── runner/
-│   ├── Dockerfile.python310     # Python 3.10 + nbconvert
+│   ├── Dockerfile.python310     # Python 3.10 + nbconvert → образ istp-ci:latest
 │   ├── entrypoint.sh            # SSH + runner
 │   └── scripts/
+│       ├── auto_grade.py        # CI-оркестратор (student identity, persist в Dashboard)
+│       ├── grade_md.py          # Оценка Markdown-отчёта (Pr_<N>)
 │       └── grade_notebook.py    # Оценка ноутбука через LLM
 │
 ├── dashboard/
 │   ├── Dockerfile               # Flask + Plotly
 │   ├── app.py                   # Flask приложение
-│   ├── routes.py                # REST API: logs, stats, export
-│   ├── models.py                # Кэш логов
+│   ├── routes.py                # REST API: results, students, logs, stats, export
+│   ├── models.py                # legacy (не импортируется; кэш — in-memory в routes.py)
 │   ├── templates/
-│   │   └── dashboard.html       # Real-time дашборд
+│   │   └── dashboard.html      # Единая таблица (результаты + Lazy/Smart-списки)
 │   └── static/                  # CSS/JS (по желанию)
 │
 
@@ -146,7 +148,7 @@ Docker Compose-развёртывание полного учебного кла
 │   ├── data/                    # Материалы преподавателя
 │   └── student-work/            # Репозитории студентов
 │
-└── README_new.md                # Этот файл
+└── README.md                    # этот файл
 ```
 
 ---
@@ -169,21 +171,21 @@ Docker Compose-развёртывание полного учебного кла
 
 #### GitLab CE
 ```
-Image: gitlab/gitlab-ce:latest
+Build: ./gitlab-custom (gitlab/gitlab-ce:18.10.4-ce.0 + patch)
 RAM: ~4 GB
 Ports: 80, 2222
 ```
 
 #### GitLab Runner
 ```
-Image: gitlab/gitlab-runner:latest
+Image: gitlab/gitlab-runner:alpine-v18.10.1
 RAM: ~100 MB
 Mount: /var/run/docker.sock
 ```
 
 #### JupyterHub
 ```
-Base: python:3.10-slim
+Image: ghcr.io/danil1online/istp-jupyterhub:latest (base: python:3.10-slim)
 Packages: jupyterhub, jupyterlab, nativeauthenticator, jupyter-ai
 RAM: ~500 MB на спавн
 ```
@@ -210,7 +212,7 @@ RAM: ~500 MB на спавн
 #### Admin Dashboard
 ```
 Base: python:3.10-slim
-Packages: flask, plotly, requests
+Packages: flask, plotly, requests, python-dotenv, oauthenticator
 RAM: ~50 MB
 ```
 
@@ -382,7 +384,7 @@ docker exec -it gitlab-runner gitlab-runner register \
   --url http://gitlab:80 \
   --token <registration-token> \
   --executor docker \
-  --docker-image python:3.10 \
+  --docker-image istp-ci:latest \
   --tag-list istp-runner
 ```
 
@@ -393,7 +395,7 @@ docker exec -it gitlab-runner gitlab-runner register \
 ### 1. GitLab CE
 
 ```yaml
-Image: gitlab/gitlab-ce:latest
+Build: ./gitlab-custom   # FROM gitlab/gitlab-ce:18.10.4-ce.0 + patch (убран prometheus-client-mmap)
 Ports: 80 (HTTP), 2222 (SSH)
 Volumes: gitlab-config, gitlab-logs, gitlab-data
 ```
@@ -409,7 +411,7 @@ Volumes: gitlab-config, gitlab-logs, gitlab-data
 ### 2. JupyterHub
 
 ```yaml
-Build: ./jupyterhub
+Image: ghcr.io/danil1online/istp-jupyterhub:latest   # prebuilt (build ./jupyterhub закомментирован)
 Port: 8000 (по умолчанию)
 Auth: NativeAuthenticator (саморегистрация)
 Spawner: LocalProcessSpawner
@@ -422,7 +424,7 @@ Spawner: LocalProcessSpawner
 - **pre_spawn_hook** — создание системного пользователя, копирование шаблонов `.ipynb`, генерация SSH-ключей
 - **Изоляция** — каждый студент имеет собственный `/home/{username}` с собственными правами
 
-### 4. LLM (опционально, 3 взаимозаменяемых профиля)
+### 3. LLM (опционально, 3 взаимозаменяемых профиля)
 
 **Профиль A — legacy (local-llm)**
 ```yaml
@@ -458,15 +460,15 @@ POST /v1/embeddings
 GET  /v1/models
 ```
 
-### 6. GitLab Runner
+### 4. GitLab Runner
 
 ```yaml
-Image: gitlab/gitlab-runner:latest
-Docker: python:3.10
-Tags: docker_runner, python3.10
+Image: gitlab/gitlab-runner:alpine-v18.10.1
+Docker (job): istp-ci:latest   # собран из runner/Dockerfile.python310 (Python 3.10 + скрипты)
+Tags: istp-runner
 ```
 
-**Роль:** CI/CD runner для проверки ноутбуков.
+**Роль:** CI/CD runner для авто-оценки. Image job'а — `istp-ci:latest` (`auto_grade.py` + `grade_md.py` + `grade_notebook.py` уже внутри, `pip install` в job не требуется).
 
 **Пайплайн:**
 ```yaml
@@ -477,8 +479,16 @@ grade:
   stage: grade
   tags:
     - istp-runner
+  variables:
+    GIT_STRATEGY: none
+    LLM_CI_BASE_URL: "<из .env>"
+    LLM_CI_API_KEY: "<из .env>"
+    LLM_CI_MODEL: "<из .env>"
   before_script:
-    - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
+    - cd /
+    - rm -rf /builds/${CI_PROJECT_PATH}
+    - git clone --depth 20 http://job_token:${CI_JOB_TOKEN}@gitlab:80/${CI_PROJECT_PATH}.git /builds/${CI_PROJECT_PATH}
+    - cd /builds/${CI_PROJECT_PATH}
   script:
     - python /runner/scripts/auto_grade.py
   after_script:
@@ -491,9 +501,9 @@ grade:
     - main
 ```
 
-**Запуск оценки:** CI запускается на каждый push в `main`. Оценка срабатывает только при наличии файла `.grade-trigger` в репозитории — студенты создают его вручную в финальном действии каждой работы. Это предотвращает ложные оценки на промежуточных push.
+**Запуск оценки:** CI запускается на каждый push в `main`. Оценка срабатывает только при наличии файла `.grade-trigger` в репозитории — студенты создают его вручную в финальном действии каждой работы. Это предотвращает ложные оценки на промежуточных push. Job выполняется на образе `istp-ci:latest` (склонирование через `job_token`, `GIT_STRATEGY: none`).
 
-### 7. Docker Registry
+### 5. Docker Registry
 
 ```yaml
 Image: registry:2
@@ -502,32 +512,37 @@ Port: 5050 (external)
 
 **Роль:** Standalone Docker Registry для хранения образов. Отдельный сервис, не встроенный в GitLab.
 
-### 8. Admin Dashboard
+### 6. Admin Dashboard
 
 ```yaml
-Build: ./dashboard (Flask)
+Build: ./dashboard (Flask, python:3.10-slim)
 Port: 9000
-Refresh: auto 5 seconds
+Refresh: ручная кнопка «↻ Обновить» (re-fetch на клиенте)
 ```
 
 **API Endpoints:**
 | Эндпоинт | Описание |
 |---|---|
-| `GET /` | HTML дашборд |
+| `GET /` | HTML дашборд (единая таблица) |
+| `GET /health` | Health check (без аутентификации) |
+| `GET /logout` | Выход |
+| `GET /api/results` | **Основной** — оценки + Lazy/Smart по каждой практике |
+| `GET /api/students` | Список идентификаторов студентов |
 | `GET /api/logs` | Логи с фильтрацией |
 | `GET /api/stats` | LAZY/SMART ratio по студентам |
 | `GET /api/summary` | Общая сводка |
-| `GET /api/export` | CSV экспорт |
+| `GET /api/export` | CSV-экспорт объединённой таблицы (`istp_results_<дата>.csv`) |
 | `GET /api/grades` | Оценки студентов (0-5) |
-| `POST /api/grade` | Runner отправляет оценку |
+| `POST /api/grade` | CI отправляет оценку → `/home/<user>/.grades/pr_<N>.json` |
 | `GET /api/gitlab/groups` | Группы GitLab |
 | `GET /api/gitlab/projects` | Проекты GitLab |
 | `GET /api/gitlab/stats` | Сводка GitLab |
 
 **Фильтры:**
-- По студенту (`?student=student_pia_01`)
+- По студенту (`?student=<namespace>`)
+- По практике (`?practice=Pr_7`)
 - По дате (`?date_from=2025-09-01&date_to=2025-12-31`)
-- По категории (`?category=LAZY|SMART`)
+- По времени дня (`?time_from=09:00&time_to=12:00`)
 
 ---
 
@@ -627,7 +642,7 @@ GitLab          JupyterHub          Dashboard
 - Каждый студент имеет отдельный Linux-пользователь в контейнере JupyterHub
 - Домашняя директория `/home/{username}` с собственными правами (755)
 - Данные других студентов недоступны — только свои и общие `/shared/data` (только чтение)
-- Сбор данных для Dashboard: логи и оценки пишутся в `/home/{username}/`, откуда Dashboard их читает
+- Сбор данных для Dashboard: логи — в `/home/{username}/.logs/grading_log.json`, оценки — в `/home/{username}/.grades/pr_<N>.json`; Dashboard читает оба
 
 ### Fallback
 
@@ -677,8 +692,16 @@ grade:
   stage: grade
   tags:
     - istp-runner
+  variables:
+    GIT_STRATEGY: none
+    LLM_CI_BASE_URL: "<из .env>"
+    LLM_CI_API_KEY: "<из .env>"
+    LLM_CI_MODEL: "<из .env>"
   before_script:
-    - pip install --no-cache-dir nbformat nbconvert requests python-dotenv
+    - cd /
+    - rm -rf /builds/${CI_PROJECT_PATH}
+    - git clone --depth 20 http://job_token:${CI_JOB_TOKEN}@gitlab:80/${CI_PROJECT_PATH}.git /builds/${CI_PROJECT_PATH}
+    - cd /builds/${CI_PROJECT_PATH}
   script:
     - python /runner/scripts/auto_grade.py
   after_script:
@@ -710,12 +733,13 @@ grade:
 
 ### Auto-grade (CI/CD пайплайн)
 
-`auto_grade.py` — автоматический запуск при push в `main`:
-1. Проверяет наличие `.grade-trigger` (создаётся студентом в финальном действии)
-2. Определяет тип: `.ipynb` или `.md`
-3. Запускает appropriate grader
-4. Сохраняет `ai_report.json`
-5. Очищает временные файлы
+`auto_grade.py` — запускается job'ом на `istp-ci:latest` при push в `main`:
+1. Проверяет наличие `.grade-trigger` (иначе — skip)
+2. **Student identity** = `CI_PROJECT_NAMESPACE` (fallback: `STUDENT_ID` → `CI_PROJECT_NAMESPACE` → `CI_PROJECT`/basename)
+3. Собирает deliverables `Pr_<N>_*.{md,ipynb}` (N=1..21); требования — из `docs/Pr_<N>.md`
+4. Для каждой практики запускает `grade_md.py` / `grade_notebook.py` (score 0-5)
+5. **Persist**: `POST /api/grade` → Dashboard пишет `/home/<student>/.grades/pr_<N>.json`
+6. Debug-артефакт `ai_report.json` (в artifacts job'а)
 
 > 💡 Оценка запускается только при наличии `.grade-trigger` — студенты пушат промежуточные изменения без нагрузки на CI.
 
@@ -748,48 +772,38 @@ Registry доступен по адресу `http://<server-ip>:5050` (порт 
 ### Интерфейс
 
 ```
-╔════════════════════════════════════════════╗
-║  🎓 Панель преподавателя — Monitoring      ║
-╠════════════════════════════════════════════╣
-║  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐       ║
-║  │ All  │ │ LAZY │ │SMART │ │Penal │       ║
-║  │ 142  │ │  43  │ │  99  │ │  28  │       ║
-║  └──────┘ └──────┘ └──────┘ └──────┘       ║
-╠════════════════════════════════════════════╣
-║  Фильтры: [Студент ▼] [Практика ▼]         ║
-╠════════════════════════════════════════════╣
-║  📊 Оценки студентов                      ║
-║  Студент  │ Практика │ Оценка │ Feedback   ║
-║  pia_01   │ Pr_7     │  4/5   │ ...        ║
-║  pia_02   │ Pr_1     │  3/5   │ ...        ║
-╠════════════════════════════════════════════╣
-║  📝 Логи ИИ-Ментора                        ║
-║  Время  │ Студент  │ LAZY │ ⚠ │ Запрос     ║
-║  14:30  │ pia_01   │SMART │ — │ "Как..."   ║
-║  14:35  │ pia_02   │ LAZY │ ⚠ │ "Напиши"   ║
-║  ...                                       ║
-╚════════════════════════════════════════════╝
+🎓 Панель преподавателя — Результаты и мониторинг                       [↻ Обновить]
+──────────────────────────────────────────────────────────────────────────────────────────
+Фильтры: [Студент ▼] [Практика ▼] [от-дата] [до-дата] [от-время] [до-время]
+──────────────────────────────────────────────────────────────────────────────────────────
+Студент (Имя Фамилия)                Прак   Оценка   #Lazy  #Smart   Время отчёта
+  gitlab: <ns> · jupyter: <user>     Pr_1      2/5      12       7        17:34
+  ├─ Lazy-Список    (свёрнут, раскрывается по клику)
+  └─ Smart-Список   (свёрнут, раскрывается по клику)
+──────────────────────────────────────────────────────────────────────────────────────────
+Одна строка на (студент, практику); Lazy/Smart-вопросы — раскрывающиеся списки.
 ```
 
-### Real-time обновление
+### Обновление
 
-- Auto-refresh каждые 5 секунд через `setInterval`
-- SSE (Server-Sent Events) для push-уведомлений (в будущем)
+- Ручной `↻ Обновить` — ре-fetch списка через `/api/results`
+- Авто-обновления по таймеру нет
 
 ### API эндпоинты
 
 ```bash
-# Все логи с фильтрацией
-curl http://<IP>:9000/api/logs?student=student_pia_01&category=LAZY
+# Основной запрос — объединённая таблица (оценки + Lazy/Smart)
+curl "http://<IP>:9000/api/results?student=<ns>&practice=Pr_7"
 
-# Статистика по студентам
+# Список студентов
+curl http://<IP>:9000/api/students
+
+# CSV-экспорт объединённой таблицы
+curl -O "http://<IP>:9000/api/export?date_from=2025-09-01"
+
+# Логи / статистика / сводка (legacy-эндпоинты)
 curl http://<IP>:9000/api/stats
-
-# Общая сводка
 curl http://<IP>:9000/api/summary
-
-# CSV экспорт
-curl -O http://<IP>:9000/api/export?date_from=2025-09-01
 ```
 
 ---
@@ -869,7 +883,7 @@ def bubble_sort(arr):
 
 1. Открыть Dashboard: `http://<server-ip>:9000`
 2. Смотреть LAZY/SMART ratio по студентам
-3. Фильтровать по студенту, дате, категории
+3. Фильтровать по студенту, практике, дате, времени
 4. Экспортировать CSV для отчётов
 
 ### Проверка CI/CD
@@ -887,6 +901,9 @@ tail -f /home/student_pia_01/.logs/grading_log.json
 
 # LAZY запросы конкретного студента
 grep '"LAZY"' /home/student_pia_01/.logs/grading_log.json
+
+# Основная таблица (через dashboard API)
+curl http://<IP>:9000/api/results
 
 # Счёт (через dashboard API)
 curl http://<IP>:9000/api/stats
@@ -913,9 +930,12 @@ curl http://<IP>:9000/api/stats
 | `LLM_USE_LOCAL` | Использовать локальную LLM | `true` |
 | `GITLAB_ROOT_PASSWORD` | Пароль GitLab root | auto-generated |
 | `REGISTRY_PORT` | Порт Docker Registry | `5050` |
-| `JH_API_TOKEN` | JupyterHub API token | auto-generated |
-| `GITLAB_HOST` | IP/домен GitLab | `10.8.1.3` (или другой) |
-| `GITLAB_ADMIN_TOKEN` | PAT для доступа к GitLab API | `glpat-placeholder` |
+| `GITLAB_EXTERNAL_URL` | Внешний URL GitLab | `http://localhost` (или `http://<server-ip>`) |
+| `GGUF_PATH` | Путь к GGUF (legacy-профиль LLM) | `/models/model.gguf` |
+| `LECTURER_01_PASSWORD` | Пароль лектора 1 (GitLab-юзер `lecturer_1`) | auto-generated |
+| `LECTURER_02_PASSWORD` | Пароль лектора 2 (GitLab-юзер `lecturer_2`) | auto-generated |
+| `GITLAB_HOST` | IP/домен GitLab (SSH-доступ) | `localhost` (или `<server-ip>`) |
+| `GITLAB_ADMIN_TOKEN` | Root-токен GitLab API | `glpat-placeholder` (авто-выставляется `init_gitlab.sh`) |
 
 ### docker-compose profile
 
