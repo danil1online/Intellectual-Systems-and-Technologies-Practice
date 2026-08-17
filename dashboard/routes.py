@@ -643,8 +643,8 @@ def get_results():
 @auth_required
 def get_students_list():
     """Список студентов (union: gitlab-отчёты + ментор-логи) с first/last из GitLab."""
-    students = sorted(set((g.get("student") for g in read_grades()) |
-                          (l.get("student") for l in read_logs())))
+    students = sorted(set(g.get("student") for g in read_grades()) |
+                      set(l.get("student") for l in read_logs()))
     students = [s for s in students if s]
     out = []
     for u in students:
