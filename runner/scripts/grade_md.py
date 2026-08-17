@@ -2,7 +2,7 @@
 """
 grade_md.py — Оценка Markdown-отчёта студента через LLM.
 
-Для terminal-based работ (Pr_1, Pr_2).
+Для MD-only работ (Pr_1, Pr_4, Pr_22..Pr_28 и остальных практик, где выбран .md-отчёт).
 Анализирует git log репозитория + содержимое md-отчёта.
 Шкала: 0-5.
 
@@ -17,6 +17,13 @@ import datetime
 import subprocess
 import requests
 from pathlib import Path
+
+from grading_common import (
+    read_requirement_text,
+    extract_control_questions,
+    format_question_block,
+    normalize_grade_payload,
+)
 
 # Конфигурация LLM
 LLM_BASE_URL = os.environ.get("LLM_CI_BASE_URL", "http://llm:8080/v1")
@@ -86,9 +93,11 @@ def get_md_content(md_file):
         return ""
 
 
-def build_prompt(git_log, md_content, practice_num, requirement=None):
-    """Промпт для оценки. Если передано requirement (docs/Pr_N.md) — оцениваем
-    соответствие именно этому требованию; иначе — fallback на чеклист операций."""
+def build_prompt(git_log, md_content, practice_num, requirement_text=None, questions=None):
+    """Промпт для оценки. Если передан requirement-док — оцениваем
+    соответствие именно этому требованию; если есть questions — отдельный блок
+    контрольных вопросов оценивается бинарно: каждый вопрос 0 или полный вес."""
+    questions = questions or []
     git_summary = ""
     if git_log.get("error"):
         git_summary = f"Ошибка чтения git: {git_log['error']}"
@@ -103,13 +112,14 @@ def build_prompt(git_log, md_content, practice_num, requirement=None):
             git_summary += f"\nRemotes:\n{git_log['remote']}\n"
 
     md_preview = md_content[:12000] if md_content else "(файл отчёта не найден или пуст)"
+    requirement_preview = (requirement_text or "")[:30000]
 
-    if requirement:
+    if requirement_text or questions:
         prompt = f"""Ты — строгий преподаватель курса ISTP (интеллектуальные системы и технологии).
 Оцени работу студента по ПРАКТИКЕ {practice_num}.
 
 === ТРЕБОВАНИЯ ПО ПРАКТИКЕ (docs/Pr_{practice_num}.md) ===
-{requirement[:12000]}
+{requirement_preview or "(requirement-файл не найден)"}
 
 === ДЕЙСТВИЯ СТУДЕНТА (git log) ===
 {git_summary}
@@ -117,8 +127,30 @@ def build_prompt(git_log, md_content, practice_num, requirement=None):
 === СОДЕРЖИМОЕ ОТЧЁТА СТУДЕНТА ===
 {md_preview}
 
-ЗАДАЧА: оцени, насколько выполненные действия студента СОТВЕТСТВУЮТ ТРЕБОВАНИЯМ из раздела выше.
-Шкала (0-5):
+ЗАДАЧА: оцени, насколько выполненные действия студента СОТВЕТСТВУЮТ ТРЕБОВАНИЯМ.
+Оцени отдельно:
+1) техническую/практическую часть работы (task_score 0..3);
+2) наличие ответов на контрольные вопросы, если раздел «КОНТРОЛЬНЫЕ ВОПРОСЫ» присутствует.
+
+Шкала task_score:
+3 — ключевые шаги практики выполнены, работа соответствует методичке;
+2 — выполнено в основном, есть незначительные пробелы;
+1 — выполнено меньше половины ключевых шагов;
+0 — работа фактически не представлена или не соответствует практике.
+
+"""
+        if questions:
+            prompt += f"""=== КОНТРОЛЬНЫЕ ВОПРОСЫ ({len(questions)}) ===
+{format_question_block(questions)}
+
+По каждому контрольному вопросу ставь true только если в отчёте/действиях есть внятный ответ по смыслу.
+Итоговый балл посчитать НЕ нужно — его посчитает код.
+Отвечай СТРОГО в формате JSON:
+{{"task_score": <0-3>, "control_questions": [<true/false>, ...], "feedback": "<1-2 предложения>", "issues": ["..."], "recommendations": ["..."]}}
+В массиве control_questions ровно {len(questions)} значений.
+"""
+        else:
+            prompt += """Шкала итога (0-5):
 5 — все требования полностью выполнены
 4 — выполнено в основном, есть незначительные пробелы
 3 — выполнено больше половины требований
@@ -126,7 +158,7 @@ def build_prompt(git_log, md_content, practice_num, requirement=None):
 1 — выполнено меньше 20%
 0 — не выполнялось
 Отвечай СТРОГО в формате JSON:
-{{"score": <0-5>, "feedback": "<1-2 предложения>", "issues": ["..."], "recommendations": ["..."]}}
+{"score": <0-5>, "feedback": "<1-2 предложения>", "issues": ["..."], "recommendations": ["..."]}
 """
         return prompt
 
@@ -230,6 +262,11 @@ def main():
     if requirement:
         print(f"  requirement-док: {requirement}")
 
+    requirement_text = read_requirement_text(requirement) if requirement else ""
+    questions = extract_control_questions(requirement_text)
+    if questions:
+        print(f"  контрольных вопросов: {len(questions)}")
+
     # Читаем git log
     git_log = get_git_log(repo_dir)
 
@@ -248,8 +285,24 @@ def main():
             print("  ⚠ Отчёт .md не найден")
 
     # Формируем промпт
-    prompt = build_prompt(git_log, md_content, practice_num, requirement=requirement)
+    prompt = build_prompt(
+        git_log,
+        md_content,
+        practice_num,
+        requirement_text=requirement_text,
+        questions=questions,
+    )
     result = evaluate_with_llm(prompt)
+
+    if questions:
+        result, _ = normalize_grade_payload(result, questions)
+
+    try:
+        result["score"] = int(result.get("score", 0) or 0)
+    except (TypeError, ValueError):
+        result["score"] = 0
+    if "feedback" not in result:
+        result["feedback"] = result.get("comment", "")
 
     # Формируем отчёт
     report = {
@@ -262,6 +315,7 @@ def main():
         "git_commits": len(git_log.get("commits", [])),
         "git_branches": len(git_log.get("branches", [])),
         "practice_requirement": requirement or "",
+        "question_count": len(questions),
         **result,
     }
 

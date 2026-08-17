@@ -24,11 +24,13 @@ RUN mkdir -p /runner/work /runner/scripts
 
 # Копирование скриптов
 COPY runner/entrypoint.sh /runner/entrypoint.sh
+COPY runner/scripts/grading_common.py /runner/scripts/grading_common.py
 COPY runner/scripts/grade_notebook.py /runner/scripts/grade_notebook.py
 COPY runner/scripts/grade_md.py /runner/scripts/grade_md.py
 COPY runner/scripts/auto_grade.py /runner/scripts/auto_grade.py
 
 RUN chmod +x /runner/entrypoint.sh
+RUN chmod +x /runner/scripts/grading_common.py
 RUN chmod +x /runner/scripts/grade_notebook.py
 RUN chmod +x /runner/scripts/grade_md.py
 RUN chmod +x /runner/scripts/auto_grade.py

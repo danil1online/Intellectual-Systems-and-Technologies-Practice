@@ -4,7 +4,8 @@ auto_grade.py — CI/CD пайплайн автоматической оценк
 
 Запускается GitLab Runner при push в main. Логика:
   0. Точный вход — только если в корне есть `.grade-trigger` (иначе skip).
-  1. Выборка deliverables — только файлы `Pr_<N>_*.{md,ipynb}` (N = 1..21).
+  1. Выборка deliverables — только файлы `Pr_<N>_*.md` или `Pr_<N>_*.ipynb`
+     (N = 1..28). Для MD-only практик (1, 4, 22..28) берутся только `.md`.
      Исключаются: docs/, .git/, .ipynb_checkpoints/, helper-ноутбуки (LLM_Help,
      *help* в имени) и пустые .ipynb (0 символов кода). На каждую практику —
      файл с наибольшим временем последнего коммита (git log, не mtime).
@@ -33,10 +34,13 @@ from pathlib import Path
 import requests
 from requests.auth import HTTPBasicAuth
 
+from grading_common import GRADER_VERSION
+
 DASHBOARD_BASE = os.environ.get("DASHBOARD_API_URL", "http://admin-dashboard:5000").rstrip("/")
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "")
 DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS", "")
-MAX_PRACTICE = 21
+MAX_PRACTICE = 28
+MD_ONLY_PRACTICES = {1, 4, 22, 23, 24, 25, 26, 27, 28}
 LLM_TIMEOUT_S = int(os.environ.get("LLM_TIMEOUT_S", "300"))
 SCRIPTS_DIR = "/runner/scripts"
 
@@ -116,6 +120,8 @@ def find_deliverables(repo_dir):
             continue
         n = int(m.group(1))
         if not (1 <= n <= MAX_PRACTICE):
+            continue
+        if name.endswith(".ipynb") and n in MD_ONLY_PRACTICES:
             continue
         if not (name.endswith(".md") or name.endswith(".ipynb")):
             continue
@@ -223,6 +229,7 @@ def write_debug_report(repo_dir, results, commit):
         "student": resolve_student(),
         "commit": commit,
         "updated": now_iso(),
+        "grader_version": GRADER_VERSION,
         "practices": results,
     }
     path = Path(repo_dir) / "ai_report.json"
@@ -267,13 +274,19 @@ def main():
         rel = str(path.relative_to(repo_dir))
         file_sha = sha256_file(path)
         commit_sha = commit_sha_for(repo_dir, rel)
+        requirement_path = Path(repo_dir) / "docs" / f"Pr_{n}.md"
+        requirement_sha = sha256_file(requirement_path) if requirement_path.exists() else ""
         print(f"\n--- Pr_{n} → {rel}  (file_sha {file_sha[:12]}…) ---")
 
         cached = None
         if auth is not None:
             try:
                 for g in dashboard_get_grades(auth, student, n):
-                    if g.get("file_sha") == file_sha:
+                    if (
+                        g.get("file_sha") == file_sha
+                        and g.get("requirement_sha") == requirement_sha
+                        and g.get("grader_version") == GRADER_VERSION
+                    ):
                         cached = g
                         break
             except Exception as exc:
@@ -296,11 +309,19 @@ def main():
         feedback = report.get("feedback") or report.get("comment") or ""
         print(f"  ✅ Pr_{n}: score={score}/5")
 
-        results.append({
+        result_entry = {
             "practice": n, "file_path": rel, "score": score, "max_score": 5,
             "feedback": feedback, "cached": False,
             "file_sha": file_sha, "commit_sha": commit_sha,
-        })
+        }
+        for key in (
+            "task_score", "question_score", "control_questions",
+            "answered_count", "total_questions", "answered_idx",
+            "not_answered_idx",
+        ):
+            if key in report:
+                result_entry[key] = report[key]
+        results.append(result_entry)
 
         if auth is not None:
             payload = {
@@ -308,6 +329,17 @@ def main():
                 "feedback": feedback, "comment": feedback, "grade": report.get("grade", ""),
                 "file_path": rel, "file_name": path.name, "file_sha": file_sha,
                 "commit_sha": commit_sha, "project_id": project_id,
+                "requirement_sha": requirement_sha,
+                "grader_version": GRADER_VERSION,
+                **{
+                    key: report[key]
+                    for key in (
+                        "task_score", "question_score", "control_questions",
+                        "answered_count", "total_questions", "answered_idx",
+                        "not_answered_idx",
+                    )
+                    if key in report
+                },
             }
             try:
                 saved = dashboard_post_grade(auth, payload)
