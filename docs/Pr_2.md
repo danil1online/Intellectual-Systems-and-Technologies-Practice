@@ -1,4 +1,3 @@
-# Практическая работа №2
 # Практическая работа №2: Знакомство с Python. Структуры данных и циклы
 
 ---
@@ -11,15 +10,17 @@
 
 ## ⚠️ Важно
 
-Это работа в формате **Notebook-based**. Вам будет доступен **ИИ-ментор** (`%%ask_mentor`). Все запросы логируются.
+Это работа в формате **Notebook-based**. Вам будет доступен **ИИ-ментор** (`%%ask_mentor`). Все запросы оцениваются.
 
 ---
 
 ## 📚 Основные идеи и теоретические основы.
 
-### Списки (list)
+### Списки [(list)](https://pythonworld.ru/tipy-dannyx-v-python/spiski-list-funkcii-i-metody-spiskov.html)
 
-Список — упорядоченная изменяемая коллекция элементов. Элементы обращаются по индексу (начиная с 0).
+Список — *упорядоченная* изменяемая коллекция элементов. Элементы обращаются по индексу (начиная с 0). 
+
+Ниже показаны примеры использования и после знака `#` -- ожидаемый результат. 
 
 ```python
 # Создание списков
@@ -61,9 +62,9 @@ matrix = [[i * 3 + j for j in range(3)] for i in range(3)]
 # [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 ```
 
-### Словари (dict)
+### Словари [(dict)](https://pythonworld.ru/tipy-dannyx-v-python/slovari-dict-funkcii-i-metody-slovarej.html)
 
-Словарь — неупорядоченный (до Python 3.7 — произвольный порядок, с 3.7 — insertion order) коллекция пар «ключ-значение». Ключи уникальны и должны быть хешируемыми.
+Словарь — *неупорядоченная* коллекция пар «ключ-значение». Ключи уникальны и должны быть [хешируемыми](https://youngjunior.ru/python/interviews/13399).
 
 ```python
 # Создание словарей
@@ -115,9 +116,9 @@ freq = {word: count for word, count in [("cat", 3), ("dog", 4)]}
 # {'cat': 3, 'dog': 4}
 ```
 
-### Кортежи (tuple)
+### Кортежи [(tuple)](https://pythonworld.ru/tipy-dannyx-v-python/kortezhi-tuple.html)
 
-Кортеж — упорядоченная неизменяемая коллекция. Используется для группировки связанных данных.
+Кортеж — *упорядоченная* неизменяемая коллекция. Используется для группировки связанных данных.
 
 ```python
 # Создание кортежей
@@ -162,7 +163,7 @@ print(nums.count(2))  # 3 — количество вхождений
 print(nums.index(4))  # 4 — индекс первого вхождения
 ```
 
-### Множества (set)
+### Множества [(set)](https://pythonworld.ru/tipy-dannyx-v-python/mnozhestva-set-i-frozenset.html)
 
 Множество — неупорядоченная коллекция уникальных элементов. Поддерживает математические операции над множествами.
 
@@ -201,7 +202,7 @@ unique_lengths = {len(word) for word in ["hello", "hi", "world", "python"]}
 # {2, 5, 6}
 ```
 
-### Цикл for
+### Цикл [for](https://pyplanet.ru/article/for.html)
 
 Цикл for перебирает элементы любой итерируемой коллекции.
 
@@ -263,7 +264,7 @@ for i in range(10):
 print()  # 1 3 5 7 9
 ```
 
-### Цикл while
+### Цикл [while](https://pyplanet.ru/article/while.html)
 
 Цикл while выполняется, пока условие истинно.
 
@@ -372,27 +373,58 @@ print(next(it))  # 30
 
 **Откройте JupyterHub**: `http://<server-ip>:8000`, войдите под своей учётной записью.
 
-Создайте новый Jupyter Notebook: **File → New → Notebook → Python 3**.
+В левой части Jupyter Lab перейдите (предположим, Вы находитесь в своем корневом каталоге `~`) в `project` -> `reports`
 
-Первый блок кода — проверка версии Python:
+Создайте новый каталог `Pr_2`
+
+Создайте новый Jupyter Notebook: **File → New → Notebook → Python 3 (ipykernel)**.
+
+Сохраните новый Jupyter Notebook под именем `Pr_2_report.ipynb` (в `~/project/reports/Pr_2`)
+
+Введите первый блок кода в первую ячейку — проверка версии Python:
 
 ```python
 import sys
 print(f"Python version: {sys.version}")
 ```
 
+**Далее приведены задания для самостоятельного выполнения**. 
+
+В ходе выполнения рекомендуется комментировать код. Комментарии в Python начинаются с символа `#`, все, что следует за ним, не будет выполнено. 
+
+При появлении ошибок и наличии вопросов рекомендуется использовать встроенного ИИ-ментора, например
+```python
+%%ask_mentor
+Почему при выполнении freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]} появляется ошибка
+TypeError                                 Traceback (most recent call last)
+Cell In[8], line 46
+     44 squares_dict = {x: x ** 2 for x in range(1, 6)}
+     45 # {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
+---> 46 freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]}
+
+Cell In[8], line 46, in <dictcomp>(.0)
+     44 squares_dict = {x: x ** 2 for x in range(1, 6)}
+     45 # {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
+---> 46 freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]}
+
+TypeError: object of type 'int' has no len()
+```
+
 ---
 
 ### 📌 Практика 1: Списки (list)
 
-**Задание 1.** Создайте список из 10 случайных чисел от 1 до 100. Найдите максимальный, минимальный элемент и их индексы.
+**Задание 1.** Создан список из 10 случайных чисел от 1 до 100. Найдите и выведите на экран максимальный, минимальный элемент и их индексы.
 
-<!-- ANSWER
 ```python
 import random
 
 numbers = [random.randint(1, 100) for _ in range(10)]
 print(f"Список: {numbers}")
+```
+
+<!-- ANSWER
+```python
 print(f"Максимум: {max(numbers)} (индекс {numbers.index(max(numbers))})")
 print(f"Минимум: {min(numbers)} (индекс {numbers.index(min(numbers))})")
 ```
@@ -400,9 +432,13 @@ print(f"Минимум: {min(numbers)} (индекс {numbers.index(min(numbers)
 
 **Задание 2.** Дан список слов. Отфильтруйте те, длина которых больше 4 символов, и отсортируйте результат по алфавиту.
 
-<!-- ANSWER
+Список слов:
 ```python
 words = ["банан", "яблоко", "вишня", "груша", "слива", "абрикос", "персик"]
+```
+
+<!-- ANSWER
+```python
 long_words = sorted([w for w in words if len(w) > 4])
 print(long_words)
 ```
@@ -412,16 +448,17 @@ print(long_words)
 
 ### 📌 Практика 2: Словари (dict)
 
-**Задание 3.** Создайте словарь, где ключ — название города, значение — список температур за 5 дней. Найдите город с максимальной средней температурой.
-
-<!-- ANSWER
+**Задание 3.** Дан словарь, где ключ — название города, значение — список температур за 5 дней. Найдите город с максимальной средней температурой.
 ```python
 temperatures = {
     "Москва": [22, 24, 21, 23, 25],
     "Санкт-Петербург": [18, 19, 17, 20, 18],
     "Казань": [25, 27, 26, 24, 28],
 }
+```
 
+<!-- ANSWER
+```python
 best_city = None
 best_avg = -1
 for city, temps in temperatures.items():
@@ -436,7 +473,6 @@ print(f"Самый тёплый город: {best_city} (средняя {best_av
 
 **Задание 4.** Дан словарь с оценками студентов. Посчитайте средний балл каждого студента и выведите рейтинг (по убыванию).
 
-<!-- ANSWER
 ```python
 grades = {
     "Анна": [5, 4, 5, 5, 4],
@@ -444,7 +480,10 @@ grades = {
     "Мария": [5, 5, 5, 5, 5],
     "Иван": [3, 4, 3, 4, 3],
 }
+```
 
+<!-- ANSWER
+```python
 averages = [(name, sum(student_grades) / len(student_grades)) for name, student_grades in grades.items()]
 averages.sort(key=lambda item: item[1], reverse=True)
 for name, avg in averages:
@@ -454,10 +493,12 @@ for name, avg in averages:
 
 **Задание 5.** Решите задачу: дан список строк. Создайте словарь, где ключ — длина слова, значение — список слов такой длины. Отсортируйте по длине.
 
-<!-- ANSWER
 ```python
 words = ["hi", "hello", "world", "python", "a", "code", "programming", "go"]
+```
 
+<!-- ANSWER
+```python
 groups = {}
 for word in words:
     length = len(word)
@@ -473,9 +514,12 @@ for length, word_list in result.items():
 
 **Задание 6.** Посчитайте по тексту: количество слов, уникальных слов, среднюю длину слова, наиболее частое слово.
 
-<!-- ANSWER
 ```python
 text = "python is great python is fun python is powerful and python is easy"
+```
+
+<!-- ANSWER
+```python
 words = text.lower().split()
 
 freq = {}
@@ -503,9 +547,12 @@ for key, value in stats.items():
 
 **Задание 7.** Дан список кортежей с данными о студентах: `(имя, возраст, курс)`. Отсортируйте по возрасту, затем по имени.
 
-<!-- ANSWER
 ```python
 students = [("Мария", 20, 2), ("Анна", 19, 1), ("Пётр", 21, 3), ("Иван", 19, 2)]
+```
+
+<!-- ANSWER
+```python
 sorted_students = sorted(students, key=lambda s: (s[1], s[0]))
 for name, age, course in sorted_students:
     print(f"{name}, {age} лет, курс {course}")
@@ -514,14 +561,16 @@ for name, age, course in sorted_students:
 
 **Задание 8.** Найдите общие и уникальные элементы двух множеств слов.
 
-<!-- ANSWER
 ```python
 text1 = "python is great and python is fun".split()
 text2 = "python is powerful and easy to learn".split()
 
 set1 = set(text1)
 set2 = set(text2)
+```
 
+<!-- ANSWER
+```python
 print(f"Уникальные для текста 1: {set1 - set2}")
 print(f"Уникальные для текста 2: {set2 - set1}")
 print(f"Общие слова: {set1 & set2}")
@@ -545,14 +594,16 @@ for i in range(1, 11):
 
 **Задание 10.** Используйте `enumerate()` и `zip()` для анализа данных. Дан список оценок по предметам для каждого студента. Найдите средний балл по каждому предмету.
 
-<!-- ANSWER
 ```python
 students = {
     "Анна": {"математика": 5, "физика": 4, "информатика": 5},
     "Пётр": {"математика": 4, "физика": 5, "информатика": 4},
     "Мария": {"математика": 3, "физика": 4, "информатика": 5},
 }
+```
 
+<!-- ANSWER
+```python
 subjects = list(students["Анна"].keys())
 for subject in subjects:
     scores = [data[subject] for data in students.values()]
@@ -602,28 +653,18 @@ while True:
 
 ---
 
-## 📌 Отчёт о выполненной работе
+## 📌 Отчёт о выполненной работе после выполнения заданий / завершения занятия
 
-1. Сохраните все ячейки с выполненными заданиями в Jupyter Notebook
-2. Добавьте краткие комментарии к каждому заданию
-3. Добавьте Markdown-ячейку с ответами на контрольные вопросы из раздела «Контрольные вопросы»
-4. Сохраните ноутбук как `Pr_2_<группа>_<номер>.ipynb`
-5. Загрузите файл в репозиторий `reports_<группа>_<номер>` в GitLab:
-
-```bash
-git add Pr_2_<группа>_<номер>.ipynb
-git commit -m "Pr_2 notebook"
-git push
-```
-
-**Финальное действие:**
-
-Для запуска автоматической оценки создайте триггер-файл и отправьте его в репозиторий:
+1. Добавьте в конец Jupyter Notebook `Pr_2_report.ipynb` Markdown-ячейку с ответами на контрольные вопросы из раздела [«Контрольные вопросы»](Pr_2.md#контрольные-вопросы)
+2. Сохраните Jupyter Notebook
+3. Загрузите файл в репозиторий `reports_<группа>_<номер>` в GitLab:
+   - В левом окне Jupyter Lab (файловом менеджере) перейдите в каталог `project` (поднимитесь на два уровня вверх: из `Pr_2` в `reports` -> `project`)
+   - Создайте новую вкладку типа `Terminal` (File -> New -> Terminal)
+   - Введите
 
 ```bash
-touch .grade-trigger
-git add .grade-trigger
-git commit -m "Grade trigger"
+git add ю
+git commit -m "Pr_2 notebook report"
 git push
 ```
 
