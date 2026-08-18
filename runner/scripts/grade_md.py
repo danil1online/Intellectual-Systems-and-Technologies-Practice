@@ -23,6 +23,8 @@ from grading_common import (
     extract_control_questions,
     format_question_block,
     normalize_grade_payload,
+    parse_llm_json,
+    llm_raw_preview,
 )
 
 # Конфигурация LLM
@@ -147,7 +149,8 @@ def build_prompt(git_log, md_content, practice_num, requirement_text=None, quest
 
 По каждому контрольному вопросу ставь true только если в отчёте/действиях есть внятный ответ по смыслу.
 Итоговый балл посчитать НЕ нужно — его посчитает код.
-Отвечай СТРОГО в формате JSON:
+Отвечай ТОЛЬКО одним JSON-объектом, без markdown, без пояснений до/после.
+Формат:
 {{"task_score": <0-3>, "control_questions": [<true/false>, ...], "feedback": "<1-2 предложения>", "issues": ["..."], "recommendations": ["..."]}}
 В массиве control_questions ровно {len(questions)} значений.
 """
@@ -159,7 +162,8 @@ def build_prompt(git_log, md_content, practice_num, requirement_text=None, quest
 2 — выполнено меньше половины
 1 — выполнено меньше 20%
 0 — не выполнялось
-Отвечай СТРОГО в формате JSON:
+Отвечай ТОЛЬКО одним JSON-объектом, без markdown, без пояснений до/после.
+Формат:
 {"score": <0-5>, "feedback": "<1-2 предложения>", "issues": ["..."], "recommendations": ["..."]}
 """
         return prompt
@@ -185,14 +189,15 @@ def build_prompt(git_log, md_content, practice_num, requirement_text=None, quest
 1 — выполнено меньше 20%
 0 — не выполнялось
 
-Отвечай СТРОГО в формате JSON:
-{{
-    "score": число от 0 до 5,
-    "feedback": "детальный отзыв",
-    "issues": ["список проблем"],
-    "recommendations": ["список рекомендаций"]
-}}
-"""
+ Отвечай ТОЛЬКО одним JSON-объектом, без markdown, без пояснений до/после.
+ Формат:
+ {{
+     "score": число от 0 до 5,
+     "feedback": "детальный отзыв",
+     "issues": ["список проблем"],
+     "recommendations": ["список рекомендаций"]
+ }}
+ """
     return prompt
 
 
@@ -218,28 +223,37 @@ def evaluate_with_llm(prompt):
         response.raise_for_status()
 
         content = response.json()["choices"][0]["message"]["content"]
+        parsed, parse_mode = parse_llm_json(content)
 
-        # Убираем markdown code block если есть
-        if content.startswith("```"):
-            content = content.split("\n", 1)[-1]
-            if content.endswith("```"):
-                content = content.rsplit("\n", 1)[0]
+        if not parsed:
+            preview = llm_raw_preview(content)
+            print(
+                f"LLM parse failed (mode={parse_mode}); raw_preview={preview[:500]!r}",
+                file=sys.stderr,
+            )
+            return {
+                "score": 0,
+                "feedback": "Ошибка парсинга ответа LLM",
+                "issues": ["Ошибка оценки"],
+                "recommendations": [],
+                "llm_parse_mode": parse_mode,
+                "llm_raw_preview": preview,
+            }
 
-        return json.loads(content)
+        parsed.setdefault("issues", [])
+        parsed.setdefault("recommendations", [])
+        if parse_mode != "strict":
+            parsed["llm_raw_preview"] = llm_raw_preview(content)
+        parsed["llm_parse_mode"] = parse_mode
+        return parsed
 
-    except json.JSONDecodeError:
-        return {
-            "score": 0,
-            "feedback": "Ошибка парсинга ответа LLM",
-            "issues": ["Ошибка оценки"],
-            "recommendations": [],
-        }
     except Exception as e:
         return {
             "score": 0,
             "feedback": f"Ошибка связи с LLM: {e}",
             "issues": [f"Ошибка LLM: {e}"],
             "recommendations": [],
+            "llm_parse_mode": "request-error",
         }
 
 
