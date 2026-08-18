@@ -10,7 +10,7 @@
 
 ## ⚠️ Важно
 
-Это работа в формате **Notebook-based**. Вам будет доступен **ИИ-ментор** (`%%ask_mentor`). Все запросы логируются.
+Это работа в формате **Notebook-based**. Вам будет доступен **ИИ-ментор** (`%%ask_mentor`). Все запросы оцениваются.
 
 ---
 
@@ -18,7 +18,11 @@
 
 ### Функции
 
-Функция — переиспользуемый блок кода с собственным именем, принимающий аргументы и возвращающий значение.
+Функция — переиспользуемый блок кода с собственным именем, принимающий аргументы и возвращающий значение. Обычная [функция в python](https://pyplanet.ru/article/def-return.html) определяется с помощью инструкции def. 
+
+Функции в python могут иметь переменное число аргументов; для этого используются термины [args, kwargs](https://pyplanet.ru/article/args-kwargs.html)
+
+Существуют также т.н. [анонимные lambda-функции](https://pyplanet.ru/article/lambda.html)
 
 ```python
 # Объявление функции
@@ -87,7 +91,7 @@ print(add5(3))   # 8
 print(add10(3))  # 13
 ```
 
-### Классы и объекты
+### [Классы и объекты](https://pyplanet.ru/article/classes.html)
 
 Класс — шаблон для создания объектов. Объект содержит данные (атрибуты) и поведение (методы).
 
@@ -304,14 +308,43 @@ print(loaded)
 
 **Откройте JupyterHub**: `http://<server-ip>:8000`, войдите под своей учётной записью.
 
-Создайте новый Jupyter Notebook: **File → New → Notebook → Python 3**.
+В левой части Jupyter Lab перейдите (предположим, Вы находитесь в своем корневом каталоге `~`) в `project` -> `reports`
 
-Первый блок кода — проверка версии Python:
+Создайте новый каталог `Pr_3`
+
+Создайте новый Jupyter Notebook: **File → New → Notebook → Python 3 (ipykernel)**.
+
+Сохраните новый Jupyter Notebook под именем `Pr_3_report.ipynb` (в `~/project/reports/Pr_3`)
+
+Введите первый блок кода в первую ячейку — проверка версии Python:
 
 ```python
 import sys
 print(f"Python version: {sys.version}")
 ```
+
+**Далее приведены задания для самостоятельного выполнения**. 
+
+В ходе выполнения рекомендуется комментировать код. Комментарии в Python начинаются с символа `#`, все, что следует за ним, не будет выполнено. 
+
+При появлении ошибок и наличии вопросов рекомендуется использовать встроенного ИИ-ментора, например
+```python
+%%ask_mentor
+Почему при выполнении freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]} появляется ошибка
+TypeError                                 Traceback (most recent call last)
+Cell In[8], line 46
+     44 squares_dict = {x: x ** 2 for x in range(1, 6)}
+     45 # {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
+---> 46 freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]}
+
+Cell In[8], line 46, in <dictcomp>(.0)
+     44 squares_dict = {x: x ** 2 for x in range(1, 6)}
+     45 # {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
+---> 46 freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]}
+
+TypeError: object of type 'int' has no len()
+```
+
 
 ---
 
@@ -368,13 +401,17 @@ for word, count in word_freq(text).items():
 ```
 -->
 
-**Задание 4.** Реализуйте обработку списка чисел с использованием `map()`, `filter()` и `reduce()` (из `functools`). Вычислите квадраты, чётные числа и сумму.
+**Задание 4.** Реализуйте обработку списка чисел с использованием [map()](https://pyplanet.ru/article/map.html), [filter()](https://pyplanet.ru/article/filter.html) и [reduce()](https://pyplanet.ru/article/functoolsreduce.html) (из `functools`). Вычислите квадраты, чётные числа и сумму.
+
+```python
+№Импорт библиотеки
+from functools import reduce
+# Список чисел
+numbers = list(range(1, 11))
+```
 
 <!-- ANSWER
 ```python
-from functools import reduce
-
-numbers = list(range(1, 11))
 squares = list(map(lambda x: x ** 2, numbers))
 evens = list(filter(lambda x: x % 2 == 0, numbers))
 total = reduce(lambda a, b: a + b, numbers)
@@ -387,16 +424,20 @@ print(f"Сумма: {total}")
 
 **Задание 5.** Напишите функцию `matrix_transpose(matrix)`, которая транспонирует матрицу (меняет строки и столбцы местами).
 
+Исходная матрица 
+```python
+matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+```
+
 <!-- ANSWER
 ```python
-def matrix_transpose(matrix):
-    if not matrix:
+def matrix_transpose(matrix_):
+    if not matrix_:
         return []
-    rows = len(matrix)
-    cols = len(matrix[0])
-    return [[matrix[r][c] for r in range(rows)] for c in range(cols)]
+    rows = len(matrix_)
+    cols = len(matrix_[0])
+    return [[matrix_[r][c] for r in range(rows)] for c in range(cols)]
 
-matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
 for row in matrix_transpose(matrix):
     print(row)
 ```
@@ -404,12 +445,16 @@ for row in matrix_transpose(matrix):
 
 **Задание 6.** Напишите функцию `unique_elements(lst)`, которая возвращает список уникальных элементов, сохраняя порядок их первого появления.
 
+Исходные данные
+```python
+data = [1, 2, 2, 3, 4, 3, 5, 1]
+```
+
 <!-- ANSWER
 ```python
 def unique_elements(lst):
     return list(dict.fromkeys(lst))
 
-data = [1, 2, 2, 3, 4, 3, 5, 1]
 print(unique_elements(data))
 print(dict.fromkeys(data))  # словарь — ещё один способ
 ```
@@ -417,13 +462,17 @@ print(dict.fromkeys(data))  # словарь — ещё один способ
 
 **Задание 7.** Напишите функцию `swap(a, b)`, которая меняет местами значения двух переменных и возвращает новый кортеж.
 
+Исходный кортеж
+```python
+x, y = 10, 20
+```
+
 <!-- ANSWER
 ```python
 def swap(a, b):
     a, b = b, a
     return a, b
 
-x, y = 10, 20
 x, y = swap(x, y)
 print(x, y)
 ```
@@ -443,7 +492,7 @@ print(reverse_number(-456))
 ```
 -->
 
-**Задание 9.** Реализуйте алгоритм Евклида для вычисления НОД: `gcd(a, b)`.
+**Задание 9.** Реализуйте [алгоритм Евклида для вычисления наибольшего общего делителя (НОД)](https://younglinux.info/algorithm/euclidean): `gcd(a, b)`.
 
 <!-- ANSWER
 ```python
@@ -456,7 +505,7 @@ print(gcd(48, 18))
 ```
 -->
 
-**Задание 10.** Реализуйте гипотезу Коллатца: `collatz(n)` — количество шагов до единицы.
+**Задание 10.** Реализуйте [гипотезу Коллатца](https://habr.com/ru/articles/597935/): `collatz(n)` — количество шагов до единицы.
 
 <!-- ANSWER
 ```python
@@ -480,6 +529,11 @@ print(collatz(27))
 
 **Задание 11.** Реализуйте функцию `find_duplicates(lst)`, которая возвращает список всех дубликатов в списке.
 
+Исходный список
+```python
+data = [1, 2, 3, 2, 4, 5, 3, 6]
+```
+
 <!-- ANSWER
 ```python
 def find_duplicates(lst):
@@ -491,12 +545,16 @@ def find_duplicates(lst):
         seen.add(item)
     return list(duplicates)
 
-data = [1, 2, 3, 2, 4, 5, 3, 6]
 print(find_duplicates(data))
 ```
 -->
 
 **Задание 12.** Реализуйте функцию `invert_dict(d)`, которая инвертирует словарь (значения становятся ключами, а ключи — списками значений).
+
+Исходный словарь
+```python
+d = {"a": 1, "b": 1, "c": 2, "d": 2, "e": 3}
+```
 
 <!-- ANSWER
 ```python
@@ -505,14 +563,19 @@ def invert_dict(d):
     for key, value in d.items():
         inverted.setdefault(value, []).append(key)
     return inverted
-
-d = {"a": 1, "b": 1, "c": 2, "d": 2, "e": 3}
+    
 for value, keys in invert_dict(d).items():
     print(f"{value}: {keys}")
 ```
 -->
 
 **Задание 13.** Реализуйте функцию `merge_dicts(*dicts)`, которая объединяет несколько словарей с суммированием значений для общих ключей.
+
+Исходные словари:
+```python
+d1 = {"a": 1, "b": 2, "c": 3}
+d2 = {"b": 5, "c": 7, "d": 4}
+```
 
 <!-- ANSWER
 ```python
@@ -523,13 +586,16 @@ def merge_dicts(*dicts):
             result[key] = result.get(key, 0) + value
     return result
 
-d1 = {"a": 1, "b": 2, "c": 3}
-d2 = {"b": 5, "c": 7, "d": 4}
 print(merge_dicts(d1, d2))
 ```
 -->
 
 **Задание 14.** Реализуйте функцию `word_index(text)`, которая строит инвертированный индекс: словарь word → список позиций в тексте.
+
+Исходный текст
+```python
+text = "to be or not to be thats the question to be"
+```
 
 <!-- ANSWER
 ```python
@@ -540,7 +606,6 @@ def word_index(text):
         index.setdefault(word, []).append(i)
     return index
 
-text = "to be or not to be thats the question to be"
 for word, positions in sorted(word_index(text).items()):
     print(f"{word}: {positions}")
 ```
@@ -550,7 +615,7 @@ for word, positions in sorted(word_index(text).items()):
 
 ### 📌 Практика 3: Классы и наследование
 
-**Задание 15.** Реализуйте класс `BankAccount` с методами `deposit(amount)`, `withdraw(amount)`. Проверка на отрицательные значения и недостаточный баланс.
+**Задание 15.** Реализуйте класс `BankAccount` с методами `deposit(amount)`, `withdraw(amount)`, реализующими проверку на отрицательные значения и недостаточный баланс.
 
 <!-- ANSWER
 ```python
@@ -762,137 +827,12 @@ print(book)
 ```
 -->
 
----
+**Задание 20.** Реализуйте функцию `find_anagrams(words)`, которая находит группы анаграмм в списке слов.
 
-### 📌 Практика 4: Декораторы и lambda
-
-**Задание 20.** Реализуйте декоратор `retry(func)` для повторения функции 3 раза при исключении с задержкой (используйте `time.sleep`).
-
-<!-- ANSWER
+Исходный список слов
 ```python
-import time
-import random
-
-def retry(func):
-    def wrapper(*args, **kwargs):
-        for attempt in range(3):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                print(f"Попытка {attempt + 1} провалилась: {e}")
-                time.sleep(0.5)
-        print("Все попытки провалились")
-        return None
-
-    return wrapper
-
-@retry
-def fetch_data(url):
-    if random.random() > 0.3:
-        return f"Данные с {url}"
-    raise ConnectionError("Таймаут")
-
-result = fetch_data("http://example.com")
-print(f"Результат: {result}")
+words = ["listen", "silent", "hello", "enlist", "world", "dlrow"]
 ```
--->
-
-**Задание 21.** Реализуйте декоратор `log_calls` для логирования вызовов функции: аргументы, результат, время выполнения.
-
-<!-- ANSWER
-```python
-import datetime
-
-def log_calls(func):
-    def wrapper(*args, **kwargs):
-        print(f"Вызов {func.__name__}({', '.join(repr(a) for a in args)})")
-        result = func(*args, **kwargs)
-        print(f"Результат {func.__name__}: {result}")
-        return result
-
-    return wrapper
-
-@log_calls
-def add(a, b):
-    return a + b
-
-@log_calls
-def multiply(a, b):
-    return a * b
-
-add(3, 5)
-multiply(4, 6)
-```
--->
-
----
-
-### 📌 Практика 5: Комбинированные
-
-**Задание 22.** Реализуйте двустворочный список (связный список) с методами `append`, `remove`, `__len__`, `__str__`.
-
-<!-- ANSWER
-```python
-class Node:
-    def __init__(self, data):
-        self.data = data
-        self.next = None
-
-class LinkedList:
-    def __init__(self):
-        self.head = None
-
-    def append(self, data):
-        new_node = Node(data)
-        if not self.head:
-            self.head = new_node
-            return
-        current = self.head
-        while current.next:
-            current = current.next
-        current.next = new_node
-
-    def remove(self, data):
-        if not self.head:
-            return
-        if self.head.data == data:
-            self.head = self.head.next
-            return
-        current = self.head
-        while current.next:
-            if current.next.data == data:
-                current.next = current.next.next
-                return
-            current = current.next
-
-    def __len__(self):
-        count = 0
-        current = self.head
-        while current:
-            count += 1
-            current = current.next
-        return count
-
-    def __str__(self):
-        elements = []
-        current = self.head
-        while current:
-            elements.append(str(current.data))
-            current = current.next
-        return ' -> '.join(elements) if elements else "пустой список"
-
-ll = LinkedList()
-ll.append(10)
-ll.append(20)
-ll.append(30)
-print(ll)
-print(f"Длина: {len(ll)}")
-ll.remove(20)
-print(ll)
-```
--->
-
-**Задание 23.** Реализуйте функцию `find_anagrams(words)`, которая находит группы анаграмм в списке слов.
 
 <!-- ANSWER
 ```python
@@ -903,63 +843,8 @@ def find_anagrams(words):
         groups.setdefault(key, []).append(word)
     return [group for group in groups.values() if len(group) > 1]
 
-words = ["listen", "silent", "hello", "enlist", "world", "dlrow"]
 for group in find_anagrams(words):
     print(group)
-```
--->
-
-**Задание 24.** Реализуйте класс `Matrix` с операциями сложения, умножения на скаляр и транспонирования (используя `__add__`, `__mul__`, `transpose`).
-
-<!-- ANSWER
-```python
-class Matrix:
-    def __init__(self, data):
-        self.data = data
-        self.rows = len(data)
-        if self.rows:
-            self.cols = len(data[0])
-        else:
-            self.cols = 0
-
-    def __add__(self, other):
-        if self.rows != other.rows or self.cols != other.cols:
-            raise ValueError("Размеры матриксов не совпадают")
-        return Matrix([
-            [self.data[i][j] + other.data[i][j] for j in range(self.cols)]
-            for i in range(self.rows)
-        ])
-
-    def __mul__(self, value):
-        return Matrix([
-            [self.data[i][j] * value for j in range(self.cols)]
-            for i in range(self.rows)
-        ])
-
-    def transpose(self):
-        if not self.data:
-            return Matrix([])
-        return Matrix([
-            [self.data[i][j] for i in range(self.rows)]
-            for j in range(self.cols)
-        ])
-
-    def __str__(self):
-        return '\n'.join(' | '.join(str(x) for x in row) for row in self.data)
-
-a = Matrix([[1, 2, 3], [4, 5, 6]])
-b = Matrix([[7, 8, 9], [10, 11, 12]])
-
-print("A:")
-print(a)
-print("\nB:")
-print(b)
-print("\nA + B:")
-print(a + b)
-print("\nA * 2:")
-print(a * 2)
-print("\nA.T:")
-print(a.transpose())
 ```
 -->
 
@@ -967,26 +852,17 @@ print(a.transpose())
 
 ## 📌 Отчёт о выполненной работе
 
-1. Сохраните все ячейки с выполненными заданиями в Jupyter Notebook
-2. Добавьте краткие комментарии к каждому заданию
-3. Добавьте Markdown-ячейку с ответами на контрольные вопросы из раздела «Контрольные вопросы»
-4. Сохраните ноутбук как `Pr_3_<группа>_<номер>.ipynb`
-5. Загрузите файл в репозиторий `reports_<группа>_<номер>` в GitLab:
+1. Добавьте в конец Jupyter Notebook `Pr_3_report.ipynb` Markdown-ячейку с ответами на контрольные вопросы из раздела [«Контрольные вопросы»](Pr_3.md#контрольные-вопросы)
+   - Тип ячейки выбирается в верхней части окна Jupyter Notebook'а из выпадающего списка, где по умолчанию стоит значение `Code`
+3. Сохраните Jupyter Notebook
+4. Загрузите файл в свой репозиторий в GitLab:
+   - В левом окне Jupyter Lab (файловом менеджере) перейдите в каталог `project` (поднимитесь на два уровня вверх: из `Pr_3` в `reports` -> `project`)
+   - Создайте новую вкладку типа `Terminal` (File -> New -> Terminal)
+   - Введите
 
 ```bash
-git add Pr_3_<группа>_<номер>.ipynb
-git commit -m "Pr_3 notebook"
-git push
-```
-
-**Финальное действие:**
-
-Для запуска автоматической оценки создайте триггер-файл и отправьте его в репозиторий:
-
-```bash
-touch .grade-trigger
-git add .grade-trigger
-git commit -m "Grade trigger"
+git add ю
+git commit -m "Pr_3 notebook report"
 git push
 ```
 
