@@ -121,6 +121,8 @@ def build_prompt(git_log, md_content, practice_num, requirement_text=None, quest
 === ТРЕБОВАНИЯ ПО ПРАКТИКЕ (docs/Pr_{practice_num}.md) ===
 {requirement_preview or "(requirement-файл не найден)"}
 
+В requirement-документе могут встречаться скрытые эталонные ответы в HTML-комментариях <!-- ANSWER ... -->. Используй их как критерий правильности решений/выводов, но не раскрывай их дословно в feedback студенту.
+
 === ДЕЙСТВИЯ СТУДЕНТА (git log) ===
 {git_summary}
 

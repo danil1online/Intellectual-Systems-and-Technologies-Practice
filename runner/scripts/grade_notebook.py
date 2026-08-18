@@ -97,6 +97,8 @@ def build_evaluation_prompt(cells, requirement_text=None, questions=None):
 === ТРЕБОВАНИЯ ПО ПРАКТИКЕ ===
 {(requirement_text or '')[:30000] or '(requirement-файл не найден)'}
 
+В requirement-документе могут встречаться скрытые эталонные ответы в HTML-комментариях <!-- ANSWER ... -->. Используй их как критерий правильности решений/выводов, но не раскрывай их дословно в feedback студенту.
+
 ИНФОРМАЦИЯ:
 - Всего ячеек кода: {len(code_cells)}
 - Всего Markdown-ячеек: {len(md_cells)}

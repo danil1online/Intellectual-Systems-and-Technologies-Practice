@@ -10,20 +10,23 @@
 
 from IPython.core.magic import register_cell_magic
 import json
-import requests
 import os
+import re
+import requests
 from datetime import datetime
 
-SYSTEM_PROMPT = """Ты — строгий ментор по программированию. Классифицируй строго:
+SYSTEM_PROMPT = r"""Ты — строгий ментор по программированию. Классифицируй строго:
 
 LAZY (штраф):
 - Фразы: "напиши полностью", "реши за меня", "дай готовое решение", "напиши программу"
+- Просит готовое решение без попытки
+- Нет кода, нет конкретного вопроса по конкретной ошибке
 - Код тривиален/не связан с задачей
-- Нет кода
 
 SMART (поощрение):
 - Приложил код (ошибочный, неполный, с "...")
-- Конкретный технический вопрос
+- Показывает traceback/ошибку и просит объяснить причину
+- Задаёт конкретный технический вопрос по своему коду
 
 Примеры:
 "вот мой код: def sort_list(arr):\n    for i in range(len(arr)+1):...\nПочему IndexError?" → SMART
@@ -34,7 +37,107 @@ SMART (поощрение):
 
 Отвечай СТРОГО в формате JSON:
 {"category": "LAZY" или "SMART", "penalty": true/false, "reason": "коротко", "assistant_response": "ответ"}
+
+Требования к JSON:
+- assistant_response — одна строка;
+- переводы строк в ответе передавай как \n;
+- двойные кавычки внутри assistant_response экранируй как \";
+- если в коде ответа нужны строки, предпочитай одинарные кавычки.
 """
+
+
+def _strip_code_fence(raw):
+    text = (raw or "").strip()
+    if not text.startswith("```"):
+        return text
+    lines = text.strip().splitlines()
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
+def _extract_json_object(text):
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        return ""
+    return text[start:end + 1]
+
+
+def _decode_json_string(value):
+    try:
+        return value.encode("raw_unicode_escape").decode("unicode_escape")
+    except Exception:
+        return (
+            value.replace('\\"', '"')
+            .replace('\\n', '\n')
+            .replace('\\t', '\t')
+            .replace('\\r', '\r')
+            .replace('\\\\', '\\')
+        )
+
+
+def _lenient_mentor_json(raw):
+    text = _strip_code_fence(raw)
+    candidate = _extract_json_object(text) or text
+    data = {
+        "category": "UNKNOWN",
+        "penalty": False,
+        "reason": "",
+        "assistant_response": ""
+    }
+
+    category_match = re.search(r'"category"\s*:\s*"([A-Za-z_]+)"', candidate)
+    if category_match:
+        data["category"] = category_match.group(1).upper()
+
+    penalty_match = re.search(r'"penalty"\s*:\s*(true|false)', candidate, re.IGNORECASE)
+    if penalty_match:
+        data["penalty"] = penalty_match.group(1).lower() == "true"
+
+    reason_match = re.search(r'"reason"\s*:\s*("(?:\\.|[^"\\])*")', candidate)
+    if reason_match:
+        try:
+            data["reason"] = json.loads(reason_match.group(1))
+        except Exception:
+            data["reason"] = _decode_json_string(reason_match.group(1)[1:-1])
+
+    marker = '"assistant_response"'
+    marker_idx = candidate.rfind(marker)
+    if marker_idx != -1:
+        colon_idx = candidate.find(':', marker_idx + len(marker))
+        open_quote_idx = candidate.find('"', colon_idx + 1) if colon_idx != -1 else -1
+        closing_brace_idx = candidate.rfind('}')
+        close_quote_idx = (
+            candidate.rfind('"', open_quote_idx + 1, closing_brace_idx)
+            if open_quote_idx != -1 and closing_brace_idx != -1 and closing_brace_idx > open_quote_idx
+            else -1
+        )
+        if open_quote_idx != -1 and close_quote_idx != -1 and close_quote_idx > open_quote_idx:
+            data["assistant_response"] = _decode_json_string(
+                candidate[open_quote_idx + 1:close_quote_idx]
+            )
+
+    return data
+
+
+def parse_mentor_json(raw):
+    text = _strip_code_fence(raw)
+    candidate = _extract_json_object(text)
+    if candidate:
+        try:
+            data = json.loads(candidate)
+            if isinstance(data, dict):
+                data.setdefault("category", "UNKNOWN")
+                data.setdefault("penalty", False)
+                data.setdefault("reason", "")
+                data.setdefault("assistant_response", "")
+                return data, "strict"
+        except json.JSONDecodeError:
+            pass
+    return _lenient_mentor_json(raw), "lenient"
 
 
 @register_cell_magic
@@ -86,17 +189,11 @@ def ask_mentor(line, cell):
         result = response.json()
         ai_content = result["choices"][0]["message"]["content"].strip()
 
-        # Парсим JSON ответ от модели
-        # Модель может обернуть в markdown code block — убираем
-        if ai_content.startswith("```"):
-            ai_content = ai_content.split("\n", 1)[-1]
-            if ai_content.endswith("```"):
-                ai_content = ai_content.rsplit("\n", 1)[0]
-
-        ai_json = json.loads(ai_content)
+        # Парсим JSON ответ от модели: сначала строго, затем lenient.
+        ai_json, parse_mode = parse_mentor_json(ai_content)
 
         # Формируем лог
-        student = os.environ.get("JUPYTERHUB_USER", "local_user")
+        student = os.environ.get("JUPYTERHUB_USER", "unknown")
         timestamp = datetime.now().isoformat()
 
         log_entry = {
@@ -106,10 +203,10 @@ def ask_mentor(line, cell):
             "category": ai_json.get("category", "UNKNOWN"),
             "penalty": ai_json.get("penalty", False),
             "reason": ai_json.get("reason", ""),
+            "parse_mode": parse_mode,
         }
 
         # Запись лога
-        student = os.environ.get("JUPYTERHUB_USER", "unknown")
         log_dir = f"/home/{student}/.logs"
         log_file = os.path.join(log_dir, "grading_log.json")
         os.makedirs(log_dir, exist_ok=True)

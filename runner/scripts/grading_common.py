@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 CONTROL_QUESTION_TOTAL = 2.0
-GRADER_VERSION = "v2-md-only-control-questions"
+GRADER_VERSION = "v3-pr2-pr3-hidden-answers"
 
 # Canonical heading is "Контрольные вопросы".
 # The old "Вопросы" heading is kept as a compatibility fallback for already
