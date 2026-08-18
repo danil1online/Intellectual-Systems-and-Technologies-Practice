@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     build-essential \
     nano \
+    npm \
     nodejs \
     libeigen3-dev \
     ffmpeg \
