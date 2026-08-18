@@ -217,7 +217,7 @@ import pandas as pd
 1. 🧪 **Загружаем данные из CSV-файла**
 
 ```python
-cust_df = pd.read_csv("/shared/data/Cust_Segmentation.csv")
+cust_df = pd.read_csv("~/data/Cust_Segmentation.csv")
 cust_df.head()
 ```
 
