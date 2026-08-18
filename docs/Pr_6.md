@@ -1,5 +1,4 @@
-# Практическая работа №6
-# Практическая работа №5 Визуализация данных средствами MatplotLib. Диаграммы
+# Практическая работа №6: Визуализация данных средствами MatplotLib. Диаграммы
 
 ---
 
@@ -11,7 +10,7 @@
 
 ## ⚠️ Важно
 
-Это работа в формате **Notebook-based**. Вам будет доступен **ИИ-ментор** (`%%ask_mentor`). Все запросы логируются.
+Это работа в формате **Notebook-based**. Вам будет доступен **ИИ-ментор** (`%%ask_mentor`). Все запросы оцениваются.
 
 ---
 
@@ -21,7 +20,7 @@ matplotlib – это основная библиотека для постро�
 Она включает функции для создания высококачественных визуализаций типа линейных диаграмм, гистограмм, диаграмм разброса и т.д. 
 Визуализация данных и различных аспектов вашего анализа может дать важную информацию. 
 
-В данной работе взаимодействие с matplotlib будет проходить в [Jupyter Notebook](Pr_6.md) на базе [Google Colab](https://colab.research.google.com/notebooks/intro.ipynb)
+В данной работе взаимодействие с matplotlib будет проходить в Jupyter Notebook
 В среде Jupyter Notebook  возможно вывести рисунок прямо в браузере с помощью встроенных команд ```%matplotlib notebook``` и ```%matplotlib inline```.
 Рекомендуется использовать ```%matplotlib inline```.
 
@@ -37,7 +36,6 @@ Bar Charts обычно представляют числовые и катег�
 
 ## 📁 Материалы и методы
 
-- Среда выполнения - [Google Colab](https://github.com/deepmipt/dlschl/wiki/Инструкция-по-работе-с-Google-Colab)
 - Язык программирования – [python](https://www.python.org/).
 - Основные технологии:
   -  [jupyter Notebook](https://jupyter.org/).
@@ -54,19 +52,63 @@ Bar Charts обычно представляют числовые и катег�
 
 ### ⚙️ Настройка среды  
 
-**Перейти по [ссылке](https://colab.research.google.com/notebooks/intro.ipynb)**
+**Откройте JupyterHub**: `http://<server-ip>:8000`, войдите под своей учётной записью.
 
-**В правом верхнем углу нажать кнопку «Войти» и затем ввести свои учетные данные google.**
+В левой части Jupyter Lab перейдите (предположим, Вы находитесь в своем корневом каталоге `~`) в `project` -> `reports`
 
-**В верхнем левом углу найдите подменю «Файл», далее «Открыть блокнот», выберите блокнот, который вы создали в рамках [П.р. №6](Pr_6.md).**
+Создайте новый каталог `Pr_6`
 
-**Выполните заново все ячейки этого блокнота.**
+Создайте новый Jupyter Notebook: **File → New → Notebook → Python 3 (ipykernel)**.
+
+Сохраните новый Jupyter Notebook под именем `Pr_6_report.ipynb` (в `~/project/reports/Pr_6`)
+
+Введите первый блок кода в первую ячейку — проверка версии Python:
+
+```python
+import sys
+print(f"Python version: {sys.version}")
+```
+
+**Далее приведены задания для самостоятельного выполнения**. 
+
+В ходе выполнения рекомендуется комментировать код. Комментарии в Python начинаются с символа `#`, все, что следует за ним, не будет выполнено. 
+
+При появлении ошибок и наличии вопросов рекомендуется использовать встроенного ИИ-ментора, например
+```python
+%%ask_mentor
+Почему при выполнении freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]} появляется ошибка
+TypeError                                 Traceback (most recent call last)
+Cell In[8], line 46
+     44 squares_dict = {x: x ** 2 for x in range(1, 6)}
+     45 # {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
+---> 46 freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]}
+
+Cell In[8], line 46, in <dictcomp>(.0)
+     44 squares_dict = {x: x ** 2 for x in range(1, 6)}
+     45 # {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
+---> 46 freq = {word: len(words) for word, words in [("cat", 3), ("dog", 4)]}
+
+TypeError: object of type 'int' has no len()
+```
 
 ---
 
-
 ### 🧪 Построение Гистограмм
 
+  - Загрузка и подготовка данных.
+    - Импорт первичных библиотек - pandas, Numpy.
+    ```python
+    import numpy as np
+    import pandas as pd
+    ```
+    - Загрузка данных из сети интернет в pandas dataframe.
+    ```python
+    df_can = pd.read_excel('https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx',
+              sheet_name='Canada by Citizenship',
+              skiprows=range(20),
+              skipfooter=2)
+    print('Данные загружены и записаны в dataframe!')
+    ```
   - Обзор данных
   ```python
   df_can['2013'].head()
@@ -103,7 +145,26 @@ Bar Charts обычно представляют числовые и катег�
     ```    
 ---
 
-## 📌 Подготовить отчет о выполненной работе
-В т.ч.: 
-  - Попробуйте изменить kind='barh' на kind='bar', что получится?
-  - Постройте последний график не для Пакистана, а для Индии. 
+## 📌 Отчёт о выполненной работе после выполнения заданий / завершения занятия
+
+1. Добавьте в конец Jupyter Notebook `Pr_6_report.ipynb` Markdown-ячейку с ответами на контрольные вопросы из раздела [«Контрольные вопросы»](Pr_6.md#контрольные-вопросы)
+   - Тип ячейки выбирается в верхней части окна Jupyter Notebook'а из выпадающего списка, где по умолчанию стоит значение `Code`
+3. Сохраните Jupyter Notebook
+4. Загрузите файл в свой репозиторий в GitLab:
+   - В левом окне Jupyter Lab (файловом менеджере) перейдите в каталог `project` (поднимитесь на два уровня вверх: из `Pr_6` в `reports` -> `project`)
+   - Создайте новую вкладку типа `Terminal` (File -> New -> Terminal)
+   - Введите
+
+```bash
+git add .
+git commit -m "Pr_6 notebook report"
+git push
+```
+
+> ⏳ Оценка запустится автоматически в GitLab CI. Результат появится в разделе **CI/CD → Pipelines**.
+
+---
+
+## Контрольные вопросы
+1. Попробуйте изменить kind='barh' на kind='bar', что получится?
+2. Постройте последний график не для Пакистана, а для Индии. 
