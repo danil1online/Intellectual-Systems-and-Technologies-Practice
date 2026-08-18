@@ -70,7 +70,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     numpy==1.26.4 scipy pandas scikit-learn matplotlib \
     transformers datasets==3.5.1 \
     pydotplus openpyxl folium mglearn basemap \
-    tensorflow-cpu==2.16.2 tensorflow-text==2.16.2 \
+    tensorflow-cpu==2.15.0 tensorflow-text==2.15.0 \
     opencv-python-headless segmentation-models-pytorch efficientnet_pytorch \
     pillow imageio jiwer SpeechRecognition soundfile librosa openai-whisper \
     nltk rouge-score umap-learn seaborn \
