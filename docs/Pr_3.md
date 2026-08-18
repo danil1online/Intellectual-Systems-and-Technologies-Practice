@@ -861,7 +861,7 @@ for group in find_anagrams(words):
    - Введите
 
 ```bash
-git add ю
+git add .
 git commit -m "Pr_3 notebook report"
 git push
 ```
