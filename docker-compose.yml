@@ -78,6 +78,7 @@ services:
       - ./shared/data/shared-packages/site-packages:/usr/local/lib/python3.10/shared-packages
       - hf-cache:/hf-cache
       - pip-cache:/shared/pip-cache
+      - torch-cache:/shared/torch-cache
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - internal
@@ -250,6 +251,9 @@ volumes:
   pip-cache:
     external: true
     name: ${PROJECT_VOLUME_PREFIX}_pip-cache
+  torch-cache:
+    external: true
+    name: ${PROJECT_VOLUME_PREFIX}_torch-cache
 
 networks:
   internal:

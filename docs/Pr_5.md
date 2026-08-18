@@ -118,9 +118,9 @@ TypeError: object of type 'int' has no len()
     import numpy as np
     import pandas as pd
     ```
-    - Загрузка данных из сети интернет в pandas dataframe.
+    - Загрузка данных из общего датасета в pandas dataframe.
     ```python
-    df_can = pd.read_excel('https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx',
+    df_can = pd.read_excel('/shared/data/Canada.xlsx',
               sheet_name='Canada by Citizenship',
               skiprows=range(20),
               skipfooter=2)

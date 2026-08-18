@@ -545,90 +545,137 @@ print_success "Порты: JupyterHub=$JUPYTERHUB_PORT, Dashboard=$DASHBOARD_POR
 print_header "ШАГ 2.5/12: Загрузка датасетов для практических работ"
 
 DATA_ZIP_URL="https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.1/data.zip"
+CANADA_XLSX_URL="https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx"
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
 DATA_VOLUME="${PROJECT_VOLUME_PREFIX}_shared-data"
+TORCH_CACHE_VOLUME="${PROJECT_VOLUME_PREFIX}_torch-cache"
 
-# Проверяем, есть ли уже данные в volume
-if docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
-    FILE_COUNT=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "find /data -type f 2>/dev/null | wc -l")
-    if [[ "$FILE_COUNT" -gt 0 ]]; then
-        DATA_SIZE=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "du -sh /data 2>/dev/null | cut -f1")
-        print_success "Датасеты уже загружены в Docker volume (${DATA_SIZE}, ${FILE_COUNT} файлов)"
-        cd - > /dev/null
-    else
-        print_step "Volume существует, но пустой — загружаю данные..."
-        DOWNLOAD_NEEDED="true"
-    fi
-else
-    print_step "Volume не существует — создаю и загружаю данные..."
-    DOWNLOAD_NEEDED="true"
+if ! docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
+    docker volume create "$DATA_VOLUME"
+fi
+if ! docker volume inspect "$TORCH_CACHE_VOLUME" >/dev/null 2>&1; then
+    docker volume create "$TORCH_CACHE_VOLUME"
 fi
 
-if [[ "${DOWNLOAD_NEEDED:-false}" == "true" ]]; then
-    DATA_SOURCE=$(ask_choice \
-        "Выберите источник данных" \
-        "1" "Скачать по ссылке (GitHub)" \
-        "2" "Локальный файл data.zip" \
-        "1")
+is_data_volume_populated() {
+    docker run --rm -v "$DATA_VOLUME":/data --entrypoint sh alpine -c \
+        'test -d /data/cifar-10-batches-py || test -f /data/ratings.csv'
+}
 
-    if [[ "$DATA_SOURCE" == "2" ]]; then
-        while true; do
-            DATA_ZIP_PATH=$(ask "Путь к файлу data.zip")
-            if [[ -f "$DATA_ZIP_PATH" ]]; then
-                print_success "Файл найден: $DATA_ZIP_PATH"
-                USE_LOCAL_ZIP="true"
-                break
-            else
-                print_error "Файл не найден: $DATA_ZIP_PATH"
-            fi
-        done
+JUPYTERHUB_IMAGE_CANDIDATES=("istp-jupyterhub:latest" "ghcr.io/danil1online/istp-jupyterhub:latest")
+
+find_jupyterhub_data_image() {
+    local required_file="$1"
+    local image
+    for image in "${JUPYTERHUB_IMAGE_CANDIDATES[@]}"; do
+        if docker image inspect "$image" >/dev/null 2>&1 && \
+            docker run --rm --entrypoint test "$image" -f "$required_file" >/dev/null 2>&1; then
+            echo "$image"
+            return 0
+        fi
+    done
+    return 1
+}
+
+extract_zip_to_volume() {
+    local zip_path="$1"
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -oq "$zip_path" -d "$tmp_dir"
     else
-        USE_LOCAL_ZIP="false"
+        python3 -m zipfile -e "$zip_path" "$tmp_dir"
+    fi
+    docker run --rm -v "$DATA_VOLUME":/data -v "$tmp_dir":/src:ro --entrypoint sh alpine -c '
+        mkdir -p /data /data/cifar-10-batches-py
+        cp -a /src/cifar-10-batches-py/. /data/cifar-10-batches-py/ 2>/dev/null || true
+        cp -a /src/cifar-10-python.tar.gz /data/ 2>/dev/null || true
+        cp -a /src/*.csv /data/ 2>/dev/null || true
+    '
+    rm -rf "$tmp_dir"
+}
+
+copy_canada_to_volume() {
+    local src="$1"
+    docker run --rm -v "$DATA_VOLUME":/data -v "$src":/src/Canada.xlsx:ro --entrypoint sh alpine -c \
+        'mkdir -p /data && cp /src/Canada.xlsx /data/Canada.xlsx'
+}
+
+DATA_IMAGE=$(find_jupyterhub_data_image /opt/istp-data/data.zip || true)
+
+print_step "Проверка датасетов в Docker volume $DATA_VOLUME"
+if is_data_volume_populated; then
+    print_success "Датасеты уже загружены в Docker volume"
+else
+    print_step "Загрузка датасетов в Docker volume..."
+    DATA_ZIP_PATH=""
+    if [[ -f "$PROJECT_DIR/jupyterhub/data.zip" ]]; then
+        DATA_ZIP_PATH="$PROJECT_DIR/jupyterhub/data.zip"
+    elif [[ -f "$PROJECT_DIR/../data.zip" ]]; then
+        DATA_ZIP_PATH="$PROJECT_DIR/../data.zip"
     fi
 
-    if [[ "${USE_LOCAL_ZIP:-false}" == "false" ]]; then
-        print_step "Скачивание data.zip ..."
+    if [[ -n "$DATA_ZIP_PATH" ]]; then
+        print_step "Использую локальный data.zip: $DATA_ZIP_PATH"
+        extract_zip_to_volume "$DATA_ZIP_PATH"
+    elif [[ -n "$DATA_IMAGE" ]]; then
+        print_step "Использую data.zip из образа $DATA_IMAGE"
+        docker run --rm -v "$DATA_VOLUME":/data --entrypoint python "$DATA_IMAGE" \
+            -m zipfile -e /opt/istp-data/data.zip /data/
+    else
+        print_step "Скачивание data.zip по URL..."
         if command -v wget >/dev/null 2>&1; then
             wget -q --show-progress -O /tmp/data.zip "$DATA_ZIP_URL"
         else
             curl -fsSL -o /tmp/data.zip "$DATA_ZIP_URL"
         fi
-    else
-        print_step "Копирование data.zip ..."
-        cp "$DATA_ZIP_PATH" /tmp/data.zip
+        extract_zip_to_volume /tmp/data.zip
+        rm -f /tmp/data.zip
     fi
 
-    if [[ -f /tmp/data.zip ]]; then
-        ZIP_SIZE=$(du -h /tmp/data.zip | cut -f1)
-        print_step "Распаковка архива (${ZIP_SIZE}) ..."
-        
-        cd /tmp
-        unzip -o data.zip > /dev/null 2>&1
-        
-        if ! docker volume inspect "$DATA_VOLUME" >/dev/null 2>&1; then
-            print_step "Создание Docker volume $DATA_VOLUME ..."
-            docker volume create "$DATA_VOLUME"
-        fi
-        
-        print_step "Копирование данных в Docker volume ..."
-        docker run --rm -v "$DATA_VOLUME":/data -v /tmp:/src:ro alpine sh -c "cp -r /src/cifar-10* /src/*.csv /data/"
-        
-        FILE_COUNT=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "find /data -type f | wc -l")
-        if [[ "$FILE_COUNT" -gt 0 ]]; then
-            DATA_SIZE=$(docker run --rm -v "$DATA_VOLUME":/data alpine sh -c "du -sh /data | cut -f1")
-            print_success "Датасеты загружены в Docker volume (${DATA_SIZE}, ${FILE_COUNT} файлов)"
-        else
-            print_error "Не удалось скопировать данные в volume"
-            exit 1
-        fi
-        
-        rm -f /tmp/data.zip
-        rm -rf /tmp/cifar-10* /tmp/*.csv
-        cd - > /dev/null
-    else
-        print_error "Не удалось получить data.zip"
+    if ! is_data_volume_populated; then
+        print_error "Не удалось загрузить датасеты в Docker volume"
         exit 1
     fi
+
+    FILE_COUNT=$(docker run --rm -v "$DATA_VOLUME":/data --entrypoint sh alpine -c 'find /data -type f | wc -l')
+    DATA_SIZE=$(docker run --rm -v "$DATA_VOLUME":/data --entrypoint sh alpine -c 'du -sh /data | cut -f1')
+    print_success "Датасеты загружены в Docker volume (${DATA_SIZE}, ${FILE_COUNT} файлов)"
+fi
+
+if docker run --rm -v "$DATA_VOLUME":/data --entrypoint test alpine -f /data/Canada.xlsx; then
+    print_success "Canada.xlsx уже присутствует в Docker volume"
+else
+    print_step "Загрузка Canada.xlsx ..."
+    CANADA_SRC=""
+    if [[ -f "$PROJECT_DIR/jupyterhub/data/Canada.xlsx" ]]; then
+        CANADA_SRC="$PROJECT_DIR/jupyterhub/data/Canada.xlsx"
+    elif [[ -f "$PROJECT_DIR/../jupyterhub/data/Canada.xlsx" ]]; then
+        CANADA_SRC="$PROJECT_DIR/../jupyterhub/data/Canada.xlsx"
+    fi
+
+    CANADA_IMAGE=$(find_jupyterhub_data_image /opt/istp-data/Canada.xlsx || true)
+    if [[ -n "$CANADA_SRC" ]]; then
+        copy_canada_to_volume "$CANADA_SRC"
+    elif [[ -n "$CANADA_IMAGE" ]]; then
+        docker run --rm -v "$DATA_VOLUME":/data --entrypoint sh "$CANADA_IMAGE" -c \
+            'mkdir -p /data && cp /opt/istp-data/Canada.xlsx /data/Canada.xlsx'
+    else
+        CANADA_TMP="/tmp/Canada.xlsx"
+        if command -v wget >/dev/null 2>&1; then
+            wget -q -O "$CANADA_TMP" "$CANADA_XLSX_URL"
+        else
+            curl -fsSL -o "$CANADA_TMP" "$CANADA_XLSX_URL"
+        fi
+        copy_canada_to_volume "$CANADA_TMP"
+        rm -f "$CANADA_TMP"
+    fi
+
+    if ! docker run --rm -v "$DATA_VOLUME":/data --entrypoint test alpine -f /data/Canada.xlsx; then
+        print_error "Не удалось загрузить Canada.xlsx в Docker volume"
+        exit 1
+    fi
+    print_success "Canada.xlsx загружен в Docker volume"
 fi
 # ШАГ 3/11: LLM для ИИ-Ментора
 # ============================================
@@ -835,7 +882,7 @@ rm -rf "$PROJECT_DIR/shared/data/docs"
 print_success "Старые bind-mount директории удалены"
 
 # Создаём Docker volumes для кэшей
-for vol in hf-cache pip-cache; do
+for vol in hf-cache pip-cache torch-cache; do
     FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
     docker volume inspect "$FULL_VOL_NAME" >/dev/null 2>&1 || docker volume create "$FULL_VOL_NAME"
     print_success "Volume $FULL_VOL_NAME создана"

@@ -87,6 +87,14 @@ c.Spawner.environment = {
     "LLM_CI_API_KEY": os.environ.get("LLM_CI_API_KEY", "local-api-key"),
     "LLM_CI_MODEL": os.environ.get("LLM_CI_MODEL", "gpt-4o"),
     "HF_HOME": "/hf-cache",
+    "HF_HUB_CACHE": "/hf-cache/hub",
+    "HF_DATASETS_CACHE": "/hf-cache/datasets",
+    "HF_TRANSFORMERS_CACHE": "/hf-cache/transformers",
+    "TRANSFORMERS_CACHE": "/hf-cache/transformers",
+    "XDG_CACHE_HOME": "/hf-cache/xdg-cache",
+    "TORCH_HOME": "/shared/torch-cache",
+    "C_INCLUDE_PATH": "/usr/include/eigen3",
+    "CPLUS_INCLUDE_PATH": "/usr/include/eigen3",
     "PIP_CACHE_DIR": "/shared/pip-cache",
 }
 

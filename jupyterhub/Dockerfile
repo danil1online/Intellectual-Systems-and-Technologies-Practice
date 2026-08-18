@@ -8,12 +8,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     build-essential \
     nano \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
+    nodejs \
+    libeigen3-dev \
+    ffmpeg \
+    libsndfile1 \
+    libglib2.0-0 \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка configurable-http-proxy
 RUN npm install -g configurable-http-proxy
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_USER=0
+ENV PIP_NO_CACHE_DIR=1
+ENV C_INCLUDE_PATH=/usr/include/eigen3
+ENV CPLUS_INCLUDE_PATH=/usr/include/eigen3
+ENV HF_HOME=/hf-cache
+ENV HF_HUB_CACHE=/hf-cache/hub
+ENV HF_DATASETS_CACHE=/hf-cache/datasets
+ENV HF_TRANSFORMERS_CACHE=/hf-cache/transformers
+ENV TRANSFORMERS_CACHE=/hf-cache/transformers
+ENV XDG_CACHE_HOME=/hf-cache/xdg-cache
+ENV TORCH_HOME=/shared/torch-cache
+ENV NLTK_DATA=/usr/share/nltk_data
 
 # Установка Python пакетов
 RUN pip install --no-cache-dir \
@@ -34,7 +52,10 @@ RUN pip install --no-cache-dir \
 
 # ML-библиотеки (CPU-only PyTorch)
 RUN pip install --no-cache-dir \
-    torch torchvision torchaudio \
+    torch==2.5.1+cpu \
+    torchvision==0.20.1+cpu \
+    torchaudio==2.5.1+cpu \
+    torchtext==0.20.1+cpu \
     --index-url https://download.pytorch.org/whl/cpu
 
 # Научные пакеты
@@ -46,10 +67,61 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-luatex \
     cm-super \
     && pip install --no-cache-dir \
-    numpy scipy pandas scikit-learn matplotlib \
+    numpy==1.26.4 scipy pandas scikit-learn matplotlib \
     transformers datasets==3.5.1 \
     pydotplus openpyxl folium mglearn basemap \
+    tensorflow-cpu==2.16.2 tensorflow-text==2.16.2 \
+    opencv-python-headless segmentation-models-pytorch efficientnet_pytorch \
+    pillow imageio jiwer SpeechRecognition soundfile librosa openai-whisper \
+    nltk rouge-score umap-learn seaborn \
     && rm -rf /var/lib/apt/lists/*
+
+# ============================================
+# pydensecrf (Eigen headers + Cython<3)
+# ============================================
+RUN pip install --no-cache-dir "cython<3" "setuptools" wheel && \
+    pip install --no-cache-dir git+https://github.com/phillip84/pydensecrf.git#egg=pydensecrf
+
+# ============================================
+# NLTK data (общий путь для всех пользователей)
+# ============================================
+RUN python -m nltk.downloader -d /usr/share/nltk_data \
+    brown \
+    punkt \
+    punkt_tab \
+    wordnet \
+    averaged_perceptron_tagger \
+    averaged_perceptron_tagger_eng \
+    omw-1.4 \
+    stopwords
+
+# ============================================
+# Предзагрузка моделей/датасетов в общий HF/torch cache
+# ============================================
+RUN mkdir -p /hf-cache/hub /hf-cache/datasets /hf-cache/transformers /hf-cache/xdg-cache /shared/torch-cache /opt/istp-data && \
+    python - <<'PY'
+from datasets import load_dataset
+from transformers import AutoModel, AutoTokenizer, Wav2Vec2ForCTC, Wav2Vec2Processor
+import whisper
+from torchvision.models import resnet34
+from torchvision.models.detection import maskrcnn_resnet50_fpn
+
+AutoTokenizer.from_pretrained("bert-base-uncased")
+AutoModel.from_pretrained("bert-base-uncased")
+Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
+Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
+whisper.load_model("base")
+load_dataset("glue", "stsb")
+resnet34(weights="IMAGENET1K_V1")
+maskrcnn_resnet50_fpn(weights="COCO_V1")
+PY
+RUN chmod -R 0777 /hf-cache /shared/torch-cache
+
+# ============================================
+# Данные для setup.sh (распаковываются в shared-data volume)
+# ============================================
+COPY data.zip /opt/istp-data/data.zip
+COPY data/Canada.xlsx /opt/istp-data/Canada.xlsx
 
 WORKDIR /app
 
