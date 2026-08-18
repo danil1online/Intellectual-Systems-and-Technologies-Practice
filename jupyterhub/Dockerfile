@@ -119,9 +119,11 @@ RUN chmod -R 0777 /hf-cache /shared/torch-cache
 
 # ============================================
 # Данные для setup.sh (распаковываются в shared-data volume)
+# data.zip нужно предварительно скачать из https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.1/data.zip
+# Canada.xlsx качается из https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx
 # ============================================
-COPY data.zip /opt/istp-data/data.zip
-COPY data/Canada.xlsx /opt/istp-data/Canada.xlsx
+COPY /home/user1/ISTP/data.zip /opt/istp-data/data.zip
+COPY /home/user1/ISTP/Canada.xlsx /opt/istp-data/Canada.xlsx
 
 WORKDIR /app
 
