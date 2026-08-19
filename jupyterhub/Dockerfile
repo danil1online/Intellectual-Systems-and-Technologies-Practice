@@ -80,7 +80,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # pydensecrf (Eigen headers + Cython<3)
 # ============================================
 RUN pip install --no-cache-dir "cython<3" "setuptools" wheel && \
-    pip install --no-cache-dir https://github.com/phillip84/pydensecrf/archive/refs/heads/master.zip
+    pip install --no-cache-dir git+https://github.com/lucasb-eyer/pydensecrf.git#egg=pydensecrf
 # ============================================
 # NLTK data (общий путь для всех пользователей)
 # ============================================
