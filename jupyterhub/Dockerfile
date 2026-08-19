@@ -97,11 +97,9 @@ RUN python -m nltk.downloader -d /usr/share/nltk_data \
 # ============================================
 # Предзагрузка моделей/датасетов в общий HF/torch cache
 # ============================================
+ENV HF_SKIP_CHECK_TORCH_LOAD_IS_SAFE=1
 RUN mkdir -p /hf-cache/hub /hf-cache/datasets /hf-cache/transformers /hf-cache/xdg-cache /shared/torch-cache /opt/istp-data && \
     python - <<'PY'
-import os
-# Отключаем блокировку загрузки для старых версий torch во время сборки
-os.environ["HF_SKIP_CHECK_TORCH_LOAD_IS_SAFE"] = "1"
 from datasets import load_dataset
 from transformers import AutoModel, AutoTokenizer, Wav2Vec2ForCTC, Wav2Vec2Processor
 import whisper
@@ -109,9 +107,9 @@ from torchvision.models import resnet34
 from torchvision.models.detection import maskrcnn_resnet50_fpn
 
 AutoTokenizer.from_pretrained("bert-base-uncased")
-AutoModel.from_pretrained("bert-base-uncased")
+AutoModel.from_pretrained("bert-base-uncased", use_safetensors=True)
 Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
-Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
+Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h-lv60-self", use_safetensors=True)
 whisper.load_model("base")
 load_dataset("glue", "stsb")
 resnet34(weights="IMAGENET1K_V1")
