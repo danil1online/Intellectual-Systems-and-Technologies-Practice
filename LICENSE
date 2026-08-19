@@ -15,3 +15,13 @@ Under the following terms:
   You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
 
 No additional restrictions — You may not apply legal terms or technological measures that legally restrict others from doing anything the license permits.
+
+===============================================================================
+ИСПОЛЬЗОВАНИЕ СТОРОННИХ ИИ-МОДЕЛЕЙ И ДАТАСЕТОВ (THIRD-PARTY NOTICES)
+
+Данный репозиторий содержит конфигурационные файлы (Dockerfiles, скрипты сборки), которые автоматически загружают, кэшируют и запускают сторонние предобученные модели машинного обучения (включая BERT, Wav2Vec2, Whisper, ResNet, Mask R-CNN) и академические датасеты (GLUE/STSB).
+
+Эти сторонние модели и датасеты НЕ подпадают под действие основной лицензии этого проекта (CC BY 4.0). Они остаются интеллектуальной собственностью их соответствующих создателей (Google, Meta, OpenAI, PyTorch Team и др.) и распространяются на условиях их собственных открытых и академических лицензий (Apache 2.0, MIT, BSD 3-Clause, CC BY 4.0).
+
+Развертывая Docker-контейнеры, представленные в этом репозитории, вы соглашаетесь соблюдать условия и ограничения, установленные оригинальными авторами этих моделей.
+
