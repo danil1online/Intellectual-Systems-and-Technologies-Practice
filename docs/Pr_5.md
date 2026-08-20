@@ -218,9 +218,7 @@ TypeError: object of type 'int' has no len()
    - Введите
 
 ```bash
-git add .
-git commit -m "Pr_5 notebook report"
-git push
+git add . && git commit -m "Pr_5 notebook report" && git push
 ```
 
 > ⏳ Оценка запустится автоматически в GitLab CI. Результат появится в разделе **CI/CD → Pipelines**.
