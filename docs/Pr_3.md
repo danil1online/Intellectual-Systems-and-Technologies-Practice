@@ -404,7 +404,7 @@ for word, count in word_freq(text).items():
 **Задание 4.** Реализуйте обработку списка чисел с использованием [map()](https://pyplanet.ru/article/map.html), [filter()](https://pyplanet.ru/article/filter.html) и [reduce()](https://pyplanet.ru/article/functoolsreduce.html) (из `functools`). Вычислите квадраты, чётные числа и сумму.
 
 ```python
-№Импорт библиотеки
+#Импорт библиотеки
 from functools import reduce
 # Список чисел
 numbers = list(range(1, 11))
