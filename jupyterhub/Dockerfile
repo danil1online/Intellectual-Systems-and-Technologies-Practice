@@ -179,6 +179,7 @@ import tarfile
 import urllib.request
 
 from torchvision import datasets as tv_datasets
+tv_datasets.MNIST.mirrors = ["https://amazonaws.com"]
 
 root = "/shared/data"
 os.makedirs(root, exist_ok=True)
