@@ -32,6 +32,8 @@ ENV HF_TRANSFORMERS_CACHE=/hf-cache/transformers
 ENV TRANSFORMERS_CACHE=/hf-cache/transformers
 ENV XDG_CACHE_HOME=/hf-cache/xdg-cache
 ENV TORCH_HOME=/shared/torch-cache
+ENV KERAS_HOME=/hf-cache/keras
+ENV SKLEARN_DATA_HOME=/hf-cache/sklearn-data
 ENV NLTK_DATA=/usr/share/nltk_data
 
 # Установка Python пакетов
@@ -98,15 +100,35 @@ RUN python -m nltk.downloader -d /usr/share/nltk_data \
 # Предзагрузка моделей/датасетов в общий HF/torch cache
 # ============================================
 ENV HF_SKIP_CHECK_TORCH_LOAD_IS_SAFE=1
-RUN mkdir -p /hf-cache/hub /hf-cache/datasets /hf-cache/transformers /hf-cache/xdg-cache /shared/torch-cache /opt/istp-data
+RUN mkdir -p \
+    /hf-cache/hub \
+    /hf-cache/datasets \
+    /hf-cache/transformers \
+    /hf-cache/xdg-cache \
+    /hf-cache/keras \
+    /hf-cache/sklearn-data \
+    /shared/torch-cache \
+    /shared/data \
+    /opt/istp-data
 RUN --mount=type=secret,id=HF_TOKEN \
     HF_TOKEN=$(cat /run/secrets/HF_TOKEN) \
     python - <<'PY'
 from datasets import load_dataset
-from transformers import AutoModel, AutoTokenizer, Wav2Vec2ForCTC, Wav2Vec2Processor
+from transformers import (
+    AutoModel,
+    AutoModelForCausalLM,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    Wav2Vec2ForCTC,
+    Wav2Vec2Processor,
+)
 import whisper
 from torchvision.models import resnet34
 from torchvision.models.detection import maskrcnn_resnet50_fpn
+from sklearn.datasets import fetch_20newsgroups
+from tensorflow.keras.datasets import mnist as tf_mnist
+from tensorflow.keras.applications.inception_v3 import InceptionV3
+import segmentation_models_pytorch as smp
 
 AutoTokenizer.from_pretrained("bert-base-uncased")
 AutoModel.from_pretrained("bert-base-uncased", use_safetensors=True)
@@ -114,18 +136,103 @@ Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
 Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h-lv60-self", use_safetensors=True)
 whisper.load_model("base")
 load_dataset("nyu-mll/glue", "stsb")
+load_dataset("google-research-datasets/poem_sentiment")
+AutoTokenizer.from_pretrained("nickwong64/bert-base-uncased-poems-sentiment")
+AutoModelForSequenceClassification.from_pretrained(
+    "nickwong64/bert-base-uncased-poems-sentiment",
+    use_safetensors=False
+)
+AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-1.3B")
+AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B")
+fetch_20newsgroups(subset="train", shuffle=False, random_state=42)
+fetch_20newsgroups(subset="test", shuffle=False, random_state=42)
+tf_mnist.load_data()
+InceptionV3(weights="imagenet")
+smp.Unet(
+    encoder_name="resnet34",
+    encoder_weights="imagenet",
+    in_channels=3,
+    classes=1
+)
 resnet34(weights="IMAGENET1K_V1")
 maskrcnn_resnet50_fpn(weights="COCO_V1")
 PY
+RUN printf '2' > /hf-cache/.istp-hf-version
+RUN printf '2' > /shared/torch-cache/.istp-torch-version
 RUN chmod -R 0777 /hf-cache /shared/torch-cache
 
 # ============================================
-# Данные для setup.sh (распаковываются в shared-data volume)
+# Данные для студентов: /shared/data -> ~/data
 # data.zip нужно предварительно скачать из https://github.com/danil1online/Intellectual-Systems-and-Technologies-Practice/releases/download/v1.1/data.zip
 # Canada.xlsx качается из https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx
+# PennFudanPed кладётся локально в jupyterhub/data/PennFudanPed
 # ============================================
 COPY ./data.zip /opt/istp-data/data.zip
-COPY data/Canada.xlsx /opt/istp-data/Canada.xlsx
+COPY data/ /shared/data/
+RUN mkdir -p /shared/data && \
+    python3 -m zipfile -e /opt/istp-data/data.zip /shared/data/ && \
+    rm -f /opt/istp-data/data.zip
+RUN python - <<'PY'
+import os
+import subprocess
+import tarfile
+import urllib.request
+
+from torchvision import datasets as tv_datasets
+
+root = "/shared/data"
+os.makedirs(root, exist_ok=True)
+
+tv_datasets.MNIST(root=root, train=True, download=True)
+tv_datasets.MNIST(root=root, train=False, download=True)
+tv_datasets.FashionMNIST(root=root, train=True, download=True)
+tv_datasets.FashionMNIST(root=root, train=False, download=True)
+
+asr_root = os.path.join(root, "asr")
+audio_root = os.path.join(asr_root, "audio")
+transcripts_root = os.path.join(asr_root, "transcripts")
+os.makedirs(audio_root, exist_ok=True)
+os.makedirs(transcripts_root, exist_ok=True)
+
+url = "http://www.openslr.org/resources/12/dev-clean.tar.gz"
+archive = "/tmp/dev-clean.tar.gz"
+if not os.path.exists(archive):
+    urllib.request.urlretrieve(url, archive)
+
+wanted_ids = []
+with tarfile.open(archive, "r:gz") as tar:
+    for member in tar.getmembers():
+        if member.name.endswith(".flac") and len(wanted_ids) < 10:
+            flac_name = os.path.basename(member.name)
+            utt_id = os.path.splitext(flac_name)[0]
+            wanted_ids.append(utt_id)
+            flac_path = os.path.join(audio_root, f"{utt_id}.flac")
+            wav_path = os.path.join(audio_root, f"{utt_id}.wav")
+            with open(flac_path, "wb") as out:
+                out.write(tar.extractfile(member).read())
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", flac_path, wav_path],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+with tarfile.open(archive, "r:gz") as tar:
+    for member in tar.getmembers():
+        if not member.name.endswith(".trans.txt"):
+            continue
+        content = tar.extractfile(member).read().decode("utf-8")
+        for line in content.splitlines():
+            if not line:
+                continue
+            utt_id, text = line.split(" ", 1)
+            if utt_id in wanted_ids:
+                with open(os.path.join(transcripts_root, f"{utt_id}.txt"), "w", encoding="utf-8") as out:
+                    out.write(text)
+PY
+RUN rm -f /tmp/dev-clean.tar.gz
+RUN printf '2' > /shared/data/.istp-data-version
+RUN chmod -R a+rX /shared/data
 
 WORKDIR /app
 
@@ -152,7 +259,7 @@ RUN mkdir -p /usr/local/lib/python3.10/shared-packages && \
     chown root:shared-packages /shared/pip-cache && \
     chmod 775 /shared/pip-cache && \
     chown root:shared-packages /hf-cache && \
-    chmod 775 /hf-cache
+    chmod 0777 /hf-cache
 
 # Копирование скрипта для генерации SSH-ключей
 RUN chmod +x /app/startup-hooks/generate_ssh_keys.py
