@@ -113,7 +113,7 @@ AutoModel.from_pretrained("bert-base-uncased", use_safetensors=True)
 Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
 Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h-lv60-self", use_safetensors=True)
 whisper.load_model("base")
-load_dataset("glue", "stsb")
+load_dataset("nyu-mll/glue", "stsb")
 resnet34(weights="IMAGENET1K_V1")
 maskrcnn_resnet50_fpn(weights="COCO_V1")
 PY
