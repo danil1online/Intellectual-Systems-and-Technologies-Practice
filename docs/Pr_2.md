@@ -664,9 +664,7 @@ while True:
    - Введите
 
 ```bash
-git add .
-git commit -m "Pr_2 notebook report"
-git push
+git add . && git commit -m "Pr_2 notebook report" && git push
 ```
 
 > ⏳ Оценка запустится автоматически в GitLab CI. Результат появится в разделе **CI/CD → Pipelines**.
