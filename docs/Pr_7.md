@@ -44,7 +44,7 @@ Folium поддерживает наложения как GeoJSON, так и Top
   - [numpy](https://numpy.org/)
   - [pandas](https://pandas.pydata.org/)
   - [Folium](https://python-visualization.github.io/folium/latest/)
-- [Набор данных]('https://github.com/shihao-wen/IBM-Data-Science-Professional-Certificate/blob/master/6.%20Data%20Visualization/Final%20Assignment/Police_Department_Incidents_-_Previous_Year__2016_.csv?raw=true):
+- [Набор данных](https://github.com/shihao-wen/IBM-Data-Science-Professional-Certificate/blob/master/6.%20Data%20Visualization/Final%20Assignment/Police_Department_Incidents_-_Previous_Year__2016_.csv?raw=true):
   - Инциденты полицейского управления Сан-Франциско за 2016 год - инциденты полицейского управления из портала публичных данных Сан-Франциско. Инциденты получены из системы сообщений о преступлениях Департамента полиции Сан-Франциско (SFPD). Обновляется ежедневно, отображая данные за весь 2016 год.  
  
 ---
@@ -131,9 +131,9 @@ TypeError: object of type 'int' has no len()
   world_map
   ```
 -- 
-  - Загружаем датасет и запрашиваем обзор его содержимого
+  - Загружаем датасет из локального файла, размещённого в JupyterHub-образе, и запрашиваем обзор его содержимого
   ```python
-  df_incidents = pd.read_csv('https://github.com/shihao-wen/IBM-Data-Science-Professional-Certificate/blob/master/6.%20Data%20Visualization/Final%20Assignment/Police_Department_Incidents_-_Previous_Year__2016_.csv?raw=true')
+  df_incidents = pd.read_csv('/shared/data/PD_2016.csv')
   print('Набор данных загружен и прочитан в фреймворк данных Pandas!')
   df_incidents.head()
   ```

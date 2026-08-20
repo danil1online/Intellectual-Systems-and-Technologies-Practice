@@ -299,6 +299,7 @@ JupyterHub-образ собирается отдельно. `scripts/setup.sh` 
 
 - `jupyterhub/data.zip`
 - `jupyterhub/data/Canada.xlsx`
+- `jupyterhub/data/PD_2016.csv` для `Pr_7`
 - `jupyterhub/data/PennFudanPed/` для `Pr_23`
 
 Если файлов нет, можно подготовить так:
@@ -309,6 +310,7 @@ cp ../data.zip ./data.zip
 mkdir -p data
 curl -fsSL -o data/Canada.xlsx \
   "https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx"
+cp /home/user1/ISTP/PD_2016.csv data/PD_2016.csv
 mkdir -p data/PennFudanPed
 python3 -m zipfile -e ../PennFudanPed.zip data/PennFudanPed/
 ```
