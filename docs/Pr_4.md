@@ -229,9 +229,7 @@ docker rm <номер зачетки>
 5. Загрузите в репозиторий и отправьте:
 
 ```bash
-git add .
-git commit -m "Pr_4 report"
-git push
+git add . && git commit -m "Pr_4 report" && git push
 ```
 
 > 📖 Используйте [справочник по Markdown](./MD_Instructions.md) для оформления.
