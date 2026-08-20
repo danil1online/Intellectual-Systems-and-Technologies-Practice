@@ -186,6 +186,7 @@ Mount: /var/run/docker.sock
 #### JupyterHub
 ```
 Image: ghcr.io/danil1online/istp-jupyterhub:latest (base: python:3.10-slim)
+Build: jupyterhub/Dockerfile (HF_TOKEN BuildKit secret, data.zip, Canada.xlsx)
 Packages: jupyterhub, jupyterlab, nativeauthenticator, jupyter-ai
 RAM: ~500 MB на спавн
 ```
@@ -245,10 +246,11 @@ sudo ./scripts/setup.sh
 1. Внешний адрес сервера (IP или домен)
 2. Порт JupyterHub (по умолчанию: `8000`)
 3. Порт Admin Dashboard (по умолчанию: `9000`)
-4. Выбор источника учебных данных (ссылка GitHub / локальный файл)
-5. LLM для ментора: OpenAI API / встроенный образ (GigaChat3.1 / Qwen2.5-3B)
-6. LLM для CI/CD: OpenAI API / встроенный образ (GigaChat3.1 / Qwen2.5-3B)
-7. SSH-ключ для GitLab Runner
+4. LLM для ментора: OpenAI API / встроенный образ (GigaChat3.1 / Qwen2.5-3B)
+5. LLM для CI/CD: OpenAI API / встроенный образ (GigaChat3.1 / Qwen2.5-3B)
+6. SSH-ключ для GitLab Runner
+
+Учебные данные не запрашиваются: `setup.sh` автоматически кладёт `data.zip` и `Canada.xlsx` в Docker volume `<repo>_shared-data`.
 
 ### 4. Доступы
 
@@ -286,6 +288,54 @@ cat shared/data/runner-keys/runner_ed25519.pub
 # Добавьте в GitLab:
 # Settings → Repository → Deploy Keys → Add key
 ```
+
+---
+
+## Сборка JupyterHub-образа (GHCR)
+
+JupyterHub-образ собирается отдельно. `scripts/setup.sh` **не собирает** его из исходников — скрипт использует prebuilt-образ из GHCR или локальный `istp-jupyterhub:latest`, если он уже есть.
+
+Перед сборкой в `jupyterhub/` должны быть:
+
+- `jupyterhub/data.zip`
+- `jupyterhub/data/Canada.xlsx`
+
+Если их нет, можно подготовить так:
+
+```bash
+cd jupyterhub
+cp ../data.zip ./data.zip
+mkdir -p data
+curl -fsSL -o data/Canada.xlsx \
+  "https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx"
+```
+
+Сборка:
+
+```bash
+cd jupyterhub
+
+# HF_TOKEN используется Dockerfile для предзагрузки HF-моделей/датасетов
+export HF_TOKEN=hf_...
+
+docker build \
+  -f Dockerfile \
+  --secret id=HF_TOKEN,env=HF_TOKEN \
+  -t ghcr.io/danil1online/istp-jupyterhub:latest \
+  .
+
+# Локальный tag нужен setup.sh, чтобы использовать data.zip / Canada.xlsx из образа
+docker tag ghcr.io/danil1online/istp-jupyterhub:latest istp-jupyterhub:latest
+```
+
+Публикация:
+
+```bash
+docker login ghcr.io
+docker push ghcr.io/danil1online/istp-jupyterhub:latest
+```
+
+После push образ доступен `scripts/setup.sh` при установке на сервере.
 
 ---
 
@@ -342,6 +392,7 @@ cat shared/data/runner-keys/runner_ed25519.pub
 
 ШАГ 10/11: Предзагрузка Docker-образов
   → Загрузка базовых образов (GitLab, Runner, Registry, Python)
+  → Загрузка JupyterHub prebuilt-образа из GHCR или использование локального `istp-jupyterhub:latest`
   → Проверка встроенных LLM-образов (GigaChat3.1 / Qwen2.5-3B)
   → Если образ не найден — предлагается команда ручной сборки
 
@@ -411,7 +462,7 @@ Volumes: gitlab-config, gitlab-logs, gitlab-data
 ### 2. JupyterHub
 
 ```yaml
-Image: ghcr.io/danil1online/istp-jupyterhub:latest   # prebuilt (build ./jupyterhub закомментирован)
+Image: ghcr.io/danil1online/istp-jupyterhub:latest   # prebuilt; сборка описана в разделе “Сборка JupyterHub-образа”
 Port: 8000 (по умолчанию)
 Auth: NativeAuthenticator (саморегистрация)
 Spawner: LocalProcessSpawner

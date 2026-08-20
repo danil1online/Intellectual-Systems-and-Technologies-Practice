@@ -896,7 +896,6 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     docker pull gitlab/gitlab-ce:18.10.4-ce.0 2>/dev/null || true
     docker pull gitlab/gitlab-runner:alpine-v18.10.1 2>/dev/null || true
     docker pull registry:2 2>/dev/null || true
-    docker pull ghcr.io/danil1online/istp-jupyterhub:latest || true
     docker pull python:3.10-slim 2>/dev/null || true
     
     # Определяем какие образы нужны
@@ -1102,6 +1101,24 @@ if [[ "$LLM_USE_LOCAL" == "true" ]]; then
     done
 fi
 
+JUPYTERHUB_GHCR_IMAGE="ghcr.io/danil1online/istp-jupyterhub:latest"
+if docker image inspect "$JUPYTERHUB_GHCR_IMAGE" >/dev/null 2>&1; then
+    print_success "JupyterHub-образ $JUPYTERHUB_GHCR_IMAGE уже присутствует"
+else
+    print_step "Предзагрузка JupyterHub-образа из GHCR..."
+    docker pull "$JUPYTERHUB_GHCR_IMAGE" 2>/dev/null || true
+fi
+
+if ! docker image inspect "$JUPYTERHUB_GHCR_IMAGE" >/dev/null 2>&1 && \
+   docker image inspect "istp-jupyterhub:latest" >/dev/null 2>&1; then
+    docker tag "istp-jupyterhub:latest" "$JUPYTERHUB_GHCR_IMAGE" 2>/dev/null || true
+    print_success "Использую локальный istp-jupyterhub:latest как $JUPYTERHUB_GHCR_IMAGE"
+fi
+
+if ! docker image inspect "$JUPYTERHUB_GHCR_IMAGE" >/dev/null 2>&1; then
+    print_warn "JupyterHub-образ $JUPYTERHUB_GHCR_IMAGE не найден локально; docker compose попробует загрузить его"
+fi
+
 docker compose up -d jupyterhub
 
 # ============================================
@@ -1274,6 +1291,9 @@ echo "     # добавить публичный ключ в GitLab → Settings
 echo "     git clone git@gitlab.$GITLAB_HOST:students/project.git"
 echo ""
 echo "  4. Инструкция по настройке студентов: docs/Pr_1.md"
+echo ""
+echo -e "  ${YELLOW}Полная очистка учебных данных:${NC}"
+echo "  docker volume rm ${PROJECT_VOLUME_PREFIX}_shared-data"
 echo ""
 echo -e "${YELLOW}Архитектура:${NC}"
 echo "  - GitLab: встроенная саморегистрация (sign_up_enabled)"
