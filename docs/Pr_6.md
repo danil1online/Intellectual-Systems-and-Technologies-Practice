@@ -98,6 +98,7 @@ TypeError: object of type 'int' has no len()
   - Загрузка и подготовка данных.
     - Импорт первичных библиотек - pandas, Numpy.
     ```python
+    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     ```
@@ -111,18 +112,18 @@ TypeError: object of type 'int' has no len()
     ```
   - Обзор данных
   ```python
-  df_can['2013'].head()
+  df_can[2013].head()
   ```
   - Подготовка данных для гистограммы
   ```python
-  count, bin_edges = np.histogram(df_can['2013'])
+  count, bin_edges = np.histogram(df_can[2013])
   
   print(count) # подсчет частоты появления данных
   print(bin_edges) # количество столбцов, по умолчанию – 10
   ```
   - Построение гистограммы:
   ```python
-  df_can['2013'].plot(kind='hist', figsize=(8, 5))
+  df_can[2013].plot(kind='hist', figsize=(8, 5))
   plt.title('Гистограмма иммиграции из 195 стран в 2013 году') # добавление названия
   plt.ylabel('Количество стран') # добавление наименования оси у
   plt.xlabel('Количество иммигрантов') # наименование оси х
@@ -130,6 +131,11 @@ TypeError: object of type 'int' has no len()
   ```
 ### 🧪 Построение Bar Charts (Dataframe)
 
+  - Делаем название страны ('OdName') ключевым полем и создаем дополнительный список с перечнем годов в df_can:
+    ```python
+    df_can.set_index('OdName', inplace=True)
+    years = list(range(1980, 2014))
+    ```
   - Извлекаем часть данных из df_can:
     ```python
     df_pakistan = df_can.loc['Pakistan', years]
