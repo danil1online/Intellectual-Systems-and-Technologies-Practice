@@ -133,7 +133,7 @@ from sklearn import metrics
 
 1. 🧪 **Загрузка данных из CSV-файла**
 ```python
-df = pd.read_csv("~/data/Cust_Segmentation.csv")
+df = pd.read_csv("~/data/teleCust1000t.csv")
 df['income']=df['income']*np.random.rand()
 df.head()
 ```
@@ -237,9 +237,7 @@ print ('Test set:', X_test.shape,  y_test.shape)
    - Введите
 
 ```bash
-git add .
-git commit -m "Pr_9 notebook report"
-git push
+git add . && git commit -m "Pr_9 notebook report" && git push
 ```
 
 > ⏳ Оценка запустится автоматически в GitLab CI. Результат появится в разделе **CI/CD → Pipelines**.
