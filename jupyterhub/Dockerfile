@@ -140,7 +140,7 @@ load_dataset("google-research-datasets/poem_sentiment")
 AutoTokenizer.from_pretrained("nickwong64/bert-base-uncased-poems-sentiment")
 AutoModelForSequenceClassification.from_pretrained(
     "nickwong64/bert-base-uncased-poems-sentiment",
-    use_safetensors=False
+    use_safetensors=True
 )
 AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-1.3B")
 AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B")
