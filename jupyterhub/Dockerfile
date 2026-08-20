@@ -56,9 +56,9 @@ RUN pip install --no-cache-dir \
 
 # ML-библиотеки (CPU-only PyTorch)
 RUN pip install --no-cache-dir \
-    torch==2.5.1+cpu \
-    torchvision==0.20.1+cpu \
-    torchaudio==2.5.1+cpu \
+    torch==2.6.0+cpu \
+    torchvision==0.21.0+cpu \
+    torchaudio==2.6.0+cpu \
     --index-url https://download.pytorch.org/whl/cpu
 
 # Научные пакеты
