@@ -250,7 +250,7 @@ sudo ./scripts/setup.sh
 5. LLM для CI/CD: OpenAI API / встроенный образ (GigaChat3.1 / Qwen2.5-3B)
 6. SSH-ключ для GitLab Runner
 
-Учебные данные не запрашиваются: `setup.sh` автоматически кладёт `data.zip` и `Canada.xlsx` в Docker volume `<repo>_shared-data`.
+Учебные данные не запрашиваются: `setup.sh` использует образ JupyterHub с предзагруженными данными и при необходимости обновляет Docker volumes `<repo>_shared-data`, `<repo>_hf-cache` и `<repo>_torch-cache`.
 
 ### 4. Доступы
 
@@ -299,8 +299,9 @@ JupyterHub-образ собирается отдельно. `scripts/setup.sh` 
 
 - `jupyterhub/data.zip`
 - `jupyterhub/data/Canada.xlsx`
+- `jupyterhub/data/PennFudanPed/` для `Pr_23`
 
-Если их нет, можно подготовить так:
+Если файлов нет, можно подготовить так:
 
 ```bash
 cd jupyterhub
@@ -308,6 +309,8 @@ cp ../data.zip ./data.zip
 mkdir -p data
 curl -fsSL -o data/Canada.xlsx \
   "https://s3-api.us-geo.objectstorage.softlayer.net/cf-courses-data/CognitiveClass/DV0101EN/labs/Data_Files/Canada.xlsx"
+mkdir -p data/PennFudanPed
+python3 -m zipfile -e ../PennFudanPed.zip data/PennFudanPed/
 ```
 
 Сборка:
@@ -324,7 +327,7 @@ docker build \
   -t ghcr.io/danil1online/istp-jupyterhub:latest \
   .
 
-# Локальный tag нужен setup.sh, чтобы использовать data.zip / Canada.xlsx из образа
+# Локальный tag нужен setup.sh, чтобы использовать данные и кэши из образа
 docker tag ghcr.io/danil1online/istp-jupyterhub:latest istp-jupyterhub:latest
 ```
 
@@ -336,6 +339,11 @@ docker push ghcr.io/danil1online/istp-jupyterhub:latest
 ```
 
 После push образ доступен `scripts/setup.sh` при установке на сервере.
+
+Важно:
+- новый образ стал заметно больше, чем раньше: в него добавлены MNIST/FashionMNIST, LibriSpeech subset, 20-Newsgroups, TensorFlow MNIST, InceptionV3, HF-модели/датасеты и PennFudanPed;
+- сборка занимает больше времени из-за автоматической предзагрузки ресурсов;
+- `setup.sh` обновляет volumes `<repo>_shared-data`, `<repo>_hf-cache` и `<repo>_torch-cache` по version markers и при старте JupyterHub заполняет их из нового образа.
 
 ---
 
