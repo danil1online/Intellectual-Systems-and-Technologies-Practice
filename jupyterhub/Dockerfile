@@ -98,8 +98,8 @@ RUN python -m nltk.downloader -d /usr/share/nltk_data \
 # Предзагрузка моделей/датасетов в общий HF/torch cache
 # ============================================
 ENV HF_SKIP_CHECK_TORCH_LOAD_IS_SAFE=1
-RUN mkdir -p /hf-cache/hub /hf-cache/datasets /hf-cache/transformers /hf-cache/xdg-cache /shared/torch-cache /opt/istp-data && \
-    --mount=type=secret,id=HF_TOKEN \
+RUN mkdir -p /hf-cache/hub /hf-cache/datasets /hf-cache/transformers /hf-cache/xdg-cache /shared/torch-cache /opt/istp-data
+RUN --mount=type=secret,id=HF_TOKEN \
     HF_TOKEN=$(cat /run/secrets/HF_TOKEN) \
     python - <<'PY'
 from datasets import load_dataset
