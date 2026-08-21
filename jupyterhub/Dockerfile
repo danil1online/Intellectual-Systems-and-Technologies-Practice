@@ -132,17 +132,14 @@ from tensorflow.keras.applications.inception_v3 import InceptionV3
 import segmentation_models_pytorch as smp
 
 AutoTokenizer.from_pretrained("bert-base-uncased")
-AutoModel.from_pretrained("bert-base-uncased", use_safetensors=True)
+AutoModel.from_pretrained("bert-base-uncased")
 Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
-Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h-lv60-self", use_safetensors=True)
+Wav2Vec2ForCTC.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
 whisper.load_model("base")
 load_dataset("nyu-mll/glue", "stsb")
 load_dataset("google-research-datasets/poem_sentiment")
 AutoTokenizer.from_pretrained("nickwong64/bert-base-uncased-poems-sentiment")
-AutoModelForSequenceClassification.from_pretrained(
-    "nickwong64/bert-base-uncased-poems-sentiment",
-    use_safetensors=True
-)
+AutoModelForSequenceClassification.from_pretrained("nickwong64/bert-base-uncased-poems-sentiment")
 AutoTokenizer.from_pretrained("EleutherAI/gpt-neo-1.3B")
 AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B")
 fetch_20newsgroups(subset="train", shuffle=False, random_state=42)
