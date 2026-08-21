@@ -343,7 +343,7 @@ docker push ghcr.io/danil1online/istp-jupyterhub:latest
 После push образ доступен `scripts/setup.sh` при установке на сервере.
 
 Важно:
-- новый образ стал заметно больше, чем раньше: в него добавлены MNIST/FashionMNIST, LibriSpeech subset, 20-Newsgroups, TensorFlow MNIST, InceptionV3, HF-модели/датасеты и PennFudanPed;
+- новый образ стал заметно больше, чем раньше: в него добавлены MNIST/FashionMNIST, LibriSpeech subset, 20-Newsgroups, TensorFlow MNIST, InceptionV3 top/notop, HF-модели/датасеты и PennFudanPed;
 - сборка занимает больше времени из-за автоматической предзагрузки ресурсов;
 - `setup.sh` обновляет volumes `<repo>_shared-data`, `<repo>_hf-cache` и `<repo>_torch-cache` по version markers и при старте JupyterHub заполняет их из нового образа.
 

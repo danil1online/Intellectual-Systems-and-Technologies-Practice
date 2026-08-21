@@ -145,7 +145,8 @@ AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-neo-1.3B")
 fetch_20newsgroups(subset="train", shuffle=False, random_state=42)
 fetch_20newsgroups(subset="test", shuffle=False, random_state=42)
 tf_mnist.load_data()
-InceptionV3(weights="imagenet")
+InceptionV3(include_top=True, weights="imagenet", pooling="avg")
+InceptionV3(include_top=False, weights="imagenet", pooling="avg")
 smp.Unet(
     encoder_name="resnet34",
     encoder_weights="imagenet",
@@ -155,6 +156,8 @@ smp.Unet(
 resnet34(weights="IMAGENET1K_V1")
 maskrcnn_resnet50_fpn(weights="COCO_V1")
 PY
+RUN test -f /hf-cache/keras/models/inception_v3_weights_tf_dim_ordering_tf_kernels.h5 && \
+    test -f /hf-cache/keras/models/inception_v3_weights_tf_dim_ordering_tf_kernels_notop.h5
 RUN printf '2' > /hf-cache/.istp-hf-version
 RUN printf '2' > /shared/torch-cache/.istp-torch-version
 RUN chmod -R 0777 /hf-cache /shared/torch-cache
