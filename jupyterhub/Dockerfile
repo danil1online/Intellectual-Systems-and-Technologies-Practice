@@ -169,8 +169,8 @@ smp.Unet(
 resnet34(weights="IMAGENET1K_V1")
 maskrcnn_resnet50_fpn(weights="COCO_V1")
 PY
-RUN test -f /hf-cache/keras/models/inception_v3_weights_tf_dim_ordering_tf_kernels.h5 && \
-    test -f /hf-cache/keras/models/inception_v3_weights_tf_dim_ordering_tf_kernels_notop.h5
+RUN KERAS_HOME=/hf-cache/keras HOME=/hf-cache python -c "from tensorflow.keras.applications.inception_v3 import InceptionV3; InceptionV3(include_top=True, weights='imagenet'); InceptionV3(include_top=False, weights='imagenet')"
+
 RUN printf '2' > /hf-cache/.istp-hf-version
 RUN printf '2' > /shared/torch-cache/.istp-torch-version
 RUN chmod -R 0777 /hf-cache /shared/torch-cache
