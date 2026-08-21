@@ -96,6 +96,15 @@ RUN python -m nltk.downloader -d /usr/share/nltk_data \
     averaged_perceptron_tagger_eng \
     omw-1.4 \
     stopwords
+RUN test -d /usr/share/nltk_data/corpora/brown && \
+    test -d /usr/share/nltk_data/tokenizers/punkt && \
+    test -d /usr/share/nltk_data/tokenizers/punkt_tab && \
+    test -d /usr/share/nltk_data/corpora/wordnet && \
+    test -d /usr/share/nltk_data/taggers/averaged_perceptron_tagger && \
+    test -d /usr/share/nltk_data/taggers/averaged_perceptron_tagger_eng && \
+    test -d /usr/share/nltk_data/corpora/omw-1.4 && \
+    test -d /usr/share/nltk_data/corpora/stopwords
+RUN chmod -R a+rX /usr/share/nltk_data
 
 # ============================================
 # Предзагрузка моделей/датасетов в общий HF/torch cache
