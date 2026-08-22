@@ -613,7 +613,7 @@ if [[ -z "$DATA_IMAGE_V2" ]]; then
         DATA_IMAGE_V2=$(find_jupyterhub_data_image_v2 || true)
     else
         print_error "Не удалось скачать образ из GHCR: $JUPYTERHUB_GHCR_IMAGE"
-        print_error "Соберите образ вручную: README.md → 'Сборка JupyterHub-образа'"
+        print_error "Соберите образ вручную: README.md → 'Сборка JupyterHub-образа' или авторизуйтесь в ghrc.io"
         exit 1
     fi
 fi
