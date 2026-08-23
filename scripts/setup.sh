@@ -1102,10 +1102,10 @@ RUNNER_RESPONSE=$(curl -s --request POST \
   --header "X-GitLab-Admin-Mode: true" \
   --header "Content-Type: application/json" \
   --data '{"description": "academic-runner", "runner_type": "instance_type"}' \
-  "http://localhost/api/v4/user/runners" 2>&1)
+  "http://localhost/api/v4/user/runners" 2>&1 || true)
 
-RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | jq -r '.token' 2>/dev/null)
-RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null)
+RUNNER_TOKEN=$(echo "$RUNNER_RESPONSE" | jq -r '.token' 2>/dev/null || echo "")
+RUNNER_ID=$(echo "$RUNNER_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
 
 if [[ -z "$RUNNER_TOKEN" || "$RUNNER_TOKEN" == "null" ]]; then
     print_error "Не удалось получить токен Runner"

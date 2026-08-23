@@ -115,37 +115,51 @@ GROUP_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/groups
     "name": "students",
     "path": "students",
     "visibility": "public"
-  }')
+  }' || true)
 
 GROUP_ID=$(echo "$GROUP_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
 
 if [[ -z "$GROUP_ID" || "$GROUP_ID" == "null" ]]; then
     GROUP_ID=$(curl -s --max-time 30 --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
       "$GITLAB_URL/api/v4/groups?search=students" \
-      | jq -r '.[0].id' 2>/dev/null)
+      | jq -r 'if type=="array" and length>0 then .[0].id else empty end' 2>/dev/null || echo "")
 fi
 
-if [[ -z "$GROUP_ID" ]]; then
-    GROUP_ID=1
-    echo "⚠ Группа создана вручную или уже существует"
-else
-    echo "✓ Группа students создана (ID: $GROUP_ID)"
+if [[ -z "$GROUP_ID" || "$GROUP_ID" == "null" ]]; then
+    echo "✗ ОШИБКА: не удалось создать/найти группу students"
+    echo "  Ответ GitLab API: ${GROUP_RESPONSE:-<пусто>}"
+    exit 1
 fi
+
+echo "✓ Группа students (ID: $GROUP_ID)"
 
 echo ""
 echo "=== GitLab: создание шаблона проекта для студентов ==="
 
 TEMPLATE_RESPONSE=$(curl -s --max-time 30 --request POST "$GITLAB_URL/api/v4/projects" \
-   --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
-   --header "Content-Type: application/json" \
-   --data "{
-     \"name\": \"project\",
-     \"path\": \"project\",
-     \"namespace_id\": $GROUP_ID,
-     \"visibility\": \"public\"
-    }")
+    --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+    --header "Content-Type: application/json" \
+    --data "{
+      \"name\": \"project\",
+      \"path\": \"project\",
+      \"namespace_id\": $GROUP_ID,
+      \"visibility\": \"public\"
+     }" || true)
 
 TEMPLATE_ID=$(echo "$TEMPLATE_RESPONSE" | jq -r '.id' 2>/dev/null || echo "")
+
+if [[ -z "$TEMPLATE_ID" || "$TEMPLATE_ID" == "null" ]]; then
+    TEMPLATE_ID=$(curl -s --max-time 30 --header "PRIVATE-TOKEN: $ROOT_TOKEN" \
+      "$GITLAB_URL/api/v4/projects/students%2Fproject" \
+      | jq -r '.id' 2>/dev/null || echo "")
+fi
+
+if [[ -z "$TEMPLATE_ID" || "$TEMPLATE_ID" == "null" ]]; then
+    echo "✗ ОШИБКА: не удалось создать/найти шаблон проекта students/project"
+    echo "  Ответ GitLab API: ${TEMPLATE_RESPONSE:-<пусто>}"
+    exit 1
+fi
+
 echo "✓ Шаблон проекта: ID=$TEMPLATE_ID"
 
 echo ""
@@ -371,9 +385,16 @@ if git clone http://oauth2:$ROOT_TOKEN@localhost/students/project.git "$TMP_DIR"
 
     # Commit + push
     cd "$TMP_DIR"
+    git config user.name "ISTP Setup"
+    git config user.email "setup@istp.local"
     git add docs/
-    if git commit -m "Add docs/" 2>&1; then
-        git push http://oauth2:$ROOT_TOKEN@localhost/students/project.git main 2>&1
+    if git diff --cached --quiet; then
+        echo "✓ docs/ уже присутствуют в шаблоне (изменений нет)"
+    elif git commit -m "Add docs/" 2>&1 && git push http://oauth2:$ROOT_TOKEN@localhost/students/project.git main 2>&1; then
+        echo "✓ docs/ скопированы в шаблон"
+    else
+        echo "✗ ОШИБКА: docs/ не скопированы в students/project (git commit/push)"
+        exit 1
     fi
 
     cd "$OLDPWD"
