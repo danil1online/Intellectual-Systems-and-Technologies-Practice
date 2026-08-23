@@ -34,7 +34,7 @@ ENV TRANSFORMERS_CACHE=/hf-cache/transformers
 ENV XDG_CACHE_HOME=/hf-cache/xdg-cache
 ENV TORCH_HOME=/shared/torch-cache
 ENV KERAS_HOME=/hf-cache/keras
-ENV SKLEARN_DATA_HOME=/hf-cache/sklearn-data
+ENV SCIKIT_LEARN_DATA=/hf-cache/sklearn-data
 ENV NLTK_DATA=/usr/share/nltk_data
 
 # Установка Python пакетов
@@ -70,7 +70,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-luatex \
     cm-super \
     && pip install --no-cache-dir \
-    numpy==1.26.4 scipy pandas scikit-learn matplotlib \
+    numpy==1.26.4 scipy pandas scikit-learn==1.7.2 matplotlib \
     transformers datasets==3.5.1 \
     pydotplus openpyxl folium mglearn basemap \
     tensorflow-cpu==2.15.0 tensorflow-text==2.15.0 \
@@ -170,8 +170,9 @@ resnet34(weights="IMAGENET1K_V1")
 maskrcnn_resnet50_fpn(weights="COCO_V1")
 PY
 RUN KERAS_HOME=/hf-cache/keras HOME=/hf-cache python -c "from tensorflow.keras.applications.inception_v3 import InceptionV3; InceptionV3(include_top=True, weights='imagenet'); InceptionV3(include_top=False, weights='imagenet')"
+RUN test -f /hf-cache/sklearn-data/20news-bydate_py3.pkz
 
-RUN printf '2' > /hf-cache/.istp-hf-version
+RUN printf '3' > /hf-cache/.istp-hf-version
 RUN printf '2' > /shared/torch-cache/.istp-torch-version
 RUN chmod -R 0777 /hf-cache /shared/torch-cache
 
