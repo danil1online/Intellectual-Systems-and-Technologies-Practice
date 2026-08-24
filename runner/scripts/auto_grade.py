@@ -175,7 +175,7 @@ def grade_file(repo_dir, n, path):
     env = os.environ.copy()
     env.setdefault("LLM_CI_BASE_URL", "http://llm:8080/v1")
     env.setdefault("LLM_CI_API_KEY", "local-api-key")
-    env.setdefault("LLM_CI_MODEL", "gpt-4o")
+    env.setdefault("LLM_CI_MODEL", "model.gguf")
 
     t0 = time.time()
     try:

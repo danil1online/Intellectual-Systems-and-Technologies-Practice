@@ -13,15 +13,18 @@ import math
 import re
 from pathlib import Path
 
+import requests
+
 CONTROL_QUESTION_TOTAL = 2.0
-GRADER_VERSION = "v4-robust-llm-json"
+TASK_TOTAL = 3.0
+GRADER_VERSION = "v5-per-practice-specs"
 
 # Canonical heading is "Контрольные вопросы".
-# The old "Вопросы" heading is kept as a compatibility fallback for already
-# distributed student repos.
+# The singular "Контрольный вопрос" and the old "Вопросы" heading are kept as
+# compatibility fallbacks for already distributed student repos.
 QUESTION_HEADING_RE = re.compile(
-    r"^\s*##[ \t]+(?:Контрольные вопросы|Вопросы)[ \t]*\r?\n(.*?)(?=^\s*##[ \t]|\Z)",
-    re.MULTILINE | re.DOTALL,
+    r"^\s*##[ \t]+(?:Контрольные вопросы|Контрольный вопрос|Вопросы)[ \t]*\r?\n(.*?)(?=^\s*##[ \t]|\Z)",
+    re.MULTILINE | re.DOTALL | re.IGNORECASE,
 )
 QUESTION_LINE_RE = re.compile(r"^\s*\d+[.)][ \t]+(.+?)[ \t]*$", re.MULTILINE)
 
@@ -389,3 +392,362 @@ def normalize_grade_payload(raw, questions):
             result[key] = []
 
     return result, True
+
+
+# ---------------------------------------------------------------------------
+# Per-practice specs (practice_specs.py): компактный чек-лист вместо «вся
+# методичка в промпт». Баллы считает код, LLM выдаёт только булевы.
+# ---------------------------------------------------------------------------
+
+SPEC_SYSTEM_PROMPT = (
+    "Ты — строгий проверяющий практических работ курса ISTP. "
+    "Ты проверяешь ТОЛЬКО пункты из списка и не придумываешь свои критерии. "
+    "Ты отвечаешь ТОЛЬКО одним JSON-объектом, без markdown."
+)
+
+DEFAULT_SPEC_REPORT_CHARS = 24000
+
+
+def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_SPEC_REPORT_CHARS):
+    """Компактный промпт по spec: шаги задания + вопросы с якорями + отчёт.
+
+    LLM выдаёт только компактные булевы массивы (надёжно парсится даже малыми
+    моделями); grounding и баллы считает код — normalize_spec_payload.
+    """
+    tasks_block = "\n".join(f"{i + 1}. {task['text']}" for i, task in enumerate(spec["tasks"]))
+    task_rules = "\n".join(f"- {rule}" for rule in spec.get("task_rules", []))
+
+    questions = spec.get("questions", [])
+    if questions:
+        q_lines = []
+        for i, q in enumerate(questions):
+            anchors = "\n".join(f"   - {anchor}" for anchor in q["anchors"])
+            q_lines.append(f"{i + 1}. {q['text']}\n   Ключевые концепты верного ответа:\n{anchors}")
+        questions_block = "\n".join(q_lines)
+        question_rules = "\n".join(f"- {rule}" for rule in spec.get("question_rules", []))
+        questions_section = f"""
+=== КОНТРОЛЬНЫЕ ВОПРОСЫ ({len(questions)}) ===
+{questions_block}
+
+Правила проверки ответов:
+{question_rules}
+"""
+        questions_json = f'"questions": [true/false по порядку, ровно {len(questions)} значений], '
+    else:
+        questions_section = ""
+        questions_json = ""
+
+    report = (report_text or "").strip()
+    if not report:
+        report = "(файл отчёта не найден или пуст)"
+    elif len(report) > max_report_chars:
+        report = report[:max_report_chars] + "\n…[отчёт обрезан]"
+
+    # ВАЖНО: отчёт стоит ПЕРВЫМ — малые модели хуже удерживают контекст,
+    # когда длинные инструкции идут до данных (проверено A/B на qwen2.5-3b).
+    return f"""=== ОТЧЁТ СТУДЕНТА ===
+{report}
+
+Проверь работу студента по практической работе №{practice_num} «{spec['title']}» по тексту отчёта ВЫШЕ, пункт за пунктом.
+
+=== ШАГИ ЗАДАНИЯ ({len(spec['tasks'])}) ===
+{tasks_block}
+
+ПРАВИЛА ПРОВЕРКИ ЗАДАНИЯ:
+{task_rules}
+{questions_section}
+Ответь ТОЛЬКО одним JSON-объектом, без markdown и без пояснений до/после:
+{{"tasks": [true/false по порядку, ровно {len(spec['tasks'])} значений], {questions_json}"feedback": "<1-2 предложения на русском>", "issues": ["..."], "recommendations": ["..."]}}
+
+Порядок значений в массивах совпадает с порядком пунктов выше. Если пункт не выполнен или ответа нет — false."""
+
+
+def validate_spec_payload(data, spec):
+    """Валидация JSON LLM под spec. Пустой список — ок, иначе список ошибок."""
+    if not isinstance(data, dict):
+        return ["ответ LLM не является JSON-объектом"]
+    errors = []
+
+    n_tasks = len(spec["tasks"])
+    tasks = data.get("tasks")
+    if tasks is None:
+        errors.append(f'нет массива "tasks" — нужен массив ровно из {n_tasks} значений true/false по порядку шагов')
+    elif not isinstance(tasks, list) or len(tasks) != n_tasks:
+        got = len(tasks) if isinstance(tasks, list) else "не массив"
+        errors.append(f'массив "tasks" должен содержать ровно {n_tasks} значений true/false, получено: {got}')
+
+    questions = spec.get("questions", [])
+    if questions:
+        n_q = len(questions)
+        answers = data.get("questions")
+        if answers is None:
+            errors.append(f'нет массива "questions" — нужен массив ровно из {n_q} значений true/false по порядку вопросов')
+        elif not isinstance(answers, list) or len(answers) != n_q:
+            got = len(answers) if isinstance(answers, list) else "не массив"
+            errors.append(f'массив "questions" должен содержать ровно {n_q} значений true/false, получено: {got}')
+    return errors
+
+
+# Заголовок блока с ответами на контрольные вопросы: разделитель между
+# «выполнением задания» (где ищутся команды) и «ответами» (где ищутся цитаты).
+ANSWERS_BLOCK_RE = re.compile(
+    r"^\s*(?:#{1,6}[ \t]+|\*{1,3}[ \t]*)?"
+    r"(?:[Кк]онтрольные вопросы|[Оо]тветы[ \t]+на[ \t]+[Кк]онтрольные вопросы)"
+    r"[ \t]*\*{0,3}[ \t]*$",
+    re.MULTILINE,
+)
+
+
+def _norm_text(text):
+    return re.sub(r"\s+", " ", (text or "")).strip().lower()
+
+
+def _work_section(report_text):
+    """Часть отчёта до блока ответов: здесь ищутся команды задания."""
+    text = report_text or ""
+    match = ANSWERS_BLOCK_RE.search(text)
+    if match:
+        return text[: match.start()]
+    return text
+
+
+ANSWER_ITEM_RE = re.compile(r"^\s*(\d{1,2})\s*[)\.:][ \t]*(.*)$")
+
+
+def extract_answer_items(report_text):
+    """Детерминированный разбор блока с ответами: {номер вопроса: текст пункта}."""
+    text = report_text or ""
+    match = ANSWERS_BLOCK_RE.search(text)
+    if not match:
+        return {}
+    block = text[match.end():]
+    lines = block.splitlines()
+    items = {}
+    current_num = None
+    buf = []
+    for line in lines:
+        item_match = ANSWER_ITEM_RE.match(line)
+        if item_match:
+            if current_num is not None:
+                items[current_num] = "\n".join(buf).strip()
+            current_num = int(item_match.group(1))
+            buf = [line]
+        elif current_num is not None:
+            # Сброс в следующем заголовке раздела (## ...) — блок ответов закончился
+            if re.match(r"^\s*#{1,6}[ \t]", line):
+                items[current_num] = "\n".join(buf).strip()
+                current_num = None
+                buf = []
+            else:
+                buf.append(line)
+    if current_num is not None:
+        items[current_num] = "\n".join(buf).strip()
+    return {num: value for num, value in sorted(items.items())}
+
+
+def _answer_present(item_text, question_text, margin=10):
+    """Ответ «есть», если в пункте есть содержимое сверх самого вопроса."""
+    if not item_text:
+        return False
+    nonempty_lines = [line for line in item_text.splitlines() if line.strip()]
+    if len(nonempty_lines) >= 2:
+        return True
+    return len(item_text.strip()) > len((question_text or "").strip()) + margin
+
+
+def _task_llm_flag(item):
+    if isinstance(item, dict):
+        return _as_bool(item.get("done", False))
+    return _as_bool(item)
+
+
+def _answer_keywords_ok(item_text, question, min_keywords=2):
+    """Проверка ответа по ключевым словам концепта: в ответе должно быть не
+    меньше min_keywords слов из spec['keywords'][i] (выбираются так, чтобы
+    они не входили в текст самого вопроса — чистое копирование вопроса
+    их не содержит)."""
+    keywords = question.get("keywords") or []
+    if not keywords:
+        return True
+    text = _norm_text(item_text)
+    hits = sum(1 for keyword in keywords if keyword.lower() in text)
+    return hits >= min_keywords
+
+
+def _task_regex_ok(task, report_text):
+    markers = task.get("markers") or []
+    return any(re.search(marker, report_text, re.IGNORECASE) for marker in markers)
+
+
+def normalize_spec_payload(raw, spec, report_text):
+    """Считать баллы по булевым LLM с детерминированным grounding из отчёта.
+
+    task[i]     = LLM_done[i] AND найден в тексте задания отчёта любой marker
+                  команды шага (команды из блока вопросов не засчитываются)
+    question[j] = LLM_correct[j] AND в блоке ответов найден пункт j
+                   с содержимым сверх самого вопроса AND в ответе есть
+                   ключевые слова концепта (spec['keywords'], порог min_keywords)
+
+    Галлюцинация LLM («выполнено» без команды / «верно» без ответа /
+    «верно» для мусорного ответа) → false.
+    """
+    result = dict(raw) if isinstance(raw, dict) else {}
+    report_text = report_text or ""
+    work_text = _work_section(report_text)
+
+    tasks_total = len(spec["tasks"])
+    raw_tasks = result.get("tasks") if isinstance(result.get("tasks"), list) else []
+    task_flags, task_llm_flags, task_regex_flags = [], [], []
+    for i, task in enumerate(spec["tasks"]):
+        item = raw_tasks[i] if i < len(raw_tasks) else None
+        llm_done = _task_llm_flag(item)
+        regex_ok = _task_regex_ok(task, work_text)
+        task_flags.append(bool(llm_done and regex_ok))
+        task_llm_flags.append(llm_done)
+        task_regex_flags.append(regex_ok)
+    tasks = task_flags
+
+    done_count = sum(1 for value in tasks if value)
+    task_score = round(TASK_TOTAL * done_count / tasks_total, 6)
+
+    questions = spec.get("questions", [])
+    raw_questions = result.get("questions") if isinstance(result.get("questions"), list) else []
+    answer_items = extract_answer_items(report_text)
+    min_keywords = int(spec.get("min_keywords", 2))
+    answers, question_llm_flags, question_present_flags, question_keyword_flags = [], [], [], []
+    for i, question in enumerate(questions):
+        item = raw_questions[i] if i < len(raw_questions) else None
+        llm_correct = _as_bool(item)
+        item_text = answer_items.get(i + 1, "")
+        present = _answer_present(item_text, question.get("text", ""))
+        keywords_ok = _answer_keywords_ok(item_text, question, min_keywords)
+        answers.append(bool(llm_correct and present and keywords_ok))
+        question_llm_flags.append(llm_correct)
+        question_present_flags.append(present)
+        question_keyword_flags.append(keywords_ok)
+    if questions:
+        correct_count = sum(1 for value in answers if value)
+        question_score = round(CONTROL_QUESTION_TOTAL * correct_count / len(questions), 6)
+    else:
+        correct_count = 0
+        question_score = 0.0
+
+    final_score = int(max(0, min(5, math.floor(task_score + question_score + 0.5))))
+
+    done_idx = [str(i + 1) for i, value in enumerate(tasks) if value]
+    extra = f"Задание: выполнены шаги {', '.join(done_idx) if done_idx else '—'} из {tasks_total} ({task_score:.2f}/3)"
+    if questions:
+        correct_idx = [str(i + 1) for i, value in enumerate(answers) if value]
+        wrong_idx = [str(i + 1) for i, value in enumerate(answers) if not value]
+        extra += (
+            f"; контрольные вопросы: верные {', '.join(correct_idx) if correct_idx else '—'}, "
+            f"неверные/отсутствующие {', '.join(wrong_idx) if wrong_idx else '—'} ({question_score:.2f}/2)"
+        )
+    extra += f"; итог {final_score}/5."
+
+    result["tasks"] = tasks
+    result["task_llm_flags"] = task_llm_flags
+    result["task_regex_flags"] = task_regex_flags
+    result["done_count"] = done_count
+    result["total_tasks"] = tasks_total
+    result["task_score"] = task_score
+    result["score"] = final_score
+    if questions:
+        result["control_questions"] = answers
+        result["question_llm_flags"] = question_llm_flags
+        result["question_present_flags"] = question_present_flags
+        result["question_keyword_flags"] = question_keyword_flags
+        result["question_score"] = question_score
+        result["answered_count"] = correct_count
+        result["total_questions"] = len(questions)
+        result["answered_idx"] = [str(i + 1) for i, value in enumerate(answers) if value]
+        result["not_answered_idx"] = [str(i + 1) for i, value in enumerate(answers) if not value]
+
+    feedback = result.get("feedback") or result.get("comment") or ""
+    if feedback and extra not in feedback:
+        result["feedback"] = f"{feedback}. {extra}"
+    else:
+        result["feedback"] = extra
+
+    for key in ("issues", "recommendations"):
+        if key not in result or result[key] is None:
+            result[key] = []
+
+    return result
+
+
+def chat_completion(prompt, system, base_url, api_key, model,
+                    temperature=0.1, max_tokens=2048, timeout=180):
+    """Один запрос к OpenAI-совместимому /chat/completions → raw content."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    response = requests.post(
+        f"{base_url}/chat/completions", json=data, headers=headers, timeout=timeout,
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
+
+def evaluate_with_llm_spec(prompt, spec, base_url, api_key, model,
+                           max_attempts=3, max_tokens=4096):
+    """Оценка по spec: запрос → парсинг → валидация, повторы при ошибках.
+
+    Повтор при: неверном JSON, неверной длине массивов, ошибке запроса.
+    Возвращает (payload, meta). payload — {} при полной ошибке;
+    meta — parse_mode, attempts, preview, retry_errors и т.п.
+    """
+    active_prompt = prompt
+    parsed = {}
+    meta = {"attempts": 0, "parse_mode": "failed"}
+    for attempt in range(1, max_attempts + 1):
+        meta["attempts"] = attempt
+        try:
+            content = chat_completion(
+                active_prompt, SPEC_SYSTEM_PROMPT, base_url, api_key, model,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            meta["parse_mode"] = "request-error"
+            meta["error"] = str(exc)
+            if attempt < max_attempts:
+                active_prompt = (
+                    prompt
+                    + "\n\n=== ОШИБКА В ТВОЁМ ПРЕДЫДУЩЕМ ОТВЕТЕ ===\n"
+                    + f"- ответ не получен: {exc}"
+                    + "\nПовтори ответ ТОЛЬКО в требуемом JSON-формате."
+                )
+                continue
+            return {}, meta
+
+        parsed, parse_mode = parse_llm_json(content)
+        meta["parse_mode"] = parse_mode
+        if parse_mode != "strict":
+            meta["llm_raw_preview"] = llm_raw_preview(content)
+        errors = [] if parsed else ["ответ не распознан как JSON — повтори полный JSON-объект"]
+        if parsed:
+            errors = validate_spec_payload(parsed, spec)
+        if not errors:
+            return parsed, meta
+
+        meta["retry_errors"] = errors
+        if attempt < max_attempts:
+            meta["parse_mode"] = f"invalid-attempt-{attempt}"
+            active_prompt = (
+                prompt
+                + "\n\n=== ОШИБКА В ТВОЁМ ПРЕДЫДУЩЕМ ОТВЕТЕ ===\n"
+                + "\n".join(f"- {error}" for error in errors)
+                + "\nПовтори ответ ТОЛЬКО одним полным JSON-объектом в требуемом формате."
+            )
+    meta["parse_mode"] = "lenient-after-retry"
+    return parsed, meta

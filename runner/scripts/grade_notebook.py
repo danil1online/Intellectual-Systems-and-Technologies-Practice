@@ -31,7 +31,7 @@ from grading_common import (
 # Конфигурация LLM
 LLM_BASE_URL = os.environ.get("LLM_CI_BASE_URL", "http://llm:8080/v1")
 LLM_API_KEY = os.environ.get("LLM_CI_API_KEY", "local-api-key")
-LLM_MODEL = os.environ.get("LLM_CI_MODEL", "gpt-4o")
+LLM_MODEL = os.environ.get("LLM_CI_MODEL", "model.gguf")
 
 
 def load_notebook(filepath):

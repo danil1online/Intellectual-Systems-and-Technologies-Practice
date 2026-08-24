@@ -25,12 +25,16 @@ from grading_common import (
     normalize_grade_payload,
     parse_llm_json,
     llm_raw_preview,
+    build_spec_prompt,
+    normalize_spec_payload,
+    evaluate_with_llm_spec,
 )
+from practice_specs import PRACTICE_SPECS
 
 # Конфигурация LLM
 LLM_BASE_URL = os.environ.get("LLM_CI_BASE_URL", "http://llm:8080/v1")
 LLM_API_KEY = os.environ.get("LLM_CI_API_KEY", "local-api-key")
-LLM_MODEL = os.environ.get("LLM_CI_MODEL", "gpt-4o")
+LLM_MODEL = os.environ.get("LLM_CI_MODEL", "model.gguf")
 
 # Критерии для каждой практики
 PRACTICE_CHECKLIST = {
@@ -300,18 +304,45 @@ def main():
             md_content = ""
             print("  ⚠ Отчёт .md не найден")
 
-    # Формируем промпт
-    prompt = build_prompt(
-        git_log,
-        md_content,
-        practice_num,
-        requirement_text=requirement_text,
-        questions=questions,
-    )
-    result = evaluate_with_llm(prompt)
+    spec = PRACTICE_SPECS.get(practice_num)
 
-    if questions:
-        result, _ = normalize_grade_payload(result, questions)
+    if spec:
+        # Spec-путь: компактный чек-лист вместо всей методички; баллы считает код
+        if not md_content:
+            result = {
+                "score": 0,
+                "feedback": "Файл отчёта не найден или пуст",
+                "issues": ["Отчёт не найден"],
+                "recommendations": [
+                    f"Создайте файл Pr_{practice_num}_report.md в каталоге reports/Pr_{practice_num}/",
+                ],
+            }
+            grading_mode = "spec-no-report"
+        else:
+            print(
+                f"  spec-оценка: {len(spec['tasks'])} шагов задания, "
+                f"{len(spec.get('questions', []))} контрольных вопросов"
+            )
+            prompt = build_spec_prompt(spec, practice_num, md_content)
+            result, meta = evaluate_with_llm_spec(prompt, spec, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL)
+            for key, value in meta.items():
+                result.setdefault(key, value)
+            result = normalize_spec_payload(result, spec, md_content)
+            grading_mode = "spec"
+    else:
+        # Legacy-путь: вся методичка в промпт (до появления spec)
+        prompt = build_prompt(
+            git_log,
+            md_content,
+            practice_num,
+            requirement_text=requirement_text,
+            questions=questions,
+        )
+        result = evaluate_with_llm(prompt)
+
+        if questions:
+            result, _ = normalize_grade_payload(result, questions)
+        grading_mode = "legacy"
 
     try:
         result["score"] = int(result.get("score", 0) or 0)
@@ -328,10 +359,12 @@ def main():
         "cells_analyzed": 0,
         "code_cells": 0,
         "markdown_cells": 0,
+        "grading_mode": grading_mode,
         "git_commits": len(git_log.get("commits", [])),
         "git_branches": len(git_log.get("branches", [])),
+        "git_log": git_log,
         "practice_requirement": requirement or "",
-        "question_count": len(questions),
+        "question_count": len(spec.get("questions", [])) if spec else len(questions),
         **result,
     }
 

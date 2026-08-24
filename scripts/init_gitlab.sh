@@ -342,7 +342,7 @@ CIEOF
 )
 CI_TEXT="${CI_TEXT//__LLM_CI_BASE_URL__/${LLM_CI_BASE_URL:-http://llm:8080/v1}}"
 CI_TEXT="${CI_TEXT//__LLM_CI_API_KEY__/${LLM_CI_API_KEY:-local-api-key}}"
-CI_TEXT="${CI_TEXT//__LLM_CI_MODEL__/${LLM_CI_MODEL:-gpt-4o}}"
+CI_TEXT="${CI_TEXT//__LLM_CI_MODEL__/${LLM_CI_MODEL:-model.gguf}}"
 GITLAB_CI_CONTENT=$(printf '%s' "$CI_TEXT" | base64 -w 0)
 
 HTTP_CODE=$(curl -s -w "%{http_code}" --max-time 30 --request POST \
