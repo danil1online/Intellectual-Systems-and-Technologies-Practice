@@ -1133,7 +1133,7 @@ docker run --rm \
   alpine sh -c "mkdir -p /data/runner-config && chown -R $(id -u):$(id -g) /data/runner-config"
 
 cat > "$RUNNER_CONFIG" << RUNNEREOF
-concurrent = 4
+concurrent = ${GRADE_CONCURRENCY:-2}
 check_interval = 0
 shutdown_request_timeout = 0
 

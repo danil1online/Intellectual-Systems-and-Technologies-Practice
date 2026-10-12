@@ -12,6 +12,7 @@ grade_notebook.py — Оценка ноутбука студента через 
 """
 
 import os
+import re
 import sys
 import json
 import datetime
@@ -26,7 +27,12 @@ from grading_common import (
     normalize_grade_payload,
     parse_llm_json,
     llm_raw_preview,
+    build_spec_prompt,
+    normalize_spec_payload,
+    evaluate_with_llm_spec,
+    load_ideal_report,
 )
+from practice_specs import PRACTICE_SPECS
 
 # Конфигурация LLM
 LLM_BASE_URL = os.environ.get("LLM_CI_BASE_URL", "http://llm:8080/v1")
@@ -54,6 +60,60 @@ def load_notebook(filepath):
             })
 
     return nb, cells
+
+
+def _output_text(output):
+    """Текст одного output ячейки (stream/execute_result/display_data/error)."""
+    if not isinstance(output, dict):
+        return ""
+    otype = output.get("output_type")
+    if otype == "stream":
+        text = output.get("text", "")
+        return "".join(text) if isinstance(text, list) else str(text)
+    if otype in ("execute_result", "display_data"):
+        data = output.get("data") or {}
+        for key in ("text/plain", "text/html"):
+            value = data.get(key)
+            if value:
+                return "".join(value) if isinstance(value, list) else str(value)
+        return ""
+    if otype == "error":
+        traceback = output.get("traceback") or [f"{output.get('ename')}: {output.get('evalue')}"]
+        return "\n".join(traceback)
+    return ""
+
+
+def notebook_to_report_text(cells, max_output_chars=500, max_md_chars=3000):
+    """Ноутбук → плоский текст для spec-промпта и grounding.
+
+    Код ячеек + текстовые output'ы (обрезка на ячейку) + markdown-ячейки как
+    есть: заголовки ответов («Контрольные вопросы»/«Ответы на контрольные
+    вопросы») остаются целыми строками — от этого зависит разбор блока
+    ответов в normalize_spec_payload.
+    """
+    parts = []
+    code_idx = 0
+    md_idx = 0
+    for cell in cells:
+        if cell["type"] == "code":
+            code_idx += 1
+            block = f"--- Ячейка кода {code_idx} ---\n{cell['source'].strip()}\n"
+            outputs = []
+            for output in cell.get("outputs", []):
+                text = _output_text(output).strip()
+                if not text:
+                    continue
+                if len(text) > max_output_chars:
+                    text = text[:max_output_chars] + " …[обрезано]"
+                outputs.append(f"[вывод] {text}")
+            if outputs:
+                block += "\n".join(outputs) + "\n"
+            parts.append(block)
+        else:
+            md_idx += 1
+            source = cell["source"].strip()[:max_md_chars]
+            parts.append(f"--- Ячейка Markdown {md_idx} ---\n{source}\n")
+    return "\n".join(parts)
 
 
 def build_evaluation_prompt(cells, requirement_text=None, questions=None):
@@ -264,16 +324,53 @@ def main():
         print(f"Ошибка загрузки ноутбука: {e}")
         return
 
-    # Оценка через LLM
-    prompt = build_evaluation_prompt(
-        cells,
-        requirement_text=requirement_text,
-        questions=questions,
-    )
-    result = evaluate_with_llm(prompt)
+    # Номер практики — из имени файла (deliverables по конвенции Pr_<N>_*.ipynb)
+    practice_num = None
+    m = re.match(r"^Pr_(\d+)_", os.path.basename(notebook_path))
+    if m:
+        practice_num = int(m.group(1))
+    spec = PRACTICE_SPECS.get(practice_num) if practice_num else None
 
-    if questions:
-        result, _ = normalize_grade_payload(result, questions)
+    if spec:
+        # Spec-путь: компактный чек-лист, баллы считает код (grounding из текста ноутбука)
+        report_text = notebook_to_report_text(cells)
+        if not report_text.strip():
+            result = {
+                "score": 0,
+                "feedback": "Ноутбук пуст",
+                "issues": ["В ноутбуке нет кода и markdown"],
+                "recommendations": [
+                    f"Заполните ноутбук Pr_{practice_num}_report.ipynb (ячейки с кодом заданий)",
+                ],
+            }
+            grading_mode = "spec-no-report"
+        else:
+            print(
+                f"  spec-оценка: {len(spec['tasks'])} шагов задания, "
+                f"{len(spec.get('questions', []))} контрольных вопросов"
+            )
+            prompt = build_spec_prompt(
+                spec, practice_num, report_text,
+                ideal_report=load_ideal_report(practice_num),
+                reference_position="before",
+            )
+            result, meta = evaluate_with_llm_spec(prompt, spec, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL)
+            for key, value in meta.items():
+                result.setdefault(key, value)
+            result = normalize_spec_payload(result, spec, report_text)
+            grading_mode = "spec"
+    else:
+        # Legacy-путь: вся методичка в промпт (практики без spec)
+        prompt = build_evaluation_prompt(
+            cells,
+            requirement_text=requirement_text,
+            questions=questions,
+        )
+        result = evaluate_with_llm(prompt)
+
+        if questions:
+            result, _ = normalize_grade_payload(result, questions)
+        grading_mode = "legacy"
 
     try:
         result["score"] = int(result.get("score", 0) or 0)
@@ -285,12 +382,14 @@ def main():
     # Формируем финальный отчёт
     report = {
         "timestamp": datetime.datetime.now().isoformat(),
+        "practice": practice_num,
         "notebook": os.path.basename(notebook_path),
         "cells_analyzed": len(cells),
         "code_cells": len([c for c in cells if c["type"] == "code"]),
         "markdown_cells": len([c for c in cells if c["type"] == "markdown"]),
+        "grading_mode": grading_mode,
         "practice_requirement": requirement or "",
-        "question_count": len(questions),
+        "question_count": len(spec.get("questions", [])) if spec else len(questions),
         **result,
     }
 

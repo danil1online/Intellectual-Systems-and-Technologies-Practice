@@ -28,6 +28,7 @@ from grading_common import (
     build_spec_prompt,
     normalize_spec_payload,
     evaluate_with_llm_spec,
+    load_ideal_report,
 )
 from practice_specs import PRACTICE_SPECS
 
@@ -323,7 +324,13 @@ def main():
                 f"  spec-оценка: {len(spec['tasks'])} шагов задания, "
                 f"{len(spec.get('questions', []))} контрольных вопросов"
             )
-            prompt = build_spec_prompt(spec, practice_num, md_content)
+            # Эталон (полный правильный отчёт) — few-shot образец для малой модели;
+            # раскладка "before" (эталон до отчёта студента) выиграла A/B на qwen2.5-3b.
+            prompt = build_spec_prompt(
+                spec, practice_num, md_content,
+                ideal_report=load_ideal_report(practice_num),
+                reference_position="before",
+            )
             result, meta = evaluate_with_llm_spec(prompt, spec, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL)
             for key, value in meta.items():
                 result.setdefault(key, value)

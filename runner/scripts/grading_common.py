@@ -11,13 +11,14 @@ Provides:
 import json
 import math
 import re
+import time
 from pathlib import Path
 
 import requests
 
 CONTROL_QUESTION_TOTAL = 2.0
 TASK_TOTAL = 3.0
-GRADER_VERSION = "v5-per-practice-specs"
+GRADER_VERSION = "v6-pr2-specs"
 
 # Canonical heading is "Контрольные вопросы".
 # The singular "Контрольный вопрос" and the old "Вопросы" heading are kept as
@@ -406,13 +407,33 @@ SPEC_SYSTEM_PROMPT = (
 )
 
 DEFAULT_SPEC_REPORT_CHARS = 24000
+SPEC_RETRY_BACKOFF_BASE_S = 2.0
+SPEC_RETRY_BACKOFF_MAX_S = 10.0
 
 
-def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_SPEC_REPORT_CHARS):
+def load_ideal_report(practice_num):
+    """Эталонный отчёт практики (few-shot образец для малых моделей).
+
+    Ищется рядом со скриптом: ideal_reports/pr{N}_ideal.md. Нет файла → None
+    (промпт строится без эталона).
+    """
+    path = Path(__file__).resolve().parent / "ideal_reports" / f"pr{practice_num}_ideal.md"
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_SPEC_REPORT_CHARS,
+                      ideal_report=None, reference_position="before"):
     """Компактный промпт по spec: шаги задания + вопросы с якорями + отчёт.
 
     LLM выдаёт только компактные булевы массивы (надёжно парсится даже малыми
     моделями); grounding и баллы считает код — normalize_spec_payload.
+
+    ideal_report — эталонный (полный) отчёт как few-shot образец для малых
+    моделей; reference_position: "before" — эталон ПЕРЕД отчётом студента
+    (дефолт, выиграл A/B на qwen2.5-3b), "after" — после.
     """
     tasks_block = "\n".join(f"{i + 1}. {task['text']}" for i, task in enumerate(spec["tasks"]))
     task_rules = "\n".join(f"- {rule}" for rule in spec.get("task_rules", []))
@@ -443,14 +464,7 @@ def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_
     elif len(report) > max_report_chars:
         report = report[:max_report_chars] + "\n…[отчёт обрезан]"
 
-    # ВАЖНО: отчёт стоит ПЕРВЫМ — малые модели хуже удерживают контекст,
-    # когда длинные инструкции идут до данных (проверено A/B на qwen2.5-3b).
-    return f"""=== ОТЧЁТ СТУДЕНТА ===
-{report}
-
-Проверь работу студента по практической работе №{practice_num} «{spec['title']}» по тексту отчёта ВЫШЕ, пункт за пунктом.
-
-=== ШАГИ ЗАДАНИЯ ({len(spec['tasks'])}) ===
+    checklist = f"""=== ШАГИ ЗАДАНИЯ ({len(spec['tasks'])}) ===
 {tasks_block}
 
 ПРАВИЛА ПРОВЕРКИ ЗАДАНИЯ:
@@ -460,6 +474,35 @@ def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_
 {{"tasks": [true/false по порядку, ровно {len(spec['tasks'])} значений], {questions_json}"feedback": "<1-2 предложения на русском>", "issues": ["..."], "recommendations": ["..."]}}
 
 Порядок значений в массивах совпадает с порядком пунктов выше. Если пункт не выполнен или ответа нет — false."""
+
+    if not ideal_report:
+        # ВАЖНО: отчёт стоит ПЕРВЫМ — малые модели хуже удерживают контекст,
+        # когда длинные инструкции идут до данных (проверено A/B на qwen2.5-3b).
+        return f"""=== ОТЧЁТ СТУДЕНТА ===
+{report}
+
+Проверь работу студента по практической работе №{practice_num} «{spec['title']}» по тексту отчёта ВЫШЕ, пункт за пунктом.
+
+{checklist}"""
+
+    # Эталон (few-shot образец полного правильного отчёта) + отчёт студента.
+    # Малые модели сравнивают с эталоном точнее, чем по «сухой» инструкции.
+    ideal_section = (
+        "=== ЭТАЛОН: ПОЛНЫЙ ПРАВИЛЬНЫЙ ОТЧЁТ (образец для сравнения) ===\n"
+        + ideal_report.strip()
+        + "\n\nЭто эталон — идеальный отчёт, где все шаги и все ответы выполнены правильно.\n"
+        "Используй его ТОЛЬКО как образец формата и содержания.\n"
+    )
+    reference_note = (
+        f"Сравни ОТЧЁТ СТУДЕНТА с ЭТАЛОНОМ выше. Оценивай ТОЛЬКО отчёт студента "
+        f"по практической работе №{practice_num} «{spec['title']}», пункт за пунктом: "
+        f"шаг/ответ — true, только если он есть в отчёте студента (команда/смысл совпадает с эталоном)."
+    )
+    if reference_position == "before":
+        head = f"{ideal_section}\n=== ОТЧЁТ СТУДЕНТА ===\n{report}\n\n{reference_note}\n\n"
+    else:  # "after": отчёт студента первым (важно для малых моделей), эталон после
+        head = f"=== ОТЧЁТ СТУДЕНТА ===\n{report}\n\n{ideal_section}\n{reference_note}\n\n"
+    return head + checklist
 
 
 def validate_spec_payload(data, spec):
@@ -493,13 +536,14 @@ def validate_spec_payload(data, spec):
 ANSWERS_BLOCK_RE = re.compile(
     r"^\s*(?:#{1,6}[ \t]+|\*{1,3}[ \t]*)?"
     r"(?:[Кк]онтрольные вопросы|[Оо]тветы[ \t]+на[ \t]+[Кк]онтрольные вопросы)"
-    r"[ \t]*\*{0,3}[ \t]*$",
+    r"[ \t]*[:：]?[ \t]*\*{0,3}[ \t]*$",
     re.MULTILINE,
 )
 
 
 def _norm_text(text):
-    return re.sub(r"\s+", " ", (text or "")).strip().lower()
+    """Нижний регистр + сжатие пробелов + ё→е (студенты и keywords пишут по-разному)."""
+    return re.sub(r"\s+", " ", (text or "")).strip().lower().replace("ё", "е")
 
 
 def _work_section(report_text):
@@ -515,38 +559,69 @@ ANSWER_ITEM_RE = re.compile(r"^\s*(\d{1,2})\s*[)\.:][ \t]*(.*)$")
 
 
 def extract_answer_items(report_text):
-    """Детерминированный разбор блока с ответами: {номер вопроса: текст пункта}."""
+    """Детерминированный разбор блока с ответами: упорядоченный список
+    [(номер пункта, текст пункта)]."""
     text = report_text or ""
     match = ANSWERS_BLOCK_RE.search(text)
     if not match:
-        return {}
+        return []
     block = text[match.end():]
     lines = block.splitlines()
-    items = {}
+    items = []
     current_num = None
     buf = []
     for line in lines:
         item_match = ANSWER_ITEM_RE.match(line)
         if item_match:
             if current_num is not None:
-                items[current_num] = "\n".join(buf).strip()
+                items.append((current_num, "\n".join(buf).strip()))
             current_num = int(item_match.group(1))
             buf = [line]
         elif current_num is not None:
             # Сброс в следующем заголовке раздела (## ...) — блок ответов закончился
             if re.match(r"^\s*#{1,6}[ \t]", line):
-                items[current_num] = "\n".join(buf).strip()
+                items.append((current_num, "\n".join(buf).strip()))
                 current_num = None
                 buf = []
             else:
                 buf.append(line)
     if current_num is not None:
-        items[current_num] = "\n".join(buf).strip()
-    return {num: value for num, value in sorted(items.items())}
+        items.append((current_num, "\n".join(buf).strip()))
+    return items
 
 
-def _answer_present(item_text, question_text, margin=10):
-    """Ответ «есть», если в пункте есть содержимое сверх самого вопроса."""
+def map_answer_items(items, n_questions):
+    """Сопоставление разобранных пунктов с вопросами: {номер вопроса: текст ответа}.
+
+    - номера ровно 1..N (без дублей) — по номерам;
+    - пунктов ровно N, но номера сломаны (дубли/пропуски, например 1,3,3,4,5) —
+      позиционно: i-й пункт соответствует i-му вопросу;
+    - иначе — по номерам, первый вхождения.
+    """
+    if not items:
+        return {}
+    numbers = [num for num, _ in items]
+    is_full_sequence = (
+        len(set(numbers)) == len(numbers)
+        and sorted(numbers) == list(range(1, n_questions + 1))
+    )
+    if is_full_sequence:
+        return {num: text for num, text in items}
+    if len(items) == n_questions:
+        return {i + 1: text for i, (_, text) in enumerate(items)}
+    mapped = {}
+    for num, text in items:
+        if num not in mapped:
+            mapped[num] = text
+    return mapped
+
+
+def _answer_present(item_text, question_text, margin=5):
+    """Ответ «есть», если в пункте есть содержимое сверх самого вопроса.
+
+    margin малый: чистая копия вопроса («1. <вопрос>») короче вопроса на
+    префикс номера и не проходит; семантический контроль — keywords.
+    """
     if not item_text:
         return False
     nonempty_lines = [line for line in item_text.splitlines() if line.strip()]
@@ -608,11 +683,12 @@ def normalize_spec_payload(raw, spec, report_text):
     tasks = task_flags
 
     done_count = sum(1 for value in tasks if value)
-    task_score = round(TASK_TOTAL * done_count / tasks_total, 6)
-
     questions = spec.get("questions", [])
+    task_scale = TASK_TOTAL if questions else 5.0
+    task_score = round(task_scale * done_count / tasks_total, 6)
+
     raw_questions = result.get("questions") if isinstance(result.get("questions"), list) else []
-    answer_items = extract_answer_items(report_text)
+    answer_items = map_answer_items(extract_answer_items(report_text), len(questions))
     min_keywords = int(spec.get("min_keywords", 2))
     answers, question_llm_flags, question_present_flags, question_keyword_flags = [], [], [], []
     for i, question in enumerate(questions):
@@ -635,7 +711,7 @@ def normalize_spec_payload(raw, spec, report_text):
     final_score = int(max(0, min(5, math.floor(task_score + question_score + 0.5))))
 
     done_idx = [str(i + 1) for i, value in enumerate(tasks) if value]
-    extra = f"Задание: выполнены шаги {', '.join(done_idx) if done_idx else '—'} из {tasks_total} ({task_score:.2f}/3)"
+    extra = f"Задание: выполнены шаги {', '.join(done_idx) if done_idx else '—'} из {tasks_total} ({task_score:.2f}/{task_scale:g})"
     if questions:
         correct_idx = [str(i + 1) for i, value in enumerate(answers) if value]
         wrong_idx = [str(i + 1) for i, value in enumerate(answers) if not value]
@@ -712,6 +788,12 @@ def evaluate_with_llm_spec(prompt, spec, base_url, api_key, model,
     meta = {"attempts": 0, "parse_mode": "failed"}
     for attempt in range(1, max_attempts + 1):
         meta["attempts"] = attempt
+        if attempt > 1:
+            delay = min(
+                SPEC_RETRY_BACKOFF_BASE_S * (2 ** (attempt - 2)),
+                SPEC_RETRY_BACKOFF_MAX_S,
+            )
+            time.sleep(delay)
         try:
             content = chat_completion(
                 active_prompt, SPEC_SYSTEM_PROMPT, base_url, api_key, model,
