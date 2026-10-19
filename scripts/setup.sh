@@ -427,7 +427,7 @@ setup_llm_ci() {
 print_header "ШАГ 0/11: Проверка портов и автоопределение сетевых параметров"
 
 # Проверка занятых портов
-REQUIRED_PORTS="80 2222 8000 8080 9000 5050"
+REQUIRED_PORTS="80 2222 8000 8080 9000 5050 7474 7687 7860 8021"
 PORTS_IN_USE=""
 for port in $REQUIRED_PORTS; do
     if ss -tlnp 2>/dev/null | grep -q ":${port} " || netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
@@ -692,6 +692,7 @@ LECTURER_02_PASSWORD=$(generate_password)
 DASHBOARD_PASSWORD=$(generate_password)
 NEO4J_PASSWORD=$(generate_password)
 LANGFLOW_SECRET=$(openssl rand -hex 32)
+LANGFLOW_SUPERUSER_PASSWORD=$(generate_password)
 
 # Сохраняем все пароли в файл
 mkdir -p "$PROJECT_DIR/shared/data"
@@ -721,6 +722,10 @@ LECTURER_02_PASSWORD=$LECTURER_02_PASSWORD
 # --- Neo4j (графовая БД, практики Pr_31/Pr_32) ---
 NEO4J_USERNAME=neo4j
 NEO4J_PASSWORD=$NEO4J_PASSWORD
+
+# --- Langflow (визуальный конструктор, практики Pr_29–Pr_32) ---
+LANGFLOW_USERNAME=admin
+LANGFLOW_SUPERUSER_PASSWORD=$LANGFLOW_SUPERUSER_PASSWORD
 PASSEOF
 chmod 600 "$PASS_FILE"
 
@@ -805,8 +810,12 @@ DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
 # --- Langflow / Neo4j / Embeddings (практики Pr_29–Pr_32) ---
 LANGFLOW_PORT=7860
 EMBEDDINGS_PORT=8021
+NEO4J_HTTP_PORT=7474
+NEO4J_BOLT_PORT=7687
 NEO4J_PASSWORD=$NEO4J_PASSWORD
 LANGFLOW_SECRET=$LANGFLOW_SECRET
+LANGFLOW_SUPERUSER=admin
+LANGFLOW_SUPERUSER_PASSWORD=$LANGFLOW_SUPERUSER_PASSWORD
 # Хосты, доступные Langflow несмотря на SSRF-защиту:
 # внутренние сервисы + IP самого сервера (LLM может указываться внешним IP)
 LANGFLOW_SSRF_ALLOWED_HOSTS=llm,neo4j,istp-embeddings,$PRIMARY_LOCAL_IP,$EXTERNAL_IP

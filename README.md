@@ -36,6 +36,7 @@ Docker Compose-развёртывание полного учебного кла
  │  Dashboard:    9000 (по умолчанию)                             │
  │  Registry:     5050 (Docker Container Registry)                │
  │  Langflow:     7860 (визуальный конструктор, Pr_29–Pr_32)      │
+ │  Neo4j:        7474 (Browser) / 7687 (bolt)                    │
  │  Embeddings:   8021 (OpenAI-совместимый /v1/embeddings)        │
 │                                                                │
 │  Internal bridge network:                                      │
@@ -293,6 +294,8 @@ Dashboard:    http://<IP>:9000
 | **GitLab (root)** | `root` | см. `.env` → `GITLAB_ROOT_PASSWORD` | `http://<IP>:80` |
 | **JupyterHub** | любой (через форму Sign Up) | тот же, что создан при регистрации | `http://<IP>:<JUPYTERHUB_PORT>` |
 | **Dashboard** | admin (Basic auth) | см. `.env` → `DASHBOARD_PASSWORD` | `http://<IP>:<DASHBOARD_PORT>` |
+| **Langflow** | `admin` | см. `credentials.env` → `LANGFLOW_SUPERUSER_PASSWORD` | `http://<IP>:7860` |
+| **Neo4j Browser** | `neo4j` | см. `credentials.env` → `NEO4J_PASSWORD` | `http://<IP>:7474` |
 
 > **Важно:** Все пароли генерируются при запуске `setup.sh` и хранятся в файле `.env`.
 > Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|LECTURER_"`
@@ -904,12 +907,14 @@ curl http://<IP>:9000/api/summary
 
 ```yaml
 langflow:          # istp-langflow:latest (FROM langflowai/langflow:1.12.6)
-  Port: 7860       # веб-интерфейс для студентов
+  Port: 7860       # веб-интерфейс для студентов (логин admin, пароль из credentials.env)
   Data: ./langflow/data → /app/data (ro): knowledge_base.txt, students.db
-  Env: LANGFLOW_SECRET, LANGFLOW_SSRF_ALLOWED_HOSTS (llm, neo4j, istp-embeddings + IP сервера)
-  Volume: langflow-data → /app/.langflow (сохранённые flow)
+  Env: LANGFLOW_SECRET, LANGFLOW_SUPERUSER(_PASSWORD), LANGFLOW_SSRF_ALLOWED_HOSTS
+       HOME/LANGFLOW_CONFIG_DIR → /app/.langflow (writable; в образе HOME=/app/data — ro)
+  Volume: langflow-data → /app/.langflow (БД, flow, кэш, knowledge bases)
 
-neo4j:            # neo4j:5.26, только internal (bolt :7687, http :7474)
+neo4j:            # neo4j:5.26
+  Ports: 7474 (Neo4j Browser), 7687 (bolt) — для студентов и Langflow
   Env: NEO4J_AUTH=neo4j/<сгенерированный пароль>
   Volume: neo4j-data → /data
 
@@ -922,6 +927,8 @@ istp-embeddings:  # OpenAI-совместимый сервер эмбеддин�
 
 Особенности развёртывания:
 
+- **Данные Langflow вне read-only каталога** — в официальном образе `HOME=/app/data`, а `/app/data` смонтирован read-only (тестовые файлы); поэтому `HOME`, `LANGFLOW_CONFIG_DIR` и `LANGFLOW_KNOWLEDGE_BASES_DIR` переопределены на writable-том `/app/.langflow` (БД, кэш, `.gunicorn`, knowledge bases).
+- **Администратор** — Langflow 1.12.6 требует учётные данные при старте: `LANGFLOW_SUPERUSER=admin` + сгенерированный `LANGFLOW_SUPERUSER_PASSWORD` (в `credentials.env`).
 - **Кастомный компонент Neo4j Cypher** — официального компонента Neo4j в Langflow 1.12.6 нет; компонент добавляется Dockerfile-слоем (`langflow/custom_components/`) через `LANGFLOW_COMPONENTS_PATH`.
 - **Embeddings отдельным сервисом** — llama-server (qwen2.5-3b) не предоставляет `/v1/embeddings`, поэтому для RAG используется отдельный CPU-сервер с мультиязычной моделью.
 - **SSRF**: в учебном контуре Langflow разрешены обращения только к `llm`, `neo4j`, `istp-embeddings` и IP самого сервера (`LANGFLOW_SSRF_ALLOWED_HOSTS`); локальные sqlite-файлы разрешены (`LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS=false`) для Pr_31.
@@ -1089,6 +1096,8 @@ curl http://<IP>:9000/api/stats
 | `LECTURER_01_PASSWORD` | Пароль лектора 1 (GitLab-юзер `lecturer_1`) | auto-generated |
 | `LECTURER_02_PASSWORD` | Пароль лектора 2 (GitLab-юзер `lecturer_2`) | auto-generated |
 | `LANGFLOW_PORT` | Порт веб-интерфейса Langflow | `7860` |
+| `NEO4J_HTTP_PORT` | Порт Neo4j Browser | `7474` |
+| `NEO4J_BOLT_PORT` | Порт Neo4j bolt | `7687` |
 | `EMBEDDINGS_PORT` | Порт OpenAI-совместимого сервера эмбеддингов | `8021` |
 | `NEO4J_PASSWORD` | Пароль Neo4j (логин `neo4j`) | auto-generated |
 | `LANGFLOW_SECRET` | JWT-секрет Langflow | auto-generated |
