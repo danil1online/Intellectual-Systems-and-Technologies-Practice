@@ -208,6 +208,7 @@ services:
       # Администратор Langflow (студенты входят под этой учёткой)
       LANGFLOW_SUPERUSER: admin
       LANGFLOW_SUPERUSER_PASSWORD: ${LANGFLOW_SUPERUSER_PASSWORD}
+      LANGFLOW_NEW_USER_IS_ACTIVE: True
     volumes:
       - ./langflow/data:/app/data:ro
       - langflow-data:/app/.langflow
