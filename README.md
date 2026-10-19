@@ -16,6 +16,7 @@ Docker Compose-развёртывание полного учебного кла
 - [Авторизация](#авторизация)
 - [GitLab CI/CD](#gitlab-cicd)
 - [Admin Dashboard](#admin-dashboard)
+- [Langflow и графические практики Pr_29–Pr_32](#langflow-и-графические-практики-pr_29--pr_32)
 - [Использование студентом](#использование-студентом)
 - [Использование преподавателем](#использование-преподавателем)
 - [Конфигурация](#конфигурация)
@@ -29,11 +30,13 @@ Docker Compose-развёртывание полного учебного кла
 ┌────────────────────────────────────────────────────────────────┐
 │             HOST (Linux, 32+ GB RAM)                           │
 │                                                                │
-│  Внешние порты:                                                │
-│  GitLab:       80 (HTTP) / 2222 (SSH)                          │
-│  JupyterHub:   8000 (по умолчанию)                             │
-│  Dashboard:    9000 (по умолчанию)                             │
-│  Registry:     5050 (Docker Container Registry)                │
+ │  Внешние порты:                                                │
+ │  GitLab:       80 (HTTP) / 2222 (SSH)                          │
+ │  JupyterHub:   8000 (по умолчанию)                             │
+ │  Dashboard:    9000 (по умолчанию)                             │
+ │  Registry:     5050 (Docker Container Registry)                │
+ │  Langflow:     7860 (визуальный конструктор, Pr_29–Pr_32)      │
+ │  Embeddings:   8021 (OpenAI-совместимый /v1/embeddings)        │
 │                                                                │
 │  Internal bridge network:                                      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────────┐                    │
@@ -119,30 +122,45 @@ Docker Compose-развёртывание полного учебного кла
 │   ├── GigaChat3.1-10B-A1.8B-q4_K_M.gguf
 │   └── qwen2.5-3b-instruct-q4_k_m.gguf
 │
-├── runner/
-│   ├── Dockerfile.python310     # Python 3.10 + nbconvert → образ istp-ci:latest
-│   ├── entrypoint.sh            # SSH + runner
-│   └── scripts/
-│       ├── auto_grade.py        # CI-оркестратор (student identity, persist в Dashboard)
-│       ├── grade_md.py          # Оценка Markdown-отчёта (Pr_<N>)
-│       └── grade_notebook.py    # Оценка ноутбука через LLM
+ ├── runner/
+ │   ├── Dockerfile.python310     # Python 3.10 + nbconvert → образ istp-ci:latest
+ │   ├── entrypoint.sh            # SSH + runner
+ │   └── scripts/
+ │       ├── auto_grade.py        # CI-оркестратор (student identity, persist в Dashboard)
+ │       ├── grade_md.py          # Оценка Markdown-отчёта (Pr_<N>)
+ │       ├── grade_notebook.py    # Оценка ноутбука через LLM
+ │       ├── grade_flow.py        # Детерминированная проверка flow JSON (Pr_29–32)
+ │       ├── debug_flow.py        # Диагностика экспорта flow (отладка имён блоков)
+ │       ├── practice_specs.py    # Спеки оценки: tasks/markers + вопросы (Pr_1..Pr_32)
+ │       ├── ideal_reports/       # Эталонные MD-отчёты (few-shot для LLM)
+ │       └── ideal_flows/         # Эталонные flow JSON (Pr_29–32)
 │
-├── dashboard/
-│   ├── Dockerfile               # Flask + Plotly
-│   ├── app.py                   # Flask приложение
-│   ├── routes.py                # REST API: results, students, logs, stats, export
-│   ├── models.py                # legacy (не импортируется; кэш — in-memory в routes.py)
-│   ├── templates/
-│   │   └── dashboard.html      # Единая таблица (результаты + Lazy/Smart-списки)
-│   └── static/                  # CSS/JS (по желанию)
-│
+ ├── dashboard/
+ │   ├── Dockerfile               # Flask + Plotly
+ │   ├── app.py                   # Flask приложение
+ │   ├── routes.py                # REST API: results, students, logs, stats, export
+ │   ├── models.py                # legacy (не импортируется; кэш — in-memory в routes.py)
+ │   ├── templates/
+ │   │   └── dashboard.html      # Единая таблица (результаты + Lazy/Smart-списки)
+ │   └── static/                  # CSS/JS (по желанию)
+ │
+ ├── langflow/                    # Langflow 1.12.6 + кастомный компонент Neo4j Cypher
+ │   ├── Dockerfile               # FROM langflowai/langflow:1.12.6 → istp-langflow:latest
+ │   ├── custom_components/       # inline-bundle (LANGFLOW_COMPONENTS_PATH)
+ │   └── data/                    # knowledge_base.txt, students.db, init_neo4j_graph.cypher
+ │
+ ├── embeddings/                  # istp-embeddings: OpenAI-совместимый сервер эмбеддингов (CPU)
+ │   ├── Dockerfile               # python:3.10-slim + sentence-transformers → istp-embeddings:latest
+ │   └── app.py                   # FastAPI: /v1/embeddings, /v1/models, /health
 
-├── docs/
-│   ├── README.md                # Индекс практических работ
-│   ├── MD_Instructions.md       # Справочник по Markdown
-│   ├── Pr_0.md                  # Предварительная настройка комплекса
-│   ├── Pr_1.md                  # Основы Git и GitLab
-│   ├── Pr_2.md — Pr_21.md       # Практические (Python, ML, визуализация, MAX)
+
+ ├── docs/
+ │   ├── README.md                # Индекс практических работ
+ │   ├── MD_Instructions.md       # Справочник по Markdown
+ │   ├── Pr_0.md                  # Предварительная настройка комплекса
+ │   ├── Pr_1.md                  # Основы Git и GitLab
+ │   ├── Pr_2.md — Pr_28.md       # Практические (Python, ML, визуализация, MAX)
+ │   └── Pr_29.md — Pr_32.md      # Графические: Langflow + LLM + SQLite + Neo4j
 │
 ├── shared/                      # Volumes mount point
 │   ├── data/                    # Материалы преподавателя
@@ -869,6 +887,81 @@ curl http://<IP>:9000/api/summary
 
 ---
 
+## Langflow и графические практики Pr_29–Pr_32
+
+С 4-й волны практик в комплекс включена low-code платформа **Langflow 1.12.6** для визуального конструирования AI-систем. Четыре новые работы выполняются студентами в веб-интерфейсе Langflow, а отчёт — это Markdown + экспорт flow (JSON).
+
+### Практики
+
+| № | Название | Ключевые компоненты flow |
+|---|---|---|
+| **Pr_29** | Базовый чат с локальной LLM | Chat Input → Prompt Template → OpenAI (llama.cpp) → Chat Output; эксперимент с Temperature |
+| **Pr_30** | Локальная RAG-система | Read File → Recursive Character Text Splitter → Embedding Model → Knowledge Base (векторное хранилище) → Prompt → LLM |
+| **Pr_31** | NLPtoSQLtoNLP | Chat Input → Prompt (DDL-схема) → LLM → SQL Database (SQLite `students.db`) → Prompt → LLM → Chat Output |
+| **Pr_32** | GraphRAG на Neo4j (Text-to-Cypher) | Chat Input → Prompt (схема графа) → LLM → **Neo4j Cypher** (кастомный компонент) → Prompt → LLM → Chat Output |
+
+### Сервисы
+
+```yaml
+langflow:          # istp-langflow:latest (FROM langflowai/langflow:1.12.6)
+  Port: 7860       # веб-интерфейс для студентов
+  Data: ./langflow/data → /app/data (ro): knowledge_base.txt, students.db
+  Env: LANGFLOW_SECRET, LANGFLOW_SSRF_ALLOWED_HOSTS (llm, neo4j, istp-embeddings + IP сервера)
+  Volume: langflow-data → /app/.langflow (сохранённые flow)
+
+neo4j:            # neo4j:5.26, только internal (bolt :7687, http :7474)
+  Env: NEO4J_AUTH=neo4j/<сгенерированный пароль>
+  Volume: neo4j-data → /data
+
+neo4j-init:       # разовый контейнер: загружает граф знаний (MERGE-скрипт, идемпотентно)
+  Data: ./langflow/data/init_neo4j_graph.cypher
+
+istp-embeddings:  # OpenAI-совместимый сервер эмбеддингов (CPU, sentence-transformers)
+  Port: 8021       # /v1/embeddings — модель paraphrase-multilingual-MiniLM-L12-v2 вшита в образ
+```
+
+Особенности развёртывания:
+
+- **Кастомный компонент Neo4j Cypher** — официального компонента Neo4j в Langflow 1.12.6 нет; компонент добавляется Dockerfile-слоем (`langflow/custom_components/`) через `LANGFLOW_COMPONENTS_PATH`.
+- **Embeddings отдельным сервисом** — llama-server (qwen2.5-3b) не предоставляет `/v1/embeddings`, поэтому для RAG используется отдельный CPU-сервер с мультиязычной моделью.
+- **SSRF**: в учебном контуре Langflow разрешены обращения только к `llm`, `neo4j`, `istp-embeddings` и IP самого сервера (`LANGFLOW_SSRF_ALLOWED_HOSTS`); локальные sqlite-файлы разрешены (`LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS=false`) для Pr_31.
+- **APOC не используется** — граф загрузки идемпотентный (MERGE), плагины не требуются; это сохраняет офлайн-безопасность первого старта Neo4j.
+
+### Автоматическая оценка (Pr_29–Pr_32)
+
+Отчёт студента = два файла:
+
+```
+reports/Pr_<N>/Pr_<N>_report.md    # описание работы + ответы на 5 контрольных вопросов
+reports/Pr_<N>/Pr_<N>_<имя>.json   # экспорт flow из Langflow (кнопка Export)
+```
+
+Баллы (0–5) складываются из двух частей:
+
+| Часть | Баллы | Метод |
+|---|---|---|
+| **Задание** (структура flow) | 0–3 | **Детерминированно** (`grade_flow.py`): наличие компонентов, ключевые параметры (Base URL, chunk_size, database_url, bolt://), связность графа (упорядоченная достижимость по рёбрам). LLM не используется. |
+| **Контрольные вопросы** (5 шт.) | 0–2 | LLM по MD-отчёту с анти-галлюцинационным grounding (наличие ответа + ключевые слова концепта) |
+
+Сопоставление блоков в flow выполняется терпимо к версиям: алиасы — подстроки имени класса компонента или display_name (например, `openaimodel` ловит `OpenAIModelComponent`, но не `EmbeddingModelComponent`). Для отладки имён блоков после обновления Langflow:
+
+```bash
+python runner/scripts/debug_flow.py <экспорт.json> 30   # структура flow + сверка со спеком Pr_30
+```
+
+Эталонные flow (`runner/scripts/ideal_flows/pr{29..32}_ideal.json`) — синтетические эталоны формата экспорта; после развёртывания рекомендуется заменить их реальными экспортами, собранными в UI.
+
+### Проверка развёртывания Langflow-стека
+
+```bash
+docker compose ps langflow neo4j neo4j-init istp-embeddings
+curl http://<IP>:8021/health                                   # embeddings
+docker exec langflow curl -sf http://localhost:7860 > /dev/null && echo "langflow OK"
+docker logs neo4j-init | tail -3                               # граф знаний загружен?
+```
+
+---
+
 ## Использование студентом
 
 ### Пошаговый алгоритм
@@ -995,6 +1088,11 @@ curl http://<IP>:9000/api/stats
 | `GGUF_PATH` | Путь к GGUF (legacy-профиль LLM) | `/models/model.gguf` |
 | `LECTURER_01_PASSWORD` | Пароль лектора 1 (GitLab-юзер `lecturer_1`) | auto-generated |
 | `LECTURER_02_PASSWORD` | Пароль лектора 2 (GitLab-юзер `lecturer_2`) | auto-generated |
+| `LANGFLOW_PORT` | Порт веб-интерфейса Langflow | `7860` |
+| `EMBEDDINGS_PORT` | Порт OpenAI-совместимого сервера эмбеддингов | `8021` |
+| `NEO4J_PASSWORD` | Пароль Neo4j (логин `neo4j`) | auto-generated |
+| `LANGFLOW_SECRET` | JWT-секрет Langflow | auto-generated |
+| `LANGFLOW_SSRF_ALLOWED_HOSTS` | Хосты, доступные Langflow (SSRF-allowlist) | `llm,neo4j,istp-embeddings,<IP>` |
 | `GITLAB_HOST` | IP/домен GitLab (SSH-доступ) | `localhost` (или `<server-ip>`) |
 | `GITLAB_ADMIN_TOKEN` | Root-токен GitLab API | `glpat-placeholder` (авто-выставляется `init_gitlab.sh`) |
 
@@ -1126,6 +1224,29 @@ docker exec admin-dashboard ls -la /home/*/.logs/grading_log.json
 
 # Проверка формата
 head -5 /home/{user}/.logs/grading_log.json
+```
+
+### Langflow / Neo4j / Embeddings не работают
+
+```bash
+# Логи сервисов
+docker logs langflow | tail -30
+docker logs neo4j-init | tail -10     # загрузка графа знаний
+docker logs istp-embeddings | tail -10
+
+# Проверка здоровья
+curl http://<IP>:8021/health          # embeddings: {"status":"ok","ready":true}
+docker exec langflow curl -sf http://localhost:7860 > /dev/null && echo "langflow OK"
+
+# Граф Neo4j не загрузился — перезапустить инициализацию (скрипт идемпотентен)
+docker compose up -d --force-recreate neo4j-init
+
+# Компонент «Neo4j Cypher» отсутствует в палитре — пересобрать образ
+docker build -f langflow/Dockerfile -t istp-langflow:latest langflow/
+docker compose up -d --force-recreate langflow
+
+# Сброс данных Neo4j (⚠️ удалит граф; neo4j-init перезагрузит его при следующем старте)
+docker compose down neo4j && docker volume rm $(basename $PWD)_neo4j-data && docker compose up -d neo4j neo4j-init
 ```
 
 ### Full restart

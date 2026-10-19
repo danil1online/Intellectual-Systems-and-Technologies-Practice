@@ -43,6 +43,9 @@ llm/*.bin
 
 # --- Data files (large archives, datasets) ---
 data/
+# Тестовые данные Langflow (knowledge_base.txt, students.db, cypher) — нужны в репозитории
+!langflow/data/
+!langflow/data/**
 data.zip*
 
 # --- Session & temp files ---

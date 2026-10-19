@@ -1,0 +1,540 @@
+{
+  "id": "flow-практическая-30---локальный-rag",
+  "name": "Практическая 30 - Локальный RAG",
+  "description": "",
+  "endpoint_name": "Практическая 30 - Локальный RAG",
+  "icon": "lf-flow",
+  "icon_bg_color": "#ffffff",
+  "is_component": false,
+  "locked": false,
+  "mcp_enabled": false,
+  "tags": [],
+  "webhook": null,
+  "data": {
+    "nodes": [
+      {
+        "id": "File-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "File-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Read file from disk.",
+            "display_name": "Read File",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "file_path",
+              "path"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.files_and_knowledge.file.FileComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "file_path": {
+                "value": "/app/data/knowledge_base.txt"
+              },
+              "path": {
+                "value": ""
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "Splitter-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "Splitter-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Split text into chunks.",
+            "display_name": "Recursive Character Text Splitter",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "chunk_size",
+              "chunk_overlap",
+              "separators"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.langchain_utilities.recursive_character.RecursiveCharacterTextSplitterComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "chunk_size": {
+                "value": 500
+              },
+              "chunk_overlap": {
+                "value": 50
+              },
+              "separators": {
+                "value": []
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "Embeddings-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "Embeddings-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Embedding model (OpenAI-compatible).",
+            "display_name": "Embedding Model",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "model_name",
+              "provider",
+              "api_base",
+              "api_key"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.models_and_agents.embedding_model.EmbeddingModelComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "model_name": {
+                "value": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+              },
+              "provider": {
+                "value": "OpenAI Compatible"
+              },
+              "api_base": {
+                "value": "http://istp-embeddings:8021/v1"
+              },
+              "api_key": {
+                "value": "not-needed"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "KnowledgeBase-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "KnowledgeBase-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Search and retrieve data from knowledge base.",
+            "display_name": "Knowledge Base",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "search_query",
+              "top_k",
+              "chunk_size",
+              "include_metadata"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.files_and_knowledge.retrieval.KnowledgeBaseComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "search_query": {
+                "value": ""
+              },
+              "top_k": {
+                "value": 4
+              },
+              "chunk_size": {
+                "value": 500
+              },
+              "include_metadata": {
+                "value": true
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "ChatInput-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "ChatInput-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Get user chat input.",
+            "display_name": "Chat Input",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.input_output.chat.ChatInputComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "Prompt-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "Prompt-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Prompt template",
+            "display_name": "Prompt Template",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "template",
+              "use_double_brackets"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.models_and_agents.prompt.PromptComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "template": {
+                "value": "System: Ты — аналитический ассистент. Отвечай на вопрос ПОЛЬЗОВАТЕЛЯ строго на основе предоставленного КОНТЕКСТА. Если в контексте нет ответа, скажи: «В документах информация отсутствует».\n\nКОНТЕКСТ:\n{context}\n\nВОПРОС ПОЛЬЗОВАТЕЛЯ:\n{question}"
+              },
+              "use_double_brackets": {
+                "value": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "OpenAIModel-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "OpenAIModel-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "OpenAI-compatible chat model (llama.cpp)",
+            "display_name": "OpenAI",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value",
+              "system_message",
+              "stream",
+              "max_tokens",
+              "model_kwargs",
+              "json_mode",
+              "model_name",
+              "openai_api_base",
+              "api_key",
+              "temperature"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.openai.openai_chat_model.OpenAIModelComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              },
+              "system_message": {
+                "value": ""
+              },
+              "stream": {
+                "value": true
+              },
+              "max_tokens": {
+                "value": 1024
+              },
+              "model_kwargs": {
+                "value": {}
+              },
+              "json_mode": {
+                "value": false
+              },
+              "model_name": {
+                "value": "qwen2.5-3b-instruct-q4_k_m.gguf"
+              },
+              "openai_api_base": {
+                "value": "http://192.168.2.83:8080/v1"
+              },
+              "api_key": {
+                "value": "not-needed"
+              },
+              "temperature": {
+                "value": 0.7
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "ChatOutput-pr30",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "ChatOutput-pr30",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Display chat output.",
+            "display_name": "Chat Output",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.input_output.chat.ChatOutputComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              }
+            }
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "xy-edge__File-pr30text-Splitter-pr30data_input",
+        "source": "File-pr30",
+        "target": "Splitter-pr30",
+        "sourceHandle": "text",
+        "targetHandle": "data_input",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__Splitter-pr30split_text-KnowledgeBase-pr30data_input",
+        "source": "Splitter-pr30",
+        "target": "KnowledgeBase-pr30",
+        "sourceHandle": "split_text",
+        "targetHandle": "data_input",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__Embeddings-pr30embeddings-KnowledgeBase-pr30embeddings",
+        "source": "Embeddings-pr30",
+        "target": "KnowledgeBase-pr30",
+        "sourceHandle": "embeddings",
+        "targetHandle": "embeddings",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__ChatInput-pr30text-Prompt-pr30question",
+        "source": "ChatInput-pr30",
+        "target": "Prompt-pr30",
+        "sourceHandle": "text",
+        "targetHandle": "question",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__ChatInput-pr30text-KnowledgeBase-pr30search_query",
+        "source": "ChatInput-pr30",
+        "target": "KnowledgeBase-pr30",
+        "sourceHandle": "text",
+        "targetHandle": "search_query",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__KnowledgeBase-pr30retrieval_data-Prompt-pr30context",
+        "source": "KnowledgeBase-pr30",
+        "target": "Prompt-pr30",
+        "sourceHandle": "retrieval_data",
+        "targetHandle": "context",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__Prompt-pr30prompt_text-OpenAIModel-pr30input_value",
+        "source": "Prompt-pr30",
+        "target": "OpenAIModel-pr30",
+        "sourceHandle": "prompt_text",
+        "targetHandle": "input_value",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__OpenAIModel-pr30text-ChatOutput-pr30input_value",
+        "source": "OpenAIModel-pr30",
+        "target": "ChatOutput-pr30",
+        "sourceHandle": "text",
+        "targetHandle": "input_value",
+        "animated": false,
+        "selected": false
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  }
+}

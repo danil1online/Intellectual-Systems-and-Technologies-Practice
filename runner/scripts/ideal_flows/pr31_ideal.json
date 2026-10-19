@@ -1,0 +1,510 @@
+{
+  "id": "flow-практическая-31---nlptosqltonlp",
+  "name": "Практическая 31 - NLPtoSQLtoNLP",
+  "description": "",
+  "endpoint_name": "Практическая 31 - NLPtoSQLtoNLP",
+  "icon": "lf-flow",
+  "icon_bg_color": "#ffffff",
+  "is_component": false,
+  "locked": false,
+  "mcp_enabled": false,
+  "tags": [],
+  "webhook": null,
+  "data": {
+    "nodes": [
+      {
+        "id": "ChatInput-pr31",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "ChatInput-pr31",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Get user chat input.",
+            "display_name": "Chat Input",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.input_output.chat.ChatInputComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "PromptSql-pr31",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "PromptSql-pr31",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Prompt template",
+            "display_name": "Prompt Template",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "template",
+              "use_double_brackets"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.models_and_agents.prompt.PromptComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "template": {
+                "value": "System: Ты — эксперт по SQL. Переведи вопрос пользователя в корректный SQL-запрос для SQLite. Выдавай ТОЛЬКО чистый SQL без кавычек и markdown.\n\nСХЕМА БД:\nstudents(student_id, full_name, group_num)\ncourses(course_id, course_name)\ngrades(student_id, course_id, grade)\n\nВОПРОС: {user_query}\nSQL:"
+              },
+              "use_double_brackets": {
+                "value": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "OpenAIModelSql-pr31",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "OpenAIModelSql-pr31",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "OpenAI-compatible chat model (llama.cpp)",
+            "display_name": "OpenAI",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value",
+              "system_message",
+              "stream",
+              "max_tokens",
+              "model_kwargs",
+              "json_mode",
+              "model_name",
+              "openai_api_base",
+              "api_key",
+              "temperature"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.openai.openai_chat_model.OpenAIModelComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              },
+              "system_message": {
+                "value": ""
+              },
+              "stream": {
+                "value": true
+              },
+              "max_tokens": {
+                "value": 1024
+              },
+              "model_kwargs": {
+                "value": {}
+              },
+              "json_mode": {
+                "value": false
+              },
+              "model_name": {
+                "value": "qwen2.5-3b-instruct-q4_k_m.gguf"
+              },
+              "openai_api_base": {
+                "value": "http://192.168.2.83:8080/v1"
+              },
+              "api_key": {
+                "value": "not-needed"
+              },
+              "temperature": {
+                "value": 0.1
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "SQL-pr31",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "SQL-pr31",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Executes SQL queries on SQLite.",
+            "display_name": "SQL Database",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "database_url",
+              "query",
+              "include_columns",
+              "add_error"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.data_source.sql_executor.SQLComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "database_url": {
+                "value": "sqlite:////app/data/students.db"
+              },
+              "query": {
+                "value": ""
+              },
+              "include_columns": {
+                "value": true
+              },
+              "add_error": {
+                "value": true
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "PromptAnswer-pr31",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "PromptAnswer-pr31",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Prompt template",
+            "display_name": "Prompt Template",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "template",
+              "use_double_brackets"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.models_and_agents.prompt.PromptComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "template": {
+                "value": "System: Сформируй ответ пользователю на понятном русском языке на основе результатов из базы данных.\n\nВОПРОС: {user_query}\nSQL ЗАПРОС: {sql_query}\nРЕЗУЛЬТАТ БД: {db_result}\nОТВЕТ:"
+              },
+              "use_double_brackets": {
+                "value": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "OpenAIModelAnswer-pr31",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "OpenAIModelAnswer-pr31",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "OpenAI-compatible chat model (llama.cpp)",
+            "display_name": "OpenAI",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value",
+              "system_message",
+              "stream",
+              "max_tokens",
+              "model_kwargs",
+              "json_mode",
+              "model_name",
+              "openai_api_base",
+              "api_key",
+              "temperature"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.openai.openai_chat_model.OpenAIModelComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              },
+              "system_message": {
+                "value": ""
+              },
+              "stream": {
+                "value": true
+              },
+              "max_tokens": {
+                "value": 1024
+              },
+              "model_kwargs": {
+                "value": {}
+              },
+              "json_mode": {
+                "value": false
+              },
+              "model_name": {
+                "value": "qwen2.5-3b-instruct-q4_k_m.gguf"
+              },
+              "openai_api_base": {
+                "value": "http://192.168.2.83:8080/v1"
+              },
+              "api_key": {
+                "value": "not-needed"
+              },
+              "temperature": {
+                "value": 0.7
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "ChatOutput-pr31",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "ChatOutput-pr31",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Display chat output.",
+            "display_name": "Chat Output",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.input_output.chat.ChatOutputComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              }
+            }
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "xy-edge__ChatInput-pr31text-PromptSql-pr31user_query",
+        "source": "ChatInput-pr31",
+        "target": "PromptSql-pr31",
+        "sourceHandle": "text",
+        "targetHandle": "user_query",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__PromptSql-pr31prompt_text-OpenAIModelSql-pr31input_value",
+        "source": "PromptSql-pr31",
+        "target": "OpenAIModelSql-pr31",
+        "sourceHandle": "prompt_text",
+        "targetHandle": "input_value",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__OpenAIModelSql-pr31text-SQL-pr31query",
+        "source": "OpenAIModelSql-pr31",
+        "target": "SQL-pr31",
+        "sourceHandle": "text",
+        "targetHandle": "query",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__ChatInput-pr31text-PromptAnswer-pr31user_query",
+        "source": "ChatInput-pr31",
+        "target": "PromptAnswer-pr31",
+        "sourceHandle": "text",
+        "targetHandle": "user_query",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__OpenAIModelSql-pr31text-PromptAnswer-pr31sql_query",
+        "source": "OpenAIModelSql-pr31",
+        "target": "PromptAnswer-pr31",
+        "sourceHandle": "text",
+        "targetHandle": "sql_query",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__SQL-pr31run_sql_query-PromptAnswer-pr31db_result",
+        "source": "SQL-pr31",
+        "target": "PromptAnswer-pr31",
+        "sourceHandle": "run_sql_query",
+        "targetHandle": "db_result",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__PromptAnswer-pr31prompt_text-OpenAIModelAnswer-pr31input_value",
+        "source": "PromptAnswer-pr31",
+        "target": "OpenAIModelAnswer-pr31",
+        "sourceHandle": "prompt_text",
+        "targetHandle": "input_value",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__OpenAIModelAnswer-pr31text-ChatOutput-pr31input_value",
+        "source": "OpenAIModelAnswer-pr31",
+        "target": "ChatOutput-pr31",
+        "sourceHandle": "text",
+        "targetHandle": "input_value",
+        "animated": false,
+        "selected": false
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  }
+}

@@ -5,10 +5,12 @@ auto_grade.py — CI/CD пайплайн автоматической оценк
 Запускается GitLab Runner при push в main. Логика:
   0. Точный вход — только если в корне есть `.grade-trigger` (иначе skip).
   1. Выборка deliverables — только файлы `Pr_<N>_*.md` или `Pr_<N>_*.ipynb`
-     (N = 1..28). Для MD-only практик (1, 4, 22..28) берутся только `.md`.
+     (N = 1..32). Для MD-only практик (1, 4, 22..32) берутся только `.md`.
      Исключаются: docs/, .git/, .ipynb_checkpoints/, helper-ноутбуки (LLM_Help,
      *help* в имени) и пустые .ipynb (0 символов кода). На каждую практику —
      файл с наибольшим временем последнего коммита (git log, не mtime).
+     Flow-практики (29..32): к .md-отчёту добавляется экспорт flow `Pr_<N>_*.json`;
+     задание проверяется детерминированно по flow (grade_flow.py), вопросы — LLM.
   2. Требования по практике — читаются из docs/Pr_<N>.md (в клоне студента).
   3. Кэш — если sha256 файла совпадает с сохранённым в dashboard, LLM не зовём.
   4. Оценка — grade_md.py / grade_notebook.py (LLM → 0..5).
@@ -24,6 +26,7 @@ LLM_CI_BASE_URL/KEY/MODEL.
 import os
 import sys
 import re
+import math
 import json
 import time
 import hashlib
@@ -39,8 +42,11 @@ from grading_common import GRADER_VERSION
 DASHBOARD_BASE = os.environ.get("DASHBOARD_API_URL", "http://admin-dashboard:5000").rstrip("/")
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "")
 DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS", "")
-MAX_PRACTICE = 28
-MD_ONLY_PRACTICES = {1, 4, 22, 23, 24, 25, 26, 27, 28}
+MAX_PRACTICE = 32
+MD_ONLY_PRACTICES = {1, 4, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+# Графические практики Langflow: отчёт = .md (вопросы) + экспорт flow .json.
+# Задание проверяется детерминированно по flow JSON (grade_flow.py).
+FLOW_PRACTICES = {29, 30, 31, 32}
 LLM_TIMEOUT_S = int(os.environ.get("LLM_TIMEOUT_S", "300"))
 SCRIPTS_DIR = "/runner/scripts"
 
@@ -137,6 +143,27 @@ def find_deliverables(repo_dir):
         if n not in best or ct > best[n][1]:
             best[n] = (p, ct)
     return best
+
+
+def find_flow_file(repo_dir, n):
+    """Лучший экспорт flow `Pr_<N>_*.json` по времени последнего коммита."""
+    best = None
+    for p in Path(repo_dir).rglob("Pr_*.json"):
+        if not p.is_file():
+            continue
+        m = re.match(rf"^Pr_{n}_", p.name)
+        if not m:
+            continue
+        parts = set(p.parts)
+        if parts & {".git", ".ipynb_checkpoints"} or "docs" in parts:
+            continue
+        if "help" in p.name.lower():
+            continue
+        rel = str(p.relative_to(repo_dir))
+        ct = last_touch_ct(repo_dir, rel)
+        if best is None or ct > best[1]:
+            best = (p, ct)
+    return best[0] if best else None
 
 
 def dashboard_get_grades(auth, student, practice):
@@ -273,6 +300,16 @@ def main():
         path, ct = deliverables[n]
         rel = str(path.relative_to(repo_dir))
         file_sha = sha256_file(path)
+        flow_path = None
+        if n in FLOW_PRACTICES:
+            # Кэш зависит и от flow JSON: правка только flow → новая оценка.
+            flow_path = find_flow_file(repo_dir, n)
+            if flow_path is not None:
+                h = hashlib.sha256()
+                h.update(file_sha.encode("utf-8"))
+                h.update(b":")
+                h.update(sha256_file(flow_path).encode("utf-8"))
+                file_sha = h.hexdigest()
         commit_sha = commit_sha_for(repo_dir, rel)
         requirement_path = Path(repo_dir) / "docs" / f"Pr_{n}.md"
         requirement_sha = sha256_file(requirement_path) if requirement_path.exists() else ""
@@ -302,6 +339,40 @@ def main():
                 continue
 
         report = grade_file(repo_dir, n, path)
+
+        if n in FLOW_PRACTICES:
+            # Technical part — deterministic check of the flow JSON (no LLM);
+            # questions — already evaluated by grade_md.py.
+            from grade_flow import grade_flow_file
+            from practice_specs import PRACTICE_SPECS
+
+            spec = PRACTICE_SPECS.get(n) or {}
+            if flow_path is None:
+                flow_result = {
+                    "task_score": 0.0, "tasks": [], "done_count": 0,
+                    "total_tasks": len(spec.get("flow_tasks") or []),
+                    "feedback": "Flow export (Pr_<N>_*.json) not found — the technical part is not counted",
+                }
+            else:
+                print(f"  🧩 Flow file: {flow_path.relative_to(repo_dir)}")
+                flow_result = grade_flow_file(str(flow_path), spec)
+                print(f"  [{flow_result['feedback']}]")
+
+            question_score = report.get("question_score", 0.0) or 0.0
+            final = int(max(0, min(5, math.floor(
+                flow_result["task_score"] + question_score + 0.5))))
+            report["task_score"] = flow_result["task_score"]
+            report["tasks"] = flow_result.get("tasks", [])
+            report["done_count"] = flow_result.get("done_count", 0)
+            report["total_tasks"] = flow_result.get("total_tasks", 0)
+            report["task_details"] = flow_result.get("task_details", [])
+            report["flow_file"] = (
+                str(flow_path.relative_to(repo_dir)) if flow_path else "")
+            report["score"] = final
+            base_fb = report.get("feedback") or ""
+            extra_fb = flow_result.get("feedback") or ""
+            report["feedback"] = f"{base_fb} {extra_fb}".strip() if base_fb else extra_fb
+
         try:
             score = int(report.get("score", 0) or 0)
         except (ValueError, TypeError):
@@ -317,7 +388,7 @@ def main():
         for key in (
             "task_score", "question_score", "control_questions",
             "answered_count", "total_questions", "answered_idx",
-            "not_answered_idx",
+            "not_answered_idx", "done_count", "total_tasks", "flow_file",
         ):
             if key in report:
                 result_entry[key] = report[key]
@@ -331,15 +402,16 @@ def main():
                 "commit_sha": commit_sha, "project_id": project_id,
                 "requirement_sha": requirement_sha,
                 "grader_version": GRADER_VERSION,
-                **{
-                    key: report[key]
-                    for key in (
-                        "task_score", "question_score", "control_questions",
-                        "answered_count", "total_questions", "answered_idx",
-                        "not_answered_idx",
-                    )
-                    if key in report
-                },
+                    **{
+                        key: report[key]
+                        for key in (
+                            "task_score", "question_score", "control_questions",
+                            "answered_count", "total_questions", "answered_idx",
+                            "not_answered_idx", "done_count", "total_tasks",
+                            "flow_file",
+                        )
+                        if key in report
+                    },
             }
             try:
                 saved = dashboard_post_grade(auth, payload)

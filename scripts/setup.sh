@@ -690,6 +690,8 @@ JH_API_TOKEN=$(generate_password)
 LECTURER_01_PASSWORD=$(generate_password)
 LECTURER_02_PASSWORD=$(generate_password)
 DASHBOARD_PASSWORD=$(generate_password)
+NEO4J_PASSWORD=$(generate_password)
+LANGFLOW_SECRET=$(openssl rand -hex 32)
 
 # Сохраняем все пароли в файл
 mkdir -p "$PROJECT_DIR/shared/data"
@@ -715,6 +717,10 @@ DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
 # --- Лекторы (обязательно смените пароли при первом входе!) ---
 LECTURER_01_PASSWORD=$LECTURER_01_PASSWORD
 LECTURER_02_PASSWORD=$LECTURER_02_PASSWORD
+
+# --- Neo4j (графовая БД, практики Pr_31/Pr_32) ---
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=$NEO4J_PASSWORD
 PASSEOF
 chmod 600 "$PASS_FILE"
 
@@ -795,6 +801,15 @@ JH_API_TOKEN=$JH_API_TOKEN
 # --- Dashboard ---
 DASHBOARD_USERNAME=admin
 DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
+
+# --- Langflow / Neo4j / Embeddings (практики Pr_29–Pr_32) ---
+LANGFLOW_PORT=7860
+EMBEDDINGS_PORT=8021
+NEO4J_PASSWORD=$NEO4J_PASSWORD
+LANGFLOW_SECRET=$LANGFLOW_SECRET
+# Хосты, доступные Langflow несмотря на SSRF-защиту:
+# внутренние сервисы + IP самого сервера (LLM может указываться внешним IP)
+LANGFLOW_SSRF_ALLOWED_HOSTS=llm,neo4j,istp-embeddings,$PRIMARY_LOCAL_IP,$EXTERNAL_IP
 ENVEOF
 
 chmod 600 "$PROJECT_DIR/.env"
@@ -825,7 +840,7 @@ fi
 # Удаляем Docker тома (с правильным префиксом)
 print_step "Удаление Docker томов..."
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
-for vol in jupyterhub-data; do
+for vol in jupyterhub-data neo4j-data langflow-data; do
     FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
     docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
 done
@@ -896,6 +911,40 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     print_header "ШАГ 11/11: Запуск сервисов"
 else
     print_header "ШАГ 10/11: Запуск сервисов"
+fi
+
+# ============================================
+# Предзагрузка и сборка стека Langflow (Pr_29–Pr_32).
+# Выполняется независимо от типа LLM: Langflow — часть базового комплекса.
+# ============================================
+print_step "Предзагрузка образов Langflow-стека (neo4j, langflow)..."
+docker pull neo4j:5.26 2>/dev/null || true
+docker pull langflowai/langflow:1.12.6 2>/dev/null || true
+
+if docker image inspect istp-embeddings:latest >/dev/null 2>&1; then
+    print_success "Образ istp-embeddings:latest уже собран"
+else
+    print_step "Сборка istp-embeddings:latest (скачивание модели эмбеддингов, может занять 10-20 минут)..."
+    if docker build -f "$PROJECT_DIR/embeddings/Dockerfile" -t istp-embeddings:latest "$PROJECT_DIR/embeddings"; then
+        print_success "istp-embeddings:latest собран"
+    else
+        print_error "Сборка istp-embeddings не удалась (нужен доступ к HuggingFace при сборке)."
+        print_error "Вручную: docker build -f embeddings/Dockerfile -t istp-embeddings:latest embeddings/"
+        exit 1
+    fi
+fi
+
+if docker image inspect istp-langflow:latest >/dev/null 2>&1; then
+    print_success "Образ istp-langflow:latest уже собран"
+else
+    print_step "Сборка istp-langflow:latest (на основе langflowai/langflow:1.12.6)..."
+    if docker build -f "$PROJECT_DIR/langflow/Dockerfile" -t istp-langflow:latest "$PROJECT_DIR/langflow"; then
+        print_success "istp-langflow:latest собран"
+    else
+        print_error "Сборка istp-langflow не удалась."
+        print_error "Вручную: docker build -f langflow/Dockerfile -t istp-langflow:latest langflow/"
+        exit 1
+    fi
 fi
 
 print_step "Запуск docker-compose..."
@@ -997,12 +1046,12 @@ if [[ -n "$LLM_PROFILE_FLAG" ]]; then
         fi
     fi
     if [[ -n "$LLM_SERVICE_NAME" ]]; then
-        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard "$LLM_SERVICE_NAME" gitlab-runner
+        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard "$LLM_SERVICE_NAME" gitlab-runner langflow neo4j neo4j-init istp-embeddings
     else
-        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard gitlab-runner
+        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard gitlab-runner langflow neo4j neo4j-init istp-embeddings
     fi
 else
-     docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner
+     docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner langflow neo4j neo4j-init istp-embeddings
 fi
 
 if ! docker network inspect "${PROJECT_VOLUME_PREFIX}_internal" >/dev/null 2>&1; then
@@ -1036,6 +1085,37 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" ]]; then
         sleep 5
     done
 fi
+
+# ============================================
+# Ожидание стека Langflow (Pr_29–Pr_32)
+# ============================================
+print_step "Ожидание готовности Neo4j и загрузки графа знаний..."
+for i in $(seq 1 60); do
+    if docker exec neo4j-init sh -c "exit 0" > /dev/null 2>&1; then
+        # контейнер neo4j-init завершён — проверяем код выхода
+        EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' neo4j-init 2>/dev/null || echo "1")
+        if [[ "$EXIT_CODE" == "0" ]]; then
+            print_success "Граф знаний Neo4j загружен"
+            break
+        fi
+    fi
+    if [[ $i -eq 60 ]]; then
+        print_warn "Neo4j-init не завершился за 10 минут — проверьте: docker logs neo4j-init"
+    fi
+    sleep 10
+done
+
+print_step "Ожидание готовности Langflow..."
+for i in $(seq 1 36); do
+    if docker exec langflow curl -sf http://localhost:7860 > /dev/null 2>&1; then
+        print_success "Langflow запущен (http://<host>:7860)"
+        break
+    fi
+    if [[ $i -eq 36 ]]; then
+        print_warn "Langflow ещё не готов — проверьте: docker logs langflow"
+    fi
+    sleep 10
+done
 
 # ============================================
 # Инициализация сервисов

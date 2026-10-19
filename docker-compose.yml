@@ -192,6 +192,99 @@ services:
       retries: 5
       start_period: 300s
 
+  # --- LANGFLOW (практики Pr_29–Pr_32) ---
+  langflow:
+    image: istp-langflow:latest
+    build:
+      context: ./langflow
+      dockerfile: Dockerfile
+    container_name: langflow
+    restart: unless-stopped
+    ports:
+      - "${LANGFLOW_PORT:-7860}:7860"
+    environment:
+      LANGFLOW_SECRET: ${LANGFLOW_SECRET}
+      LANGFLOW_SSRF_ALLOWED_HOSTS: ${LANGFLOW_SSRF_ALLOWED_HOSTS}
+    volumes:
+      - ./langflow/data:/app/data:ro
+      - langflow-data:/app/.langflow
+    networks:
+      - internal
+      - host-facing
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      istp-embeddings:
+        condition: service_healthy
+
+  # --- NEO4J (графовая БД для Pr_31/Pr_32) ---
+  neo4j:
+    image: neo4j:5.26
+    container_name: neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD}"
+      NEO4J_server_memory_heap_max__size: 1G
+    volumes:
+      - neo4j-data:/data
+    expose:
+      - "7474"
+      - "7687"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474/ > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # --- NEO4J INIT (разовая инициализация графа знаний) ---
+  neo4j-init:
+    image: neo4j:5.26
+    container_name: neo4j-init
+    restart: "no"
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+    volumes:
+      - ./langflow/data:/data:ro
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        echo "[neo4j-init] Ожидание bolt-порта Neo4j..."
+        for i in $$(seq 1 30); do
+          cypher-shell -a bolt://neo4j:7687 -u neo4j -p "$$NEO4J_PASSWORD" "RETURN 1;" > /dev/null 2>&1 && break
+          sleep 5
+        done
+        echo "[neo4j-init] Загрузка графа знаний..."
+        cypher-shell -a bolt://neo4j:7687 -u neo4j -p "$$NEO4J_PASSWORD" -f /data/init_neo4j_graph.cypher
+        echo "[neo4j-init] Граф знаний загружен"
+    networks:
+      - internal
+
+  # --- ISTP EMBEDDINGS (OpenAI-совместимый сервер эмбеддингов, CPU) ---
+  istp-embeddings:
+    image: istp-embeddings:latest
+    build:
+      context: ./embeddings
+      dockerfile: Dockerfile
+    container_name: istp-embeddings
+    restart: unless-stopped
+    ports:
+      - "${EMBEDDINGS_PORT:-8021}:8021"
+    networks:
+      - internal
+      - host-facing
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8021/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
   # --- DOCKER REGISTRY ---
   registry:
     image: registry:2
@@ -240,6 +333,8 @@ services:
 
 volumes:
   jupyterhub-data:
+  langflow-data:
+  neo4j-data:
   llm-models:
   shared-data:
     external: true

@@ -1,0 +1,275 @@
+{
+  "id": "flow-практическая-29---базовый-чат-бот",
+  "name": "Практическая 29 - Базовый Чат-бот",
+  "description": "",
+  "endpoint_name": "Практическая 29 - Базовый Чат-бот",
+  "icon": "lf-flow",
+  "icon_bg_color": "#ffffff",
+  "is_component": false,
+  "locked": false,
+  "mcp_enabled": false,
+  "tags": [],
+  "webhook": null,
+  "data": {
+    "nodes": [
+      {
+        "id": "ChatInput-pr29",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "ChatInput-pr29",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Get user chat input.",
+            "display_name": "Chat Input",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.input_output.chat.ChatInputComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "Prompt-pr29",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "Prompt-pr29",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Prompt template",
+            "display_name": "Prompt Template",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "template",
+              "use_double_brackets"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.models_and_agents.prompt.PromptComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "template": {
+                "value": "System: Ты — квалифицированный ассистент кафедры интеллектуальных систем. Отвечай строго, четко и структурировано на русском языке.\n\nUser: {user_message}"
+              },
+              "use_double_brackets": {
+                "value": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "OpenAIModel-pr29",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "OpenAIModel-pr29",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "OpenAI-compatible chat model (llama.cpp)",
+            "display_name": "OpenAI",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value",
+              "system_message",
+              "stream",
+              "max_tokens",
+              "model_kwargs",
+              "json_mode",
+              "model_name",
+              "openai_api_base",
+              "api_key",
+              "temperature"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.openai.openai_chat_model.OpenAIModelComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              },
+              "system_message": {
+                "value": ""
+              },
+              "stream": {
+                "value": true
+              },
+              "max_tokens": {
+                "value": 1024
+              },
+              "model_kwargs": {
+                "value": {}
+              },
+              "json_mode": {
+                "value": false
+              },
+              "model_name": {
+                "value": "qwen2.5-3b-instruct-q4_k_m.gguf"
+              },
+              "openai_api_base": {
+                "value": "http://192.168.2.83:8080/v1"
+              },
+              "api_key": {
+                "value": "not-needed"
+              },
+              "temperature": {
+                "value": 0.7
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "ChatOutput-pr29",
+        "type": "custom_component",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "measured": {
+          "width": 240,
+          "height": 96
+        },
+        "data": {
+          "id": "ChatOutput-pr29",
+          "node": {
+            "base_classes": [
+              "Message"
+            ],
+            "beta": false,
+            "conditional_paths": [],
+            "custom_fields": {},
+            "description": "Display chat output.",
+            "display_name": "Chat Output",
+            "documentation": "",
+            "edited": true,
+            "field_order": [
+              "input_value"
+            ],
+            "frozen": false,
+            "icon": "component",
+            "legacy": false,
+            "lf_version": "1.12.6",
+            "metadata": {
+              "module": "lfx.components.input_output.chat.ChatOutputComponent"
+            },
+            "minimized": false,
+            "output_types": [],
+            "outputs": [],
+            "pinned": false,
+            "template": {
+              "input_value": {
+                "value": ""
+              }
+            }
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "xy-edge__ChatInput-pr29text-Prompt-pr29user_message",
+        "source": "ChatInput-pr29",
+        "target": "Prompt-pr29",
+        "sourceHandle": "text",
+        "targetHandle": "user_message",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__Prompt-pr29prompt_text-OpenAIModel-pr29input_value",
+        "source": "Prompt-pr29",
+        "target": "OpenAIModel-pr29",
+        "sourceHandle": "prompt_text",
+        "targetHandle": "input_value",
+        "animated": false,
+        "selected": false
+      },
+      {
+        "id": "xy-edge__OpenAIModel-pr29text-ChatOutput-pr29input_value",
+        "source": "OpenAIModel-pr29",
+        "target": "ChatOutput-pr29",
+        "sourceHandle": "text",
+        "targetHandle": "input_value",
+        "animated": false,
+        "selected": false
+      }
+    ],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  }
+}

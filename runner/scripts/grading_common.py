@@ -435,7 +435,8 @@ def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_
     моделей; reference_position: "before" — эталон ПЕРЕД отчётом студента
     (дефолт, выиграл A/B на qwen2.5-3b), "after" — после.
     """
-    tasks_block = "\n".join(f"{i + 1}. {task['text']}" for i, task in enumerate(spec["tasks"]))
+    has_tasks = bool(spec.get("tasks"))
+    tasks_block = "\n".join(f"{i + 1}. {task['text']}" for i, task in enumerate(spec["tasks"])) if has_tasks else ""
     task_rules = "\n".join(f"- {rule}" for rule in spec.get("task_rules", []))
 
     questions = spec.get("questions", [])
@@ -464,16 +465,31 @@ def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_
     elif len(report) > max_report_chars:
         report = report[:max_report_chars] + "\n…[отчёт обрезан]"
 
-    checklist = f"""=== ШАГИ ЗАДАНИЯ ({len(spec['tasks'])}) ===
+    if has_tasks:
+        tasks_section = f"""=== ШАГИ ЗАДАНИЯ ({len(spec['tasks'])}) ===
 {tasks_block}
 
 ПРАВИЛА ПРОВЕРКИ ЗАДАНИЯ:
 {task_rules}
-{questions_section}
-Ответь ТОЛЬКО одним JSON-объектом, без markdown и без пояснений до/после:
-{{"tasks": [true/false по порядку, ровно {len(spec['tasks'])} значений], {questions_json}"feedback": "<1-2 предложения на русском>", "issues": ["..."], "recommendations": ["..."]}}
+"""
+        tasks_json = f'"tasks": [true/false по порядку, ровно {len(spec["tasks"])} значений], '
+        order_note = "Порядок значений в массивах совпадает с порядком пунктов выше. Если пункт не выполнен или ответа нет — false."
+    else:
+        # Flow-практики (Pr_29–32): задание проверяется детерминированно по
+        # flow JSON вне LLM; от модели нужны только ответы на вопросы.
+        tasks_section = (
+            "=== ШАГИ ЗАДАНИЯ ===\n"
+            "Практика выполнена в визуальном конструкторе Langflow: техническая часть "
+            "проверяется отдельно по экспорту flow и в отчёте не оценивается.\n"
+        )
+        tasks_json = '"tasks": [], '
+        order_note = "Массив «tasks» оставь пустым ([]). Оценивай только контрольные вопросы."
 
-Порядок значений в массивах совпадает с порядком пунктов выше. Если пункт не выполнен или ответа нет — false."""
+    checklist = f"""{tasks_section}{questions_section}
+Ответь ТОЛЬКО одним JSON-объектом, без markdown и без пояснений до/после:
+{{{tasks_json}{questions_json}"feedback": "<1-2 предложения на русском>", "issues": ["..."], "recommendations": ["..."]}}
+
+{order_note}"""
 
     if not ideal_report:
         # ВАЖНО: отчёт стоит ПЕРВЫМ — малые модели хуже удерживают контекст,
@@ -685,7 +701,12 @@ def normalize_spec_payload(raw, spec, report_text):
     done_count = sum(1 for value in tasks if value)
     questions = spec.get("questions", [])
     task_scale = TASK_TOTAL if questions else 5.0
-    task_score = round(task_scale * done_count / tasks_total, 6)
+    # Flow-практики: tasks пуст — техническая часть оценивается отдельно
+    # детерминированно по flow JSON (grade_flow.py), здесь task_score = 0.
+    if tasks_total == 0:
+        task_score = 0.0
+    else:
+        task_score = round(task_scale * done_count / tasks_total, 6)
 
     raw_questions = result.get("questions") if isinstance(result.get("questions"), list) else []
     answer_items = map_answer_items(extract_answer_items(report_text), len(questions))
