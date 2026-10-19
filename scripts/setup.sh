@@ -1100,13 +1100,17 @@ fi
 # ============================================
 print_step "Ожидание готовности Neo4j и загрузки графа знаний..."
 for i in $(seq 1 60); do
-    if docker exec neo4j-init sh -c "exit 0" > /dev/null 2>&1; then
-        # контейнер neo4j-init завершён — проверяем код выхода
+    # docker exec в завершённый контейнер невозможен, поэтому статус берём из inspect:
+    # у running-контейнера ExitCode всегда 0 — по нему успешность определить нельзя
+    STATE=$(docker inspect --format='{{.State.Status}}' neo4j-init 2>/dev/null || echo "missing")
+    if [[ "$STATE" == "exited" ]]; then
         EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' neo4j-init 2>/dev/null || echo "1")
         if [[ "$EXIT_CODE" == "0" ]]; then
             print_success "Граф знаний Neo4j загружен"
-            break
+        else
+            print_warn "neo4j-init завершился с кодом $EXIT_CODE — проверьте: docker logs neo4j-init"
         fi
+        break
     fi
     if [[ $i -eq 60 ]]; then
         print_warn "Neo4j-init не завершился за 10 минут — проверьте: docker logs neo4j-init"
