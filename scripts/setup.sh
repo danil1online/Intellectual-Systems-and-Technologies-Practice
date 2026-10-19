@@ -126,6 +126,15 @@ normalize_llm_endpoint() {
     fi
 }
 
+# Хост (IP или имя сервиса) из URL, без схемы и порта
+url_host() {
+    local u="$1"
+    u="${u#*://}"
+    u="${u%%/*}"
+    u="${u%%:*}"
+    printf '%s\n' "$u"
+}
+
 probe_remote_llm() {
     local title="$1"
     local endpoint url raw parsed model ctx quant params fmt again
@@ -421,6 +430,56 @@ setup_llm_ci() {
     done
 }
 
+# LLM для Langflow (Pr_29–Pr_32): какой адрес студенты указывают в Base URL.
+# Результат: LANGFLOW_LLM_BASE_URL + LANGFLOW_LLM_HOST (хост для LANGFLOW_SSRF_ALLOWED_HOSTS)
+configure_langflow_llm() {
+    local choice
+    while true; do
+        echo "" >&2
+        echo -e "  ${BOLD}Как планируется подключать LLM к Langflow (Pr_29–Pr_32)?${NC}" >&2
+        echo -e "    [1] Использовать LLM для ИИ-Ментора" >&2
+        echo -e "    [2] Использовать LLM для CI/CD" >&2
+        echo -e "    [3] Использовать внешний IP:PORT" >&2
+        echo -e "    Default: 1" >&2
+        read -rp "    Ваш выбор [1/2/3] [1]: " choice
+        [[ -z "$choice" ]] && choice="1"
+
+        if [[ "$choice" == "1" ]]; then
+            if [[ "$LLM_MENTOR_TYPE" == "local" ]]; then
+                LANGFLOW_LLM_BASE_URL="http://llm:8080/v1"
+                LANGFLOW_LLM_HOST="llm"
+            else
+                LANGFLOW_LLM_BASE_URL="$LLM_MENTOR_BASE_URL"
+                LANGFLOW_LLM_HOST=$(url_host "$LLM_MENTOR_BASE_URL")
+            fi
+            print_success "Langflow: LLM ИИ-Ментора → $LANGFLOW_LLM_BASE_URL (хост: $LANGFLOW_LLM_HOST)"
+            return 0
+        elif [[ "$choice" == "2" ]]; then
+            if [[ "$LLM_CI_TYPE" == "local" ]]; then
+                LANGFLOW_LLM_BASE_URL="http://llm:8080/v1"
+                LANGFLOW_LLM_HOST="llm"
+            else
+                LANGFLOW_LLM_BASE_URL="$LLM_CI_BASE_URL"
+                LANGFLOW_LLM_HOST=$(url_host "$LLM_CI_BASE_URL")
+            fi
+            print_success "Langflow: LLM CI/CD → $LANGFLOW_LLM_BASE_URL (хост: $LANGFLOW_LLM_HOST)"
+            return 0
+        elif [[ "$choice" == "3" ]]; then
+            if probe_remote_llm "Langflow"; then
+                LANGFLOW_LLM_BASE_URL="${REMOTE_LLM_BASE}/v1"
+                LANGFLOW_LLM_HOST=$(url_host "$LANGFLOW_LLM_BASE_URL")
+                print_success "Langflow: внешний LLM → $LANGFLOW_LLM_BASE_URL (хост: $LANGFLOW_LLM_HOST)"
+                return 0
+            else
+                print_warn "Langflow: переключаемся на повторный выбор"
+                continue
+            fi
+        else
+            print_warn "Некорректный выбор: $choice (допустимо 1, 2 или 3)"
+        fi
+    done
+}
+
 # ============================================
 # АВТООПРЕДЕЛЕНИЕ СЕТЕВЫХ ПАРАМЕТРОВ
 # ============================================
@@ -664,6 +723,17 @@ LLM_CI_PROFILE=""
 setup_llm_ci
 
 # ============================================
+# ШАГ 4.5/11: LLM для Langflow (Pr_29–Pr_32)
+# ============================================
+print_header "ШАГ 4.5/11: Настройка LLM для Langflow"
+
+LANGFLOW_LLM_BASE_URL=""
+LANGFLOW_LLM_HOST=""
+
+configure_langflow_llm
+print_step "Хост '$LANGFLOW_LLM_HOST' будет автоматически добавлен в LANGFLOW_SSRF_ALLOWED_HOSTS (.env) — без него SSRF-защита Langflow блокировала бы запросы к LLM"
+
+# ============================================
 # ШАГ 5/11: SSH-ключ для GitLab Runner
 # ============================================
 print_header "ШАГ 5/11: SSH-ключ для GitLab Runner"
@@ -758,6 +828,13 @@ GITLAB_HOST=$(echo "$GITLAB_EXTERNAL_URL" | sed 's|http://||' | sed 's|:.*||')
 
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
 
+# SSRF-allowlist Langflow: внутренние сервисы + IP сервера + хост LLM для Pr_29–Pr_32 (если внешний)
+LANGFLOW_SSRF_HOSTS="llm,neo4j,istp-embeddings,$PRIMARY_LOCAL_IP,$EXTERNAL_IP"
+if [[ -n "$LANGFLOW_LLM_HOST" && ",$LANGFLOW_SSRF_HOSTS," != *",$LANGFLOW_LLM_HOST,"* ]]; then
+    LANGFLOW_SSRF_HOSTS="$LANGFLOW_SSRF_HOSTS,$LANGFLOW_LLM_HOST"
+    print_success "SSRF-allowlist: добавлен хост LLM '$LANGFLOW_LLM_HOST'"
+fi
+
 cat > "$PROJECT_DIR/.env" <<ENVEOF
 # ============================================
 # МУЛЬТИСИСТЕМНЫЙ УЧЕБНЫЙ КОМПЛЕКС
@@ -817,8 +894,8 @@ LANGFLOW_SECRET=$LANGFLOW_SECRET
 LANGFLOW_SUPERUSER=admin
 LANGFLOW_SUPERUSER_PASSWORD=$LANGFLOW_SUPERUSER_PASSWORD
 # Хосты, доступные Langflow несмотря на SSRF-защиту:
-# внутренние сервисы + IP самого сервера (LLM может указываться внешним IP)
-LANGFLOW_SSRF_ALLOWED_HOSTS=llm,neo4j,istp-embeddings,$PRIMARY_LOCAL_IP,$EXTERNAL_IP
+# внутренние сервисы + IP самого сервера + хост LLM для Pr_29–Pr_32 (ШАГ 4.5)
+LANGFLOW_SSRF_ALLOWED_HOSTS=$LANGFLOW_SSRF_HOSTS
 ENVEOF
 
 chmod 600 "$PROJECT_DIR/.env"
@@ -1133,6 +1210,25 @@ done
 # ============================================
 # Инициализация сервисов
 # ============================================
+
+# Подставляем реальный адрес LLM в методички Pr_29–Pr_32 (до копирования docs/ в шаблон студентов)
+if [[ -n "$LANGFLOW_LLM_HOST" ]]; then
+    DOCS_DIR="$PROJECT_DIR/docs"
+    LF_DOCS=("$DOCS_DIR/Pr_29.md" "$DOCS_DIR/Pr_30.md" "$DOCS_DIR/Pr_31.md" "$DOCS_DIR/Pr_32.md")
+    if grep -q "<IP_LLM>" "${LF_DOCS[@]}" 2>/dev/null; then
+        sed -i "s|<IP_LLM>|$LANGFLOW_LLM_HOST|g" "${LF_DOCS[@]}"
+        print_success "Методички Pr_29–Pr_32: <IP_LLM> → $LANGFLOW_LLM_HOST (Base URL: $LANGFLOW_LLM_BASE_URL)"
+        LF_PORT=$(printf '%s' "$LANGFLOW_LLM_BASE_URL" | grep -oP ':\K\d+(?=/)' || true)
+        if [[ -n "$LF_PORT" && "$LF_PORT" != "8080" ]]; then
+            print_warn "Порт LLM ($LF_PORT) отличается от 8080 в методичках — проверьте адреса вручную"
+        fi
+    else
+        print_step "Методички Pr_29–Pr_32: плейсхолдер <IP_LLM> уже подставлен, пропускаем"
+    fi
+else
+    print_warn "Адрес LLM для Langflow не задан — в методичках останется плейсхолдер <IP_LLM>"
+fi
+
 print_step "Инициализация GitLab (группы, runner)..."
 bash "$SCRIPT_DIR/init_gitlab.sh"
 

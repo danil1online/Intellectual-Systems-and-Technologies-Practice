@@ -931,7 +931,8 @@ istp-embeddings:  # OpenAI-совместимый сервер эмбеддин�
 - **Администратор** — Langflow 1.12.6 требует учётные данные при старте: `LANGFLOW_SUPERUSER=admin` + сгенерированный `LANGFLOW_SUPERUSER_PASSWORD` (в `credentials.env`).
 - **Кастомный компонент Neo4j Cypher** — официального компонента Neo4j в Langflow 1.12.6 нет; компонент добавляется Dockerfile-слоем (`langflow/custom_components/`) через `LANGFLOW_COMPONENTS_PATH`.
 - **Embeddings отдельным сервисом** — llama-server (qwen2.5-3b) не предоставляет `/v1/embeddings`, поэтому для RAG используется отдельный CPU-сервер с мультиязычной моделью.
-- **SSRF**: в учебном контуре Langflow разрешены обращения только к `llm`, `neo4j`, `istp-embeddings` и IP самого сервера (`LANGFLOW_SSRF_ALLOWED_HOSTS`); локальные sqlite-файлы разрешены (`LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS=false`) для Pr_31.
+- **SSRF**: в учебном контуре Langflow разрешены обращения только к хостам из `LANGFLOW_SSRF_ALLOWED_HOSTS` (по умолчанию `llm`, `neo4j`, `istp-embeddings` + IP сервера); локальные sqlite-файлы разрешены (`LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS=false`) для Pr_31.
+- **LLM для Langflow** — setup.sh спрашивает, какой LLM указывать студентам в Base URL: LLM ИИ-Ментора, LLM CI/CD или внешний IP:PORT. Для локального контейнера это `http://llm:8080/v1` (у всех LLM-профилей один `container_name: llm`), для внешнего — его IP; этот хост автоматически добавляется в `LANGFLOW_SSRF_ALLOWED_HOSTS` при установке (без него Langflow заблокировал бы запросы). Выбранный адрес подставляется в методички `docs/Pr_29–32.md` (плейсхолдер `<IP_LLM>`) до копирования в шаблон студентов.
 - **APOC не используется** — граф загрузки идемпотентный (MERGE), плагины не требуются; это сохраняет офлайн-безопасность первого старта Neo4j.
 
 ### Автоматическая оценка (Pr_29–Pr_32)
@@ -1101,7 +1102,7 @@ curl http://<IP>:9000/api/stats
 | `EMBEDDINGS_PORT` | Порт OpenAI-совместимого сервера эмбеддингов | `8021` |
 | `NEO4J_PASSWORD` | Пароль Neo4j (логин `neo4j`) | auto-generated |
 | `LANGFLOW_SECRET` | JWT-секрет Langflow | auto-generated |
-| `LANGFLOW_SSRF_ALLOWED_HOSTS` | Хосты, доступные Langflow (SSRF-allowlist) | `llm,neo4j,istp-embeddings,<IP>` |
+| `LANGFLOW_SSRF_ALLOWED_HOSTS` | Хосты, доступные Langflow (SSRF-allowlist); сюда же добавляется хост LLM для Pr_29–Pr_32 (`llm` или внешний IP) | `llm,neo4j,istp-embeddings,<IP>` |
 | `GITLAB_HOST` | IP/домен GitLab (SSH-доступ) | `localhost` (или `<server-ip>`) |
 | `GITLAB_ADMIN_TOKEN` | Root-токен GitLab API | `glpat-placeholder` (авто-выставляется `init_gitlab.sh`) |
 
@@ -1253,6 +1254,11 @@ docker compose up -d --force-recreate neo4j-init
 # Компонент «Neo4j Cypher» отсутствует в палитре — пересобрать образ
 docker build -f langflow/Dockerfile -t istp-langflow:latest langflow/
 docker compose up -d --force-recreate langflow
+
+# Langflow не подключается к LLM («Could not connect to the OpenAI-compatible endpoint»):
+#  - http://llm:8080/v1 — нет локального LLM-контейнера: docker compose --profile local-llm-qwen up -d llm-qwen
+#  - внешний IP — хост не в LANGFLOW_SSRF_ALLOWED_HOSTS (.env): добавить IP и перезапустить langflow
+docker compose up -d langflow
 
 # Сброс данных Neo4j (⚠️ удалит граф; neo4j-init перезагрузит его при следующем старте)
 docker compose down neo4j && docker volume rm $(basename $PWD)_neo4j-data && docker compose up -d neo4j neo4j-init
