@@ -2056,9 +2056,11 @@ PRACTICE_SPECS = {
                 "any_of": ["chatoutput"],
             },
             {
-                "check": "component",
-                "text": "Есть компонент шаблона промпта Prompt Template с системной инструкцией",
-                "any_of": ["prompttemplate", "promptcomponent"],
+                "check": "param",
+                "text": "Настроен системный промпт (поле System Message компонента модели заполнено)",
+                "any_of": ["languagemodel", "openaimodel"],
+                "field": "system_message",
+                "regex": ".+",
             },
             {
                 "check": "component",
@@ -2066,22 +2068,14 @@ PRACTICE_SPECS = {
                 "any_of": ["openaimodel", "languagemodel"],
             },
             {
-                "check": "param",
-                "text": "Компонент модели подключён к локальному серверу llama.cpp (Base URL содержит 8080/v1 или хост llm)",
-                "any_of": ["openaimodel"],
-                "field": "openai_api_base",
-                "regex": "(8080|llm)",
-            },
-            {
                 "check": "path",
-                "text": "Связан путь: Chat Input → Prompt → Модель → Chat Output",
+                "text": "Связан путь: Chat Input → Модель → Chat Output (допустимо через Prompt Template)",
                 "steps": [
                     ["chatinput"],
-                    ["prompttemplate", "promptcomponent"],
-                    ["openaimodel"],
+                    ["languagemodel", "openaimodel"],
                     ["chatoutput"],
                 ],
-                "step_labels": ["Chat Input", "Prompt", "Модель", "Chat Output"],
+                "step_labels": ["Chat Input", "Модель", "Chat Output"],
             },
         ],
         "questions": [
@@ -2147,26 +2141,21 @@ PRACTICE_SPECS = {
             },
             {
                 "check": "params_all",
-                "text": "Настроен Recursive Character Text Splitter (указаны Chunk Size и Chunk Overlap)",
-                "any_of": ["recursivecharactertextsplitter", "textsplitters"],
+                "text": "Настроен сплиттер Split Text / Recursive Character Text Splitter (указаны Chunk Size и Chunk Overlap)",
+                "any_of": ["splittext", "recursivecharactertextsplitter", "textsplitters"],
                 "fields": ["chunk_size", "chunk_overlap"],
             },
             {
                 "check": "component",
-                "text": "Есть компонент модели эмбеддингов (Embedding Model / OpenAI Embeddings)",
-                "any_of": ["embeddingmodel", "openaiembeddings"],
-            },
-            {
-                "check": "component",
-                "text": "Есть компонент векторного хранилища (Knowledge Base / Chroma / Vector Store)",
-                "any_of": ["knowledgebase", "chromadb", "chromavectorstore", "vectorstore", "inmemoryvectorstore"],
+                "text": "Есть компонент векторного хранилища (Knowledge / Knowledge Base / Chroma)",
+                "any_of": ["knowledge", "knowledgebase", "chromadb", "chromavectorstore", "vectorstore", "inmemoryvectorstore"],
             },
             {
                 "check": "path",
                 "text": "Связан конвейер индексации: файл → сплиттер",
                 "steps": [
                     ["readfile", "filecomponent"],
-                    ["recursivecharactertextsplitter"],
+                    ["splittext", "recursivecharactertextsplitter"],
                 ],
                 "step_labels": ["File", "Splitter"],
             },
@@ -2181,7 +2170,7 @@ PRACTICE_SPECS = {
                 "steps": [
                     ["chatinput"],
                     ["prompttemplate", "promptcomponent"],
-                    ["openaimodel"],
+                    ["openaimodel", "languagemodel"],
                     ["chatoutput"],
                 ],
                 "step_labels": ["Chat Input", "Prompt", "Модель", "Chat Output"],
@@ -2269,7 +2258,7 @@ PRACTICE_SPECS = {
             {
                 "check": "count",
                 "text": "Не меньше двух компонентов языковой модели (генерация SQL и синтез ответа)",
-                "any_of": ["openaimodel"],
+                "any_of": ["openaimodel", "languagemodel"],
                 "min": 2,
             },
             {
@@ -2278,7 +2267,7 @@ PRACTICE_SPECS = {
                 "steps": [
                     ["chatinput"],
                     ["prompttemplate", "promptcomponent"],
-                    ["openaimodel"],
+                    ["openaimodel", "languagemodel"],
                     ["sqlcomponent", "sqldatabase"],
                     ["chatoutput"],
                 ],

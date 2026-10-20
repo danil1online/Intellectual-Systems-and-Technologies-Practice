@@ -946,7 +946,7 @@ reports/Pr_<N>/Pr_<N>_<имя>.json   # экспорт flow из Langflow (кн�
 python runner/scripts/debug_flow.py <экспорт.json> 30   # структура flow + сверка со спеком Pr_30
 ```
 
-Эталонные flow (`runner/scripts/ideal_flows/pr{29..31}_ideal.json`) — синтетические эталоны формата экспорта; после развёртывания рекомендуется заменить их реальными экспортами, собранными в UI.
+Эталонные flow (`runner/scripts/ideal_flows/pr{29..31}_ideal.json`) — реальные экспорты из UI Langflow 1.12.6 (образцовые решения); используются как эталон формата экспорта и для сверки при отладке (`debug_flow.py`).
 
 ### Проверка развёртывания Langflow-стека
 
