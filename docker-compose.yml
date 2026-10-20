@@ -209,6 +209,13 @@ services:
       LANGFLOW_SUPERUSER: admin
       LANGFLOW_SUPERUSER_PASSWORD: ${LANGFLOW_SUPERUSER_PASSWORD}
       LANGFLOW_NEW_USER_IS_ACTIVE: True
+      # Без journal_mode=WAL: глобальный listener Langflow применяет sqlite_pragmas к
+      # КАЖДОМУ sqlite-подключению (вкл. БД студентов), а WAL пишет -wal/-shm рядом с файлом —
+      # на read-only маунте /app/data это «attempt to write a readonly database» (Pr_31)
+      LANGFLOW_SQLITE_PRAGMAS: '{"synchronous":"NORMAL","busy_timeout":30000}'
+      # Основная БД Langflow (пользователи + flow) — в volume, а не в слое контейнера,
+      # иначе при пересоздании контейнера все аккаунты и flow теряются
+      LANGFLOW_DATABASE_URL: sqlite:////app/.langflow/langflow.db
     volumes:
       - ./langflow/data:/app/data:ro
       - langflow-data:/app/.langflow

@@ -910,6 +910,7 @@ langflow:          # istp-langflow:latest (FROM langflowai/langflow:1.12.6)
   Port: 7860       # веб-интерфейс для студентов (логин admin, пароль из credentials.env)
   Data: ./langflow/data → /app/data (ro): knowledge_base.txt, students.db
   Env: LANGFLOW_SECRET, LANGFLOW_SUPERUSER(_PASSWORD), LANGFLOW_SSRF_ALLOWED_HOSTS
+       LANGFLOW_SQLITE_PRAGMAS (без WAL — см. особенности), LANGFLOW_DATABASE_URL
        HOME/LANGFLOW_CONFIG_DIR → /app/.langflow (writable; в образе HOME=/app/data — ro)
   Volume: langflow-data → /app/.langflow (БД, flow, кэш, knowledge bases)
 
@@ -933,6 +934,8 @@ istp-embeddings:  # OpenAI-совместимый сервер эмбеддин�
 - **Embeddings отдельным сервисом** — llama-server (qwen2.5-3b) не предоставляет `/v1/embeddings`, поэтому для RAG используется отдельный CPU-сервер с мультиязычной моделью.
 - **SSRF**: в учебном контуре Langflow разрешены обращения только к хостам из `LANGFLOW_SSRF_ALLOWED_HOSTS` (по умолчанию `llm`, `neo4j`, `istp-embeddings` + IP сервера); локальные sqlite-файлы разрешены (`LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS=false`) для Pr_31.
 - **LLM для Langflow** — setup.sh спрашивает, какой LLM указывать студентам в Base URL: LLM ИИ-Ментора, LLM CI/CD или внешний IP:PORT. Для локального контейнера это `http://llm:8080/v1` (у всех LLM-профилей один `container_name: llm`), для внешнего — его IP; этот хост автоматически добавляется в `LANGFLOW_SSRF_ALLOWED_HOSTS` при установке (без него Langflow заблокировал бы запросы). Выбранный адрес подставляется в методички `docs/Pr_29–32.md` (плейсхолдер `<IP_LLM>`) до копирования в шаблон студентов.
+- **SQLite без WAL** — Langflow глобально применяет `sqlite_pragmas` к *каждому* sqlite-подключению процесса, включая БД студентов (компонент «SQL Database»). По умолчанию там `journal_mode=WAL`, а WAL пишет `-wal`/`-shm` рядом с файлом → на read-only маунте `/app/data` это `attempt to write a readonly database` (Pr_31). Поэтому `LANGFLOW_SQLITE_PRAGMAS` задан без `journal_mode`.
+- **БД Langflow в volume** — по умолчанию основная БД (пользователи + flow) создаётся в каталоге пакета (слой контейнера) и теряется при пересоздании контейнера. `LANGFLOW_DATABASE_URL=sqlite:////app/.langflow/langflow.db` переносит её в volume `langflow-data`.
 - **APOC не используется** — граф загрузки идемпотентный (MERGE), плагины не требуются; это сохраняет офлайн-безопасность первого старта Neo4j.
 
 ### Автоматическая оценка (Pr_29–Pr_32)
@@ -1259,6 +1262,10 @@ docker compose up -d --force-recreate langflow
 #  - http://llm:8080/v1 — нет локального LLM-контейнера: docker compose --profile local-llm-qwen up -d llm-qwen
 #  - внешний IP — хост не в LANGFLOW_SSRF_ALLOWED_HOSTS (.env): добавить IP и перезапустить langflow
 docker compose up -d langflow
+
+# Pr_31: «attempt to write a readonly database» — компонент SQL Database читает БД с ro-маунта,
+# а глобальный listener Langflow пытается включить WAL (пишет -wal рядом с файлом).
+# Проверьте, что LANGFLOW_SQLITE_PRAGMAS в compose задан БЕЗ journal_mode (см. раздел Langflow)
 
 # Сброс данных Neo4j (⚠️ удалит граф; neo4j-init перезагрузит его при следующем старте)
 docker compose down neo4j && docker volume rm $(basename $PWD)_neo4j-data && docker compose up -d neo4j neo4j-init
