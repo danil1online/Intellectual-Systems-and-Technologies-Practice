@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """grade_flow.py — детерминированная проверка экспортированного Langflow-flow.
 
-Используется для графических практик Pr_29–Pr_32: задача оценивается НЕ LLM,
+Используется для графических практик Pr_29–Pr_31: задача оценивается НЕ LLM,
 а структурным анализом JSON-экспорта flow (компоненты, параметры, связность).
 
 Формат экспорта Langflow 1.x:
@@ -32,8 +32,8 @@
 Совпадение узла с алиасом: нормализованный алиас (нижний регистр, только
 [a-z0-9]) является подстрокой нормализованного имени класса компонента или
 display_name. Пример: алиас "openaimodel" ловит класс OpenAIModelComponent,
-но не EmbeddingModelComponent; алиас "neo4j" — и класс Neo4jCypherComponent,
-и display "Neo4j Cypher".
+но не EmbeddingModelComponent; алиас "sqlitedatabase" — и класс
+SQLiteDatabaseComponent, и display "SQL Database".
 
 CLI:
     grade_flow.py <flow.json> <practice_number>   → JSON-результат в stdout

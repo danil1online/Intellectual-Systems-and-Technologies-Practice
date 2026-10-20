@@ -5,11 +5,11 @@ auto_grade.py — CI/CD пайплайн автоматической оценк
 Запускается GitLab Runner при push в main. Логика:
   0. Точный вход — только если в корне есть `.grade-trigger` (иначе skip).
   1. Выборка deliverables — только файлы `Pr_<N>_*.md` или `Pr_<N>_*.ipynb`
-     (N = 1..32). Для MD-only практик (1, 4, 22..32) берутся только `.md`.
+     (N = 1..31). Для MD-only практик (1, 4, 22..31) берутся только `.md`.
      Исключаются: docs/, .git/, .ipynb_checkpoints/, helper-ноутбуки (LLM_Help,
      *help* в имени) и пустые .ipynb (0 символов кода). На каждую практику —
      файл с наибольшим временем последнего коммита (git log, не mtime).
-     Flow-практики (29..32): к .md-отчёту добавляется экспорт flow `Pr_<N>_*.json`;
+     Flow-практики (29..31): к .md-отчёту добавляется экспорт flow `Pr_<N>_*.json`;
      задание проверяется детерминированно по flow (grade_flow.py), вопросы — LLM.
   2. Требования по практике — читаются из docs/Pr_<N>.md (в клоне студента).
   3. Кэш — если sha256 файла совпадает с сохранённым в dashboard, LLM не зовём.
@@ -42,11 +42,11 @@ from grading_common import GRADER_VERSION
 DASHBOARD_BASE = os.environ.get("DASHBOARD_API_URL", "http://admin-dashboard:5000").rstrip("/")
 DASHBOARD_USER = os.environ.get("DASHBOARD_USER", "")
 DASHBOARD_PASS = os.environ.get("DASHBOARD_PASS", "")
-MAX_PRACTICE = 32
-MD_ONLY_PRACTICES = {1, 4, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+MAX_PRACTICE = 31
+MD_ONLY_PRACTICES = {1, 4, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
 # Графические практики Langflow: отчёт = .md (вопросы) + экспорт flow .json.
 # Задание проверяется детерминированно по flow JSON (grade_flow.py).
-FLOW_PRACTICES = {29, 30, 31, 32}
+FLOW_PRACTICES = {29, 30, 31}
 LLM_TIMEOUT_S = int(os.environ.get("LLM_TIMEOUT_S", "300"))
 SCRIPTS_DIR = "/runner/scripts"
 

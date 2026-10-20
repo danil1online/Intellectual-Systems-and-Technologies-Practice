@@ -16,7 +16,7 @@ Docker Compose-развёртывание полного учебного кла
 - [Авторизация](#авторизация)
 - [GitLab CI/CD](#gitlab-cicd)
 - [Admin Dashboard](#admin-dashboard)
-- [Langflow и графические практики Pr_29–Pr_32](#langflow-и-графические-практики-pr_29--pr_32)
+- [Langflow и графические практики Pr_29–Pr_31](#langflow-и-графические-практики-pr_29--pr_31)
 - [Использование студентом](#использование-студентом)
 - [Использование преподавателем](#использование-преподавателем)
 - [Конфигурация](#конфигурация)
@@ -35,8 +35,7 @@ Docker Compose-развёртывание полного учебного кла
  │  JupyterHub:   8000 (по умолчанию)                             │
  │  Dashboard:    9000 (по умолчанию)                             │
  │  Registry:     5050 (Docker Container Registry)                │
- │  Langflow:     7860 (визуальный конструктор, Pr_29–Pr_32)      │
- │  Neo4j:        7474 (Browser) / 7687 (bolt)                    │
+ │  Langflow:     7860 (визуальный конструктор, Pr_29–Pr_31)      │
  │  Embeddings:   8021 (OpenAI-совместимый /v1/embeddings)        │
 │                                                                │
 │  Internal bridge network:                                      │
@@ -130,11 +129,11 @@ Docker Compose-развёртывание полного учебного кла
  │       ├── auto_grade.py        # CI-оркестратор (student identity, persist в Dashboard)
  │       ├── grade_md.py          # Оценка Markdown-отчёта (Pr_<N>)
  │       ├── grade_notebook.py    # Оценка ноутбука через LLM
- │       ├── grade_flow.py        # Детерминированная проверка flow JSON (Pr_29–32)
+ │       ├── grade_flow.py        # Детерминированная проверка flow JSON (Pr_29–31)
  │       ├── debug_flow.py        # Диагностика экспорта flow (отладка имён блоков)
- │       ├── practice_specs.py    # Спеки оценки: tasks/markers + вопросы (Pr_1..Pr_32)
+ │       ├── practice_specs.py    # Спеки оценки: tasks/markers + вопросы (Pr_1..Pr_31)
  │       ├── ideal_reports/       # Эталонные MD-отчёты (few-shot для LLM)
- │       └── ideal_flows/         # Эталонные flow JSON (Pr_29–32)
+ │       └── ideal_flows/         # Эталонные flow JSON (Pr_29–31)
 │
  ├── dashboard/
  │   ├── Dockerfile               # Flask + Plotly
@@ -145,10 +144,9 @@ Docker Compose-развёртывание полного учебного кла
  │   │   └── dashboard.html      # Единая таблица (результаты + Lazy/Smart-списки)
  │   └── static/                  # CSS/JS (по желанию)
  │
- ├── langflow/                    # Langflow 1.12.6 + кастомный компонент Neo4j Cypher
+ ├── langflow/                    # Langflow 1.12.6 (учебный конструктор)
  │   ├── Dockerfile               # FROM langflowai/langflow:1.12.6 → istp-langflow:latest
- │   ├── custom_components/       # inline-bundle (LANGFLOW_COMPONENTS_PATH)
- │   └── data/                    # knowledge_base.txt, students.db, init_neo4j_graph.cypher
+ │   └── data/                    # knowledge_base.txt, students.db (Pr_30, Pr_31)
  │
  ├── embeddings/                  # istp-embeddings: OpenAI-совместимый сервер эмбеддингов (CPU)
  │   ├── Dockerfile               # python:3.10-slim + sentence-transformers → istp-embeddings:latest
@@ -161,7 +159,7 @@ Docker Compose-развёртывание полного учебного кла
  │   ├── Pr_0.md                  # Предварительная настройка комплекса
  │   ├── Pr_1.md                  # Основы Git и GitLab
  │   ├── Pr_2.md — Pr_28.md       # Практические (Python, ML, визуализация, MAX)
- │   └── Pr_29.md — Pr_32.md      # Графические: Langflow + LLM + SQLite + Neo4j
+ │   └── Pr_29.md — Pr_31.md      # Графические: Langflow + LLM + Embeddings + SQLite
 │
 ├── shared/                      # Volumes mount point
 │   ├── data/                    # Материалы преподавателя
@@ -295,7 +293,6 @@ Dashboard:    http://<IP>:9000
 | **JupyterHub** | любой (через форму Sign Up) | тот же, что создан при регистрации | `http://<IP>:<JUPYTERHUB_PORT>` |
 | **Dashboard** | admin (Basic auth) | см. `.env` → `DASHBOARD_PASSWORD` | `http://<IP>:<DASHBOARD_PORT>` |
 | **Langflow** | `admin` | см. `credentials.env` → `LANGFLOW_SUPERUSER_PASSWORD` | `http://<IP>:7860` |
-| **Neo4j Browser** | `neo4j` | см. `credentials.env` → `NEO4J_PASSWORD` | `http://<IP>:7474` |
 
 > **Важно:** Все пароли генерируются при запуске `setup.sh` и хранятся в файле `.env`.
 > Для просмотра паролей после установки: `cat .env | grep -E "GITLAB_ROOT_PASSWORD|LECTURER_"`
@@ -890,9 +887,9 @@ curl http://<IP>:9000/api/summary
 
 ---
 
-## Langflow и графические практики Pr_29–Pr_32
+## Langflow и графические практики Pr_29–Pr_31
 
-С 4-й волны практик в комплекс включена low-code платформа **Langflow 1.12.6** для визуального конструирования AI-систем. Четыре новые работы выполняются студентами в веб-интерфейсе Langflow, а отчёт — это Markdown + экспорт flow (JSON).
+С 4-й волны практик в комплекс включена low-code платформа **Langflow 1.12.6** для визуального конструирования AI-систем. Три новые работы выполняются студентами в веб-интерфейсе Langflow, а отчёт — это Markdown + экспорт flow (JSON).
 
 ### Практики
 
@@ -901,7 +898,6 @@ curl http://<IP>:9000/api/summary
 | **Pr_29** | Базовый чат с локальной LLM | Chat Input → Prompt Template → OpenAI (llama.cpp) → Chat Output; эксперимент с Temperature |
 | **Pr_30** | Локальная RAG-система | Read File → Recursive Character Text Splitter → Embedding Model → Knowledge Base (векторное хранилище) → Prompt → LLM |
 | **Pr_31** | NLPtoSQLtoNLP | Chat Input → Prompt (DDL-схема) → LLM → SQL Database (SQLite `students.db`) → Prompt → LLM → Chat Output |
-| **Pr_32** | GraphRAG на Neo4j (Text-to-Cypher) | Chat Input → Prompt (схема графа) → LLM → **Neo4j Cypher** (кастомный компонент) → Prompt → LLM → Chat Output |
 
 ### Сервисы
 
@@ -914,14 +910,6 @@ langflow:          # istp-langflow:latest (FROM langflowai/langflow:1.12.6)
        HOME/LANGFLOW_CONFIG_DIR → /app/.langflow (writable; в образе HOME=/app/data — ro)
   Volume: langflow-data → /app/.langflow (БД, flow, кэш, knowledge bases)
 
-neo4j:            # neo4j:5.26
-  Ports: 7474 (Neo4j Browser), 7687 (bolt) — для студентов и Langflow
-  Env: NEO4J_AUTH=neo4j/<сгенерированный пароль>
-  Volume: neo4j-data → /data
-
-neo4j-init:       # разовый контейнер: загружает граф знаний (MERGE-скрипт, идемпотентно)
-  Data: ./langflow/data/init_neo4j_graph.cypher
-
 istp-embeddings:  # OpenAI-совместимый сервер эмбеддингов (CPU, sentence-transformers)
   Port: 8021       # /v1/embeddings — модель paraphrase-multilingual-MiniLM-L12-v2 вшита в образ
 ```
@@ -930,15 +918,13 @@ istp-embeddings:  # OpenAI-совместимый сервер эмбеддин�
 
 - **Данные Langflow вне read-only каталога** — в официальном образе `HOME=/app/data`, а `/app/data` смонтирован read-only (тестовые файлы); поэтому `HOME`, `LANGFLOW_CONFIG_DIR` и `LANGFLOW_KNOWLEDGE_BASES_DIR` переопределены на writable-том `/app/.langflow` (БД, кэш, `.gunicorn`, knowledge bases).
 - **Администратор** — Langflow 1.12.6 требует учётные данные при старте: `LANGFLOW_SUPERUSER=admin` + сгенерированный `LANGFLOW_SUPERUSER_PASSWORD` (в `credentials.env`).
-- **Кастомный компонент Neo4j Cypher** — официального компонента Neo4j в Langflow 1.12.6 нет; компонент добавляется Dockerfile-слоем (`langflow/custom_components/`) через `LANGFLOW_COMPONENTS_PATH`.
 - **Embeddings отдельным сервисом** — llama-server (qwen2.5-3b) не предоставляет `/v1/embeddings`, поэтому для RAG используется отдельный CPU-сервер с мультиязычной моделью.
-- **SSRF**: в учебном контуре Langflow разрешены обращения только к хостам из `LANGFLOW_SSRF_ALLOWED_HOSTS` (по умолчанию `llm`, `neo4j`, `istp-embeddings` + IP сервера); локальные sqlite-файлы разрешены (`LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS=false`) для Pr_31.
+- **SSRF**: в учебном контуре Langflow разрешены обращения только к хостам из `LANGFLOW_SSRF_ALLOWED_HOSTS` (по умолчанию `llm`, `istp-embeddings` + IP сервера); локальные sqlite-файлы разрешены (`LANGFLOW_RESTRICT_LOCAL_FILE_ACCESS=false`) для Pr_31.
 - **LLM для Langflow** — setup.sh спрашивает, какой LLM указывать студентам в Base URL: LLM ИИ-Ментора, LLM CI/CD или внешний IP:PORT. Для локального контейнера это `http://llm:8080/v1` (у всех LLM-профилей один `container_name: llm`), для внешнего — его IP; этот хост автоматически добавляется в `LANGFLOW_SSRF_ALLOWED_HOSTS` при установке (без него Langflow заблокировал бы запросы). Выбранный адрес подставляется в методички `docs/Pr_29–32.md` (плейсхолдер `<IP_LLM>`) до копирования в шаблон студентов.
 - **SQLite без WAL** — Langflow глобально применяет `sqlite_pragmas` к *каждому* sqlite-подключению процесса, включая БД студентов (компонент «SQL Database»). По умолчанию там `journal_mode=WAL`, а WAL пишет `-wal`/`-shm` рядом с файлом → на read-only маунте `/app/data` это `attempt to write a readonly database` (Pr_31). Поэтому `LANGFLOW_SQLITE_PRAGMAS` задан без `journal_mode`.
 - **БД Langflow в volume** — по умолчанию основная БД (пользователи + flow) создаётся в каталоге пакета (слой контейнера) и теряется при пересоздании контейнера. `LANGFLOW_DATABASE_URL=sqlite:////app/.langflow/langflow.db` переносит её в volume `langflow-data`.
-- **APOC не используется** — граф загрузки идемпотентный (MERGE), плагины не требуются; это сохраняет офлайн-безопасность первого старта Neo4j.
 
-### Автоматическая оценка (Pr_29–Pr_32)
+### Автоматическая оценка (Pr_29–Pr_31)
 
 Отчёт студента = два файла:
 
@@ -951,7 +937,7 @@ reports/Pr_<N>/Pr_<N>_<имя>.json   # экспорт flow из Langflow (кн�
 
 | Часть | Баллы | Метод |
 |---|---|---|
-| **Задание** (структура flow) | 0–3 | **Детерминированно** (`grade_flow.py`): наличие компонентов, ключевые параметры (Base URL, chunk_size, database_url, bolt://), связность графа (упорядоченная достижимость по рёбрам). LLM не используется. |
+| **Задание** (структура flow) | 0–3 | **Детерминированно** (`grade_flow.py`): наличие компонентов, ключевые параметры (Base URL, chunk_size, database_url), связность графа (упорядоченная достижимость по рёбрам). LLM не используется. |
 | **Контрольные вопросы** (5 шт.) | 0–2 | LLM по MD-отчёту с анти-галлюцинационным grounding (наличие ответа + ключевые слова концепта) |
 
 Сопоставление блоков в flow выполняется терпимо к версиям: алиасы — подстроки имени класса компонента или display_name (например, `openaimodel` ловит `OpenAIModelComponent`, но не `EmbeddingModelComponent`). Для отладки имён блоков после обновления Langflow:
@@ -960,15 +946,14 @@ reports/Pr_<N>/Pr_<N>_<имя>.json   # экспорт flow из Langflow (кн�
 python runner/scripts/debug_flow.py <экспорт.json> 30   # структура flow + сверка со спеком Pr_30
 ```
 
-Эталонные flow (`runner/scripts/ideal_flows/pr{29..32}_ideal.json`) — синтетические эталоны формата экспорта; после развёртывания рекомендуется заменить их реальными экспортами, собранными в UI.
+Эталонные flow (`runner/scripts/ideal_flows/pr{29..31}_ideal.json`) — синтетические эталоны формата экспорта; после развёртывания рекомендуется заменить их реальными экспортами, собранными в UI.
 
 ### Проверка развёртывания Langflow-стека
 
 ```bash
-docker compose ps langflow neo4j neo4j-init istp-embeddings
+docker compose ps langflow istp-embeddings
 curl http://<IP>:8021/health                                   # embeddings
 docker exec langflow curl -sf http://localhost:7860 > /dev/null && echo "langflow OK"
-docker logs neo4j-init | tail -3                               # граф знаний загружен?
 ```
 
 ---
@@ -1100,12 +1085,9 @@ curl http://<IP>:9000/api/stats
 | `LECTURER_01_PASSWORD` | Пароль лектора 1 (GitLab-юзер `lecturer_1`) | auto-generated |
 | `LECTURER_02_PASSWORD` | Пароль лектора 2 (GitLab-юзер `lecturer_2`) | auto-generated |
 | `LANGFLOW_PORT` | Порт веб-интерфейса Langflow | `7860` |
-| `NEO4J_HTTP_PORT` | Порт Neo4j Browser | `7474` |
-| `NEO4J_BOLT_PORT` | Порт Neo4j bolt | `7687` |
 | `EMBEDDINGS_PORT` | Порт OpenAI-совместимого сервера эмбеддингов | `8021` |
-| `NEO4J_PASSWORD` | Пароль Neo4j (логин `neo4j`) | auto-generated |
 | `LANGFLOW_SECRET` | JWT-секрет Langflow | auto-generated |
-| `LANGFLOW_SSRF_ALLOWED_HOSTS` | Хосты, доступные Langflow (SSRF-allowlist); сюда же добавляется хост LLM для Pr_29–Pr_32 (`llm` или внешний IP) | `llm,neo4j,istp-embeddings,<IP>` |
+| `LANGFLOW_SSRF_ALLOWED_HOSTS` | Хосты, доступные Langflow (SSRF-allowlist); сюда же добавляется хост LLM для Pr_29–Pr_31 (`llm` или внешний IP) | `llm,istp-embeddings,<IP>` |
 | `GITLAB_HOST` | IP/домен GitLab (SSH-доступ) | `localhost` (или `<server-ip>`) |
 | `GITLAB_ADMIN_TOKEN` | Root-токен GitLab API | `glpat-placeholder` (авто-выставляется `init_gitlab.sh`) |
 
@@ -1239,22 +1221,18 @@ docker exec admin-dashboard ls -la /home/*/.logs/grading_log.json
 head -5 /home/{user}/.logs/grading_log.json
 ```
 
-### Langflow / Neo4j / Embeddings не работают
+### Langflow / Embeddings не работают
 
 ```bash
 # Логи сервисов
 docker logs langflow | tail -30
-docker logs neo4j-init | tail -10     # загрузка графа знаний
 docker logs istp-embeddings | tail -10
 
 # Проверка здоровья
 curl http://<IP>:8021/health          # embeddings: {"status":"ok","ready":true}
 docker exec langflow curl -sf http://localhost:7860 > /dev/null && echo "langflow OK"
 
-# Граф Neo4j не загрузился — перезапустить инициализацию (скрипт идемпотентен)
-docker compose up -d --force-recreate neo4j-init
-
-# Компонент «Neo4j Cypher» отсутствует в палитре — пересобрать образ
+# Компоненты/палитра не обновляются после правок Dockerfile — пересобрать образ
 docker build -f langflow/Dockerfile -t istp-langflow:latest langflow/
 docker compose up -d --force-recreate langflow
 
@@ -1266,9 +1244,6 @@ docker compose up -d langflow
 # Pr_31: «attempt to write a readonly database» — компонент SQL Database читает БД с ro-маунта,
 # а глобальный listener Langflow пытается включить WAL (пишет -wal рядом с файлом).
 # Проверьте, что LANGFLOW_SQLITE_PRAGMAS в compose задан БЕЗ journal_mode (см. раздел Langflow)
-
-# Сброс данных Neo4j (⚠️ удалит граф; neo4j-init перезагрузит его при следующем старте)
-docker compose down neo4j && docker volume rm $(basename $PWD)_neo4j-data && docker compose up -d neo4j neo4j-init
 ```
 
 ### Full restart

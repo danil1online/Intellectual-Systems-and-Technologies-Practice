@@ -430,13 +430,13 @@ setup_llm_ci() {
     done
 }
 
-# LLM для Langflow (Pr_29–Pr_32): какой адрес студенты указывают в Base URL.
+# LLM для Langflow (Pr_29–Pr_31): какой адрес студенты указывают в Base URL.
 # Результат: LANGFLOW_LLM_BASE_URL + LANGFLOW_LLM_HOST (хост для LANGFLOW_SSRF_ALLOWED_HOSTS)
 configure_langflow_llm() {
     local choice
     while true; do
         echo "" >&2
-        echo -e "  ${BOLD}Как планируется подключать LLM к Langflow (Pr_29–Pr_32)?${NC}" >&2
+        echo -e "  ${BOLD}Как планируется подключать LLM к Langflow (Pr_29–Pr_31)?${NC}" >&2
         echo -e "    [1] Использовать LLM для ИИ-Ментора" >&2
         echo -e "    [2] Использовать LLM для CI/CD" >&2
         echo -e "    [3] Использовать внешний IP:PORT" >&2
@@ -486,7 +486,7 @@ configure_langflow_llm() {
 print_header "ШАГ 0/11: Проверка портов и автоопределение сетевых параметров"
 
 # Проверка занятых портов
-REQUIRED_PORTS="80 2222 8000 8080 9000 5050 7474 7687 7860 8021"
+REQUIRED_PORTS="80 2222 8000 8080 9000 5050 7860 8021"
 PORTS_IN_USE=""
 for port in $REQUIRED_PORTS; do
     if ss -tlnp 2>/dev/null | grep -q ":${port} " || netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
@@ -723,7 +723,7 @@ LLM_CI_PROFILE=""
 setup_llm_ci
 
 # ============================================
-# ШАГ 4.5/11: LLM для Langflow (Pr_29–Pr_32)
+# ШАГ 4.5/11: LLM для Langflow (Pr_29–Pr_31)
 # ============================================
 print_header "ШАГ 4.5/11: Настройка LLM для Langflow"
 
@@ -760,7 +760,6 @@ JH_API_TOKEN=$(generate_password)
 LECTURER_01_PASSWORD=$(generate_password)
 LECTURER_02_PASSWORD=$(generate_password)
 DASHBOARD_PASSWORD=$(generate_password)
-NEO4J_PASSWORD=$(generate_password)
 LANGFLOW_SECRET=$(openssl rand -hex 32)
 LANGFLOW_SUPERUSER_PASSWORD=$(generate_password)
 
@@ -789,11 +788,7 @@ DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
 LECTURER_01_PASSWORD=$LECTURER_01_PASSWORD
 LECTURER_02_PASSWORD=$LECTURER_02_PASSWORD
 
-# --- Neo4j (графовая БД, практики Pr_31/Pr_32) ---
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=$NEO4J_PASSWORD
-
-# --- Langflow (визуальный конструктор, практики Pr_29–Pr_32) ---
+# --- Langflow (визуальный конструктор, практики Pr_29–Pr_31) ---
 LANGFLOW_USERNAME=admin
 LANGFLOW_SUPERUSER_PASSWORD=$LANGFLOW_SUPERUSER_PASSWORD
 PASSEOF
@@ -828,8 +823,8 @@ GITLAB_HOST=$(echo "$GITLAB_EXTERNAL_URL" | sed 's|http://||' | sed 's|:.*||')
 
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
 
-# SSRF-allowlist Langflow: внутренние сервисы + IP сервера + хост LLM для Pr_29–Pr_32 (если внешний)
-LANGFLOW_SSRF_HOSTS="llm,neo4j,istp-embeddings,$PRIMARY_LOCAL_IP,$EXTERNAL_IP"
+# SSRF-allowlist Langflow: внутренние сервисы + IP сервера + хост LLM для Pr_29–Pr_31 (если внешний)
+LANGFLOW_SSRF_HOSTS="llm,istp-embeddings,$PRIMARY_LOCAL_IP,$EXTERNAL_IP"
 if [[ -n "$LANGFLOW_LLM_HOST" && ",$LANGFLOW_SSRF_HOSTS," != *",$LANGFLOW_LLM_HOST,"* ]]; then
     LANGFLOW_SSRF_HOSTS="$LANGFLOW_SSRF_HOSTS,$LANGFLOW_LLM_HOST"
     print_success "SSRF-allowlist: добавлен хост LLM '$LANGFLOW_LLM_HOST'"
@@ -884,17 +879,14 @@ JH_API_TOKEN=$JH_API_TOKEN
 DASHBOARD_USERNAME=admin
 DASHBOARD_PASSWORD=$DASHBOARD_PASSWORD
 
-# --- Langflow / Neo4j / Embeddings (практики Pr_29–Pr_32) ---
+# --- Langflow / Embeddings (практики Pr_29–Pr_31) ---
 LANGFLOW_PORT=7860
 EMBEDDINGS_PORT=8021
-NEO4J_HTTP_PORT=7474
-NEO4J_BOLT_PORT=7687
-NEO4J_PASSWORD=$NEO4J_PASSWORD
 LANGFLOW_SECRET=$LANGFLOW_SECRET
 LANGFLOW_SUPERUSER=admin
 LANGFLOW_SUPERUSER_PASSWORD=$LANGFLOW_SUPERUSER_PASSWORD
 # Хосты, доступные Langflow несмотря на SSRF-защиту:
-# внутренние сервисы + IP самого сервера + хост LLM для Pr_29–Pr_32 (ШАГ 4.5)
+# внутренние сервисы + IP самого сервера + хост LLM для Pr_29–Pr_31 (ШАГ 4.5)
 LANGFLOW_SSRF_ALLOWED_HOSTS=$LANGFLOW_SSRF_HOSTS
 ENVEOF
 
@@ -926,7 +918,7 @@ fi
 # Удаляем Docker тома (с правильным префиксом)
 print_step "Удаление Docker томов..."
 PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
-for vol in jupyterhub-data neo4j-data langflow-data; do
+for vol in jupyterhub-data langflow-data; do
     FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
     docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
 done
@@ -1000,11 +992,10 @@ else
 fi
 
 # ============================================
-# Предзагрузка и сборка стека Langflow (Pr_29–Pr_32).
+# Предзагрузка и сборка стека Langflow (Pr_29–Pr_31).
 # Выполняется независимо от типа LLM: Langflow — часть базового комплекса.
 # ============================================
-print_step "Предзагрузка образов Langflow-стека (neo4j, langflow)..."
-docker pull neo4j:5.26 2>/dev/null || true
+print_step "Предзагрузка образов Langflow-стека (langflow)..."
 docker pull langflowai/langflow:1.12.6 2>/dev/null || true
 
 if docker image inspect istp-embeddings:latest >/dev/null 2>&1; then
@@ -1132,12 +1123,12 @@ if [[ -n "$LLM_PROFILE_FLAG" ]]; then
         fi
     fi
     if [[ -n "$LLM_SERVICE_NAME" ]]; then
-        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard "$LLM_SERVICE_NAME" gitlab-runner langflow neo4j neo4j-init istp-embeddings
+        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard "$LLM_SERVICE_NAME" gitlab-runner langflow istp-embeddings
     else
-        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard gitlab-runner langflow neo4j neo4j-init istp-embeddings
+        docker compose $LLM_PROFILE_FLAG up -d --force-recreate gitlab admin-dashboard gitlab-runner langflow istp-embeddings
     fi
 else
-     docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner langflow neo4j neo4j-init istp-embeddings
+     docker compose up -d --force-recreate gitlab admin-dashboard gitlab-runner langflow istp-embeddings
 fi
 
 if ! docker network inspect "${PROJECT_VOLUME_PREFIX}_internal" >/dev/null 2>&1; then
@@ -1173,28 +1164,8 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" ]]; then
 fi
 
 # ============================================
-# Ожидание стека Langflow (Pr_29–Pr_32)
+# Ожидание стека Langflow (Pr_29–Pr_31)
 # ============================================
-print_step "Ожидание готовности Neo4j и загрузки графа знаний..."
-for i in $(seq 1 60); do
-    # docker exec в завершённый контейнер невозможен, поэтому статус берём из inspect:
-    # у running-контейнера ExitCode всегда 0 — по нему успешность определить нельзя
-    STATE=$(docker inspect --format='{{.State.Status}}' neo4j-init 2>/dev/null || echo "missing")
-    if [[ "$STATE" == "exited" ]]; then
-        EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' neo4j-init 2>/dev/null || echo "1")
-        if [[ "$EXIT_CODE" == "0" ]]; then
-            print_success "Граф знаний Neo4j загружен"
-        else
-            print_warn "neo4j-init завершился с кодом $EXIT_CODE — проверьте: docker logs neo4j-init"
-        fi
-        break
-    fi
-    if [[ $i -eq 60 ]]; then
-        print_warn "Neo4j-init не завершился за 10 минут — проверьте: docker logs neo4j-init"
-    fi
-    sleep 10
-done
-
 print_step "Ожидание готовности Langflow..."
 for i in $(seq 1 36); do
     if docker exec langflow curl -sf http://localhost:7860 > /dev/null 2>&1; then
@@ -1211,19 +1182,19 @@ done
 # Инициализация сервисов
 # ============================================
 
-# Подставляем реальный адрес LLM в методички Pr_29–Pr_32 (до копирования docs/ в шаблон студентов)
+# Подставляем реальный адрес LLM в методички Pr_29–Pr_31 (до копирования docs/ в шаблон студентов)
 if [[ -n "$LANGFLOW_LLM_HOST" ]]; then
     DOCS_DIR="$PROJECT_DIR/docs"
-    LF_DOCS=("$DOCS_DIR/Pr_29.md" "$DOCS_DIR/Pr_30.md" "$DOCS_DIR/Pr_31.md" "$DOCS_DIR/Pr_32.md")
+    LF_DOCS=("$DOCS_DIR/Pr_29.md" "$DOCS_DIR/Pr_30.md" "$DOCS_DIR/Pr_31.md")
     if grep -q "<IP_LLM>" "${LF_DOCS[@]}" 2>/dev/null; then
         sed -i "s|<IP_LLM>|$LANGFLOW_LLM_HOST|g" "${LF_DOCS[@]}"
-        print_success "Методички Pr_29–Pr_32: <IP_LLM> → $LANGFLOW_LLM_HOST (Base URL: $LANGFLOW_LLM_BASE_URL)"
+        print_success "Методички Pr_29–Pr_31: <IP_LLM> → $LANGFLOW_LLM_HOST (Base URL: $LANGFLOW_LLM_BASE_URL)"
         LF_PORT=$(printf '%s' "$LANGFLOW_LLM_BASE_URL" | grep -oP ':\K\d+(?=/)' || true)
         if [[ -n "$LF_PORT" && "$LF_PORT" != "8080" ]]; then
             print_warn "Порт LLM ($LF_PORT) отличается от 8080 в методичках — проверьте адреса вручную"
         fi
     else
-        print_step "Методички Pr_29–Pr_32: плейсхолдер <IP_LLM> уже подставлен, пропускаем"
+        print_step "Методички Pr_29–Pr_31: плейсхолдер <IP_LLM> уже подставлен, пропускаем"
     fi
 else
     print_warn "Адрес LLM для Langflow не задан — в методичках останется плейсхолдер <IP_LLM>"

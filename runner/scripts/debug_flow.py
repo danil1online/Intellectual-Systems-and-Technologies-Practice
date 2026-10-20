@@ -3,7 +3,7 @@
 
 Показывает нормализованную структуру flow (узлы, имена классов, display_name,
 ключевые параметры, рёбра) — для отладки соответствия flow критериям проверки
-практик Pr_29–Pr_32 и подбора алиасов в practice_specs.py.
+практик Pr_29–Pr_31 и подбора алиасов в practice_specs.py.
 
 CLI:
     debug_flow.py <flow.json> [practice_number]
