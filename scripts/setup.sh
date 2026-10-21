@@ -1039,6 +1039,8 @@ docker pull langflowai/langflow:1.12.6 2>/dev/null || true
 
 if docker image inspect istp-embeddings:latest >/dev/null 2>&1; then
     print_success "Образ istp-embeddings:latest уже собран"
+elif docker pull ghcr.io/danil1online/istp-embeddings:latest 2>/dev/null && docker tag ghcr.io/danil1online/istp-embeddings:latest istp-embeddings:latest; then
+    print_success "istp-embeddings:latest загружен из GHCR"
 else
     print_step "Сборка istp-embeddings:latest (скачивание модели эмбеддингов, может занять 10-20 минут)..."
     if docker build -f "$PROJECT_DIR/embeddings/Dockerfile" -t istp-embeddings:latest "$PROJECT_DIR/embeddings"; then
@@ -1052,6 +1054,8 @@ fi
 
 if docker image inspect istp-langflow:latest >/dev/null 2>&1; then
     print_success "Образ istp-langflow:latest уже собран"
+elif docker pull ghcr.io/danil1online/istp-langflow:latest 2>/dev/null && docker tag ghcr.io/danil1online/istp-langflow:latest istp-langflow:latest; then
+    print_success "istp-langflow:latest загружен из GHCR"
 else
     print_step "Сборка istp-langflow:latest (на основе langflowai/langflow:1.12.6)..."
     if docker build -f "$PROJECT_DIR/langflow/Dockerfile" -t istp-langflow:latest "$PROJECT_DIR/langflow"; then
@@ -1062,6 +1066,21 @@ else
         exit 1
     fi
 fi
+
+# GitLab и Dashboard: на чистой машине грузим из GHCR, чтобы compose не собирал их локально.
+# Compose по умолчанию называет образы <basename_каталога>-<сервис>; если образ найден — сборка пропускается.
+COMP_PROJECT=$(basename "$PROJECT_DIR")
+for pair in "istp-gitlab:gitlab" "istp-dashboard:admin-dashboard"; do
+    GCR_IMG="ghcr.io/danil1online/${pair%%:*}:latest"
+    LOCAL_IMG="${COMP_PROJECT}-${pair##*:}"
+    if docker image inspect "$LOCAL_IMG" >/dev/null 2>&1; then
+        print_success "Образ $LOCAL_IMG уже есть локально"
+    elif docker pull "$GCR_IMG" 2>/dev/null && docker tag "$GCR_IMG" "$LOCAL_IMG"; then
+        print_success "$LOCAL_IMG загружен из GHCR"
+    else
+        print_warn "$GCR_IMG недоступен — compose соберёт образ локально"
+    fi
+done
 
 print_step "Запуск docker-compose..."
 
