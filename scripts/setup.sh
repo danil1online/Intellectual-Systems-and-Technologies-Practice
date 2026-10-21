@@ -1034,8 +1034,7 @@ fi
 # Предзагрузка и сборка стека Langflow (Pr_29–Pr_31).
 # Выполняется независимо от типа LLM: Langflow — часть базового комплекса.
 # ============================================
-print_step "Предзагрузка образов Langflow-стека (langflow)..."
-docker pull langflowai/langflow:1.12.6 2>/dev/null || true
+print_step "Предзагрузка образов Langflow-стека..."
 
 if docker image inspect istp-embeddings:latest >/dev/null 2>&1; then
     print_success "Образ istp-embeddings:latest уже собран"
@@ -1058,6 +1057,7 @@ elif docker pull ghcr.io/danil1online/istp-langflow:latest 2>/dev/null && docker
     print_success "istp-langflow:latest загружен из GHCR"
 else
     print_step "Сборка istp-langflow:latest (на основе langflowai/langflow:1.12.6)..."
+    docker pull langflowai/langflow:1.12.6 2>/dev/null || true
     if docker build -f "$PROJECT_DIR/langflow/Dockerfile" -t istp-langflow:latest "$PROJECT_DIR/langflow"; then
         print_success "istp-langflow:latest собран"
     else
@@ -1135,25 +1135,19 @@ elif [[ "$LLM_CI_TYPE" == "local" ]]; then
 fi
 
 # ============================================
-# Сборка CI-образа istp-ci из исходников репозитория.
-# Критично: предсобраный GHCR-образ со старыми скриптами (нет selection
-# по Pr_<N> и нет persist в dashboard). Собираем локально, независимо от типа LLM.
+# CI-образ istp-ci: сначала из GHCR (актуальные скрипты автооценки),
+# сборка из исходников — fallback. Важно: при изменении runner/scripts
+# пушить обновлённый образ в GHCR:
+#   docker build -f runner/Dockerfile.python310 -t ghcr.io/danil1online/istp-ci:latest . && docker push ghcr.io/danil1online/istp-ci:latest
 # ============================================
-if [[ -f "$PROJECT_DIR/runner/Dockerfile.python310" ]]; then
+if docker image inspect istp-ci:latest >/dev/null 2>&1; then
+    print_success "Образ istp-ci:latest уже есть локально"
+elif docker pull ghcr.io/danil1online/istp-ci:latest 2>/dev/null && docker tag ghcr.io/danil1online/istp-ci:latest istp-ci:latest; then
+    print_success "istp-ci:latest загружен из GHCR"
+elif [[ -f "$PROJECT_DIR/runner/Dockerfile.python310" ]]; then
     print_step "Сборка istp-ci:latest из runner/Dockerfile.python310 (может занять несколько минут)..."
     if docker build -f "$PROJECT_DIR/runner/Dockerfile.python310" -t istp-ci:latest "$PROJECT_DIR" 2>&1; then
-        docker tag istp-ci:latest ghcr.io/danil1online/istp-ci:latest 2>/dev/null || true
         print_success "istp-ci:latest собран из исходников"
-    else
-        print_warn "Сборка istp-ci не удалась."
-    fi
-fi
-
-if ! docker image inspect istp-ci:latest >/dev/null 2>&1; then
-    print_step "Подтягиваем предсобраный istp-ci с GHCR (fallback)..."
-    if docker pull ghcr.io/danil1online/istp-ci:latest 2>/dev/null; then
-        docker tag ghcr.io/danil1online/istp-ci:latest istp-ci:latest 2>/dev/null || true
-        print_success "istp-ci:latest подтянут с GHCR"
     fi
 fi
 
