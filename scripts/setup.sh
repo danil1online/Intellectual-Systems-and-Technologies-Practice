@@ -751,6 +751,21 @@ print_success "SSH-ключ сгенерирован: $RUNNER_SSH_PRIV"
 print_step "Ключ будет автоматически добавлен в GitLab при инициализации..."
 
 # ============================================
+# Данные предыдущей установки: сохранить или сбросить
+# ============================================
+PRESERVE_DATA=false
+if [[ -f "$PROJECT_DIR/.env" || -n "$(ls -A "$PROJECT_DIR/shared/data/gitlab-data" 2>/dev/null)" ]]; then
+    print_step "Обнаружены данные предыдущей установки (.env / GitLab data)"
+    _keep=$(ask "Сохранить их? Аккаунты, репозитории и flow останутся, пароли не изменятся [Y/n]" "y")
+    if [[ "$_keep" =~ ^[Yy]([Aa])?$ ]]; then
+        PRESERVE_DATA=true
+        print_success "Режим: сохранение данных (GitLab, Langflow)"
+    else
+        print_warn "Режим: полный сброс (данные будут очищены в ШАГЕ 9)"
+    fi
+fi
+
+# ============================================
 # ШАГ 6/11: Генерация паролей
 # ============================================
 print_header "ШАГ 6/11: Генерация паролей"
@@ -762,6 +777,19 @@ LECTURER_02_PASSWORD=$(generate_password)
 DASHBOARD_PASSWORD=$(generate_password)
 LANGFLOW_SECRET=$(openssl rand -hex 32)
 LANGFLOW_SUPERUSER_PASSWORD=$(generate_password)
+
+# Режим «сохранить данные»: пароли берём из старого .env. Критично для GitLab:
+# GITLAB_ROOT_PASSWORD применяется только при ПЕРВОМ старте, поэтому при сохранённой
+# БД новый пароль из .env не подхватится и root-логин сломается.
+if [[ "$PRESERVE_DATA" == true && -f "$PROJECT_DIR/.env" ]]; then
+    print_step "Сохранение паролей предыдущей установки (.env)..."
+    for _var in GITLAB_ROOT_PASSWORD JH_API_TOKEN LECTURER_01_PASSWORD LECTURER_02_PASSWORD DASHBOARD_PASSWORD LANGFLOW_SECRET LANGFLOW_SUPERUSER_PASSWORD; do
+        _old=$(grep -m1 "^${_var}=" "$PROJECT_DIR/.env" | cut -d= -f2-)
+        if [[ -n "$_old" ]]; then
+            printf -v "$_var" '%s' "$_old"
+        fi
+    done
+fi
 
 # Сохраняем все пароли в файл
 mkdir -p "$PROJECT_DIR/shared/data"
@@ -898,32 +926,43 @@ print_success "Конфигурация записана в .env"
 # ============================================
 print_header "ШАГ 9/11: Очистка и запуск"
 
-print_step "Очистка предыдущих данных сервисов..."
 cd "$PROJECT_DIR"
 
-# Удаляем bind-mounted данные GitLab
-if [ -d "$PROJECT_DIR/shared/data/gitlab-data" ]; then
-    docker run --rm -v "$PROJECT_DIR/shared/data/gitlab-data:/data" alpine sh -c "rm -rf /data/* /data/.* 2>/dev/null; mkdir -p /data" 2>/dev/null || true
-    print_success "GitLab data очищен"
-fi
-if [ -d "$PROJECT_DIR/shared/data/gitlab-config" ]; then
-    docker run --rm -v "$PROJECT_DIR/shared/data/gitlab-config:/config" alpine sh -c "rm -rf /config/* /config/.* 2>/dev/null; mkdir -p /config" 2>/dev/null || true
-    print_success "GitLab config очищен"
-fi
-if [ -d "$PROJECT_DIR/shared/data/runner-config" ]; then
-    docker run --rm -v "$PROJECT_DIR/shared/data/runner-config:/runner" alpine sh -c "rm -rf /runner/* /runner/.* 2>/dev/null; mkdir -p /runner" 2>/dev/null || true
-    print_success "Runner config очищен"
-fi
+if [[ "$PRESERVE_DATA" == true ]]; then
+    print_success "Режим «сохранить данные»: GitLab/Langflow данные и тома не трогаются"
+else
+    print_step "Очистка предыдущих данных сервисов..."
 
-# Удаляем Docker тома (с правильным префиксом)
-print_step "Удаление Docker томов..."
-PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
-for vol in jupyterhub-data langflow-data; do
-    FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
-    docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
-done
+    # Удаляем bind-mounted данные GitLab
+    if [ -d "$PROJECT_DIR/shared/data/gitlab-data" ]; then
+        docker run --rm -v "$PROJECT_DIR/shared/data/gitlab-data:/data" alpine sh -c "rm -rf /data/* /data/.* 2>/dev/null; mkdir -p /data" 2>/dev/null || true
+        print_success "GitLab data очищен"
+    fi
+    if [ -d "$PROJECT_DIR/shared/data/gitlab-config" ]; then
+        docker run --rm -v "$PROJECT_DIR/shared/data/gitlab-config:/config" alpine sh -c "rm -rf /config/* /config/.* 2>/dev/null; mkdir -p /config" 2>/dev/null || true
+        print_success "GitLab config очищен"
+    fi
+    if [ -d "$PROJECT_DIR/shared/data/runner-config" ]; then
+        docker run --rm -v "$PROJECT_DIR/shared/data/runner-config:/runner" alpine sh -c "rm -rf /runner/* /runner/.* 2>/dev/null; mkdir -p /runner" 2>/dev/null || true
+        print_success "Runner config очищен"
+    fi
 
-print_step "Очистка завершена"
+    # Удаляем Docker тома (с правильным префиксом)
+    print_step "Удаление Docker томов..."
+    PROJECT_VOLUME_PREFIX=$(basename "$PROJECT_DIR")
+    for vol in jupyterhub-data langflow-data; do
+        FULL_VOL_NAME="${PROJECT_VOLUME_PREFIX}_${vol}"
+        docker volume rm "$FULL_VOL_NAME" 2>/dev/null && print_success "Том $vol удалён" || true
+    done
+
+    # Старые клоны репозиториев студентов (полный сброс перед новым потоком)
+    if [ -d "$PROJECT_DIR/shared/data/student-work" ]; then
+        docker run --rm -v "$PROJECT_DIR/shared/data/student-work:/work" alpine sh -c "rm -rf /work/* /work/.[!.]* 2>/dev/null; mkdir -p /work" 2>/dev/null || true
+        print_success "Клоны студентов (student-work) очищены"
+    fi
+
+    print_step "Очистка завершена"
+fi
 
 # Удаляем старые bind-mount директории (переход на Docker volumes)
 rm -rf "$PROJECT_DIR/shared/data/cache_huggingface"
