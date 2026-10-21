@@ -29,34 +29,59 @@ done
 echo ""
 echo "=== GitLab: получение root personal access token ==="
 
-ROOT_TOKEN=$(timeout 60 docker exec gitlab gitlab-rails runner '
-  user = User.find_by_username("root")
-  token = user.personal_access_tokens.where(name: "setup-token").first
-  if token
-    puts token.token
-  else
-    token = user.personal_access_tokens.create!(
-      name: "setup-token",
-      scopes: ["api", "read_api", "read_repository", "write_repository", "admin_mode"],
-      expires_at: Date.today + 365.days
-    )
-    puts token.token
-  end
-' 2>&1 | tr -d '[:space:]')
+# gitlab-rails runner поднимает полный Rails (≈45–60 с, дольше под нагрузкой установки),
+# поэтому timeout 240 с + повторные попытки + проверка sentinel-маркера в выводе.
+# ВАЖНО: plaintext PAT в GitLab доступен ТОЛЬКО в момент создания — существующий токен,
+# загруженный из БД, вернёт token.token = nil (хранится только хэш). Поэтому при каждом
+# запуске старые setup-token удаляются и создаётся новый; старый токен живёт только в .env,
+# который обновляется сразу после этого шага (и admin-dashboard пересоздаётся).
+get_root_token() {
+    timeout 240 docker exec gitlab gitlab-rails runner '
+      user = User.find_by_username("root")
+      user.personal_access_tokens.where(name: "setup-token").destroy_all
+      token = user.personal_access_tokens.create!(
+        name: "setup-token",
+        scopes: ["api", "read_api", "read_repository", "write_repository", "admin_mode"],
+        expires_at: Date.today + 365.days
+      )
+      puts "SETUP_TOKEN_OK #{token.token}"
+    ' 2>&1
+}
+
+ROOT_TOKEN=""
+for attempt in 1 2 3; do
+    TOKEN_OUT=$(get_root_token || true)
+    if [[ "$TOKEN_OUT" == *"SETUP_TOKEN_OK "* ]]; then
+        ROOT_TOKEN="${TOKEN_OUT##*SETUP_TOKEN_OK }"
+        ROOT_TOKEN=$(printf '%s' "$ROOT_TOKEN" | tr -d '[:space:]')
+        break
+    fi
+    echo "⚠ Попытка $attempt/3: валидный токен не получен (Rails/БД ещё поднимается?), ждём 15 с..."
+    sleep 15
+done
 
 if [[ -z "$ROOT_TOKEN" ]]; then
-    echo "⚠ Не удалось получить root token."
-    ROOT_TOKEN="placeholder"
+    echo "✗ ОШИБКА: не удалось получить root token после 3 попыток."
+    echo "  Диагностика: docker logs gitlab | tail -30"
+    echo "  После восстановления перезапустите: bash scripts/init_gitlab.sh (идемпотентно)"
+    exit 1
 fi
 
-echo "✓ Root token получен: $ROOT_TOKEN"
+# Валидация токена через API до создания групп/проектов
+if ! docker exec gitlab curl -sf -H "PRIVATE-TOKEN: $ROOT_TOKEN" http://localhost/api/v4/version >/dev/null 2>&1; then
+    echo "✗ ОШИБКА: полученный root token не проходит валидацию через API."
+    echo "  Перезапустите: bash scripts/init_gitlab.sh (идемпотентно)"
+    exit 1
+fi
+
+echo "✓ Root token получен и проверен (len=${#ROOT_TOKEN}, ...${ROOT_TOKEN: -4})"
 
 echo ""
 echo "=== GitLab: GITLAB_ADMIN_TOKEN → .env + перезапуск admin-dashboard ==="
 # setup.sh пишет в .env placeholder ДО того, как появится рабочий токен. Здесь
 # подставляем setup-token и force-recreate'им дашборд, чтобы он начал дёргать
-# GitLab API (first/last name студентов) уже с валидным токеном. ШАГ НЕФАТАЛЬНЫЙ:
-# при сбое установка не прерывается, имена студентов просто останутся "—".
+# GitLab API (first/last name студентов) уже с валидным токеном. До этого шага
+# ROOT_TOKEN гарантированно валиден (иначе скрипт завершился бы с ошибкой выше).
 if [[ -n "$ROOT_TOKEN" && "$ROOT_TOKEN" != "placeholder" ]]; then
     if grep -qE '^GITLAB_ADMIN_TOKEN=' .env 2>/dev/null; then
         sed -i.bak "s|^GITLAB_ADMIN_TOKEN=.*|GITLAB_ADMIN_TOKEN=${ROOT_TOKEN}|" .env || true
@@ -82,7 +107,7 @@ echo "=== GitLab: instance CI/CD variables (DASHBOARD_USER / DASHBOARD_PASS) ===
 # поэтому создаём переменные через ORM (gitlab-rails runner) — тот же механизм, что для root token.
 # ШАГ НЕФАТАЛЬНЫЙ: при сбое установка не прерывается, persist в dashboard просто отключён.
 create_instance_ci_vars() {
-    docker exec \
+    timeout 240 docker exec \
         -e CIVAR_USER="${DASHBOARD_USERNAME:-admin}" \
         -e CIVAR_PASS="${DASHBOARD_PASSWORD:-}" \
         gitlab gitlab-rails runner '
