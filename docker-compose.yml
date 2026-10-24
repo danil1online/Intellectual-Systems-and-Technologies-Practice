@@ -6,6 +6,10 @@ services:
       dockerfile: Dockerfile
     container_name: gitlab
     restart: always
+    # GitLab останавливается дольше 10с (gitlab-ctl stop); без этого down/stop
+    # убивает контейнер SIGKILL'ом → postgres в dirty-состоянии → crash recovery
+    # при следующем старте.
+    stop_grace_period: 5m
     hostname: "gitlab.${HOST_DOMAIN:-localhost}"
     shm_size: "256m"
     extra_hosts:
@@ -36,6 +40,7 @@ services:
     image: gitlab/gitlab-runner:alpine-v18.10.1
     container_name: gitlab-runner
     restart: always
+    stop_grace_period: 1m
     volumes:
       - ./shared/data/runner-config:/etc/gitlab-runner
       - /var/run/docker.sock:/var/run/docker.sock

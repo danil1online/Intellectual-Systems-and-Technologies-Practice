@@ -18,7 +18,7 @@ import requests
 
 CONTROL_QUESTION_TOTAL = 2.0
 TASK_TOTAL = 3.0
-GRADER_VERSION = "v6-pr2-specs"
+GRADER_VERSION = "v7-gigachat-json"
 
 # Canonical heading is "Контрольные вопросы".
 # The singular "Контрольный вопрос" and the old "Вопросы" heading are kept as
@@ -254,6 +254,13 @@ def _lenient_grader_json(raw):
     if control is not None:
         data["control_questions"] = control
 
+    # spec-путь: булевы массивы коротки и ломаются реже текстовых полей —
+    # восстанавливаем их даже из битого JSON (хвост issues/recommendations).
+    for key in ("tasks", "questions"):
+        value = _extract_bool_array(candidate, key)
+        if value is not None:
+            data[key] = value
+
     for key in ("issues", "recommendations"):
         value = _extract_string_array(candidate, key)
         if value is not None:
@@ -485,9 +492,12 @@ def build_spec_prompt(spec, practice_num, report_text, max_report_chars=DEFAULT_
         tasks_json = '"tasks": [], '
         order_note = "Массив «tasks» оставь пустым ([]). Оценивай только контрольные вопросы."
 
+    # Только булевы массивы — свободные текстовые поля (feedback/issues/...)
+    # ломали JSON у малых моделей, а в оценке не участвуют.
+    json_body = (tasks_json + questions_json).rstrip(", ")
     checklist = f"""{tasks_section}{questions_section}
 Ответь ТОЛЬКО одним JSON-объектом, без markdown и без пояснений до/после:
-{{{tasks_json}{questions_json}"feedback": "<1-2 предложения на русском>", "issues": ["..."], "recommendations": ["..."]}}
+{{{json_body}}}
 
 {order_note}"""
 
@@ -774,7 +784,7 @@ def normalize_spec_payload(raw, spec, report_text):
 
 
 def chat_completion(prompt, system, base_url, api_key, model,
-                    temperature=0.1, max_tokens=2048, timeout=180):
+                    temperature=0.1, max_tokens=2048, timeout=600):
     """Один запрос к OpenAI-совместимому /chat/completions → raw content."""
     headers = {
         "Authorization": f"Bearer {api_key}",

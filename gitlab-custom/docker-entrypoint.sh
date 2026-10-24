@@ -42,7 +42,7 @@ gitlab-rails runner "
   else
     puts \"require_admin_approval_after_user_signup already false\"
   end
-" 2>&1
+" 2>&1 || echo "WARNING: post-reconfigure rails runner failed — НЕ фатально, контейнер продолжит работу (проверить postgres и gitlab-rails вручную)"
 '
 
 # Delegate to original GitLab entrypoint
