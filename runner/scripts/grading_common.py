@@ -10,6 +10,7 @@ Provides:
 
 import json
 import math
+import os
 import re
 import time
 from pathlib import Path
@@ -18,7 +19,7 @@ import requests
 
 CONTROL_QUESTION_TOTAL = 2.0
 TASK_TOTAL = 3.0
-GRADER_VERSION = "v7-gigachat-json"
+GRADER_VERSION = "v8-llm-timeout"
 
 # Canonical heading is "Контрольные вопросы".
 # The singular "Контрольный вопрос" and the old "Вопросы" heading are kept as
@@ -784,8 +785,15 @@ def normalize_spec_payload(raw, spec, report_text):
 
 
 def chat_completion(prompt, system, base_url, api_key, model,
-                    temperature=0.1, max_tokens=2048, timeout=600):
+                    temperature=0.1, max_tokens=2048, timeout=None):
     """Один запрос к OpenAI-совместимому /chat/completions → raw content."""
+    if timeout is None:
+        # Не меньше бюджета практики (LLM_TIMEOUT_S в auto_grade.py), иначе
+        # subprocess-потолок убьёт оценщика посреди ещё живого LLM-вызова.
+        try:
+            timeout = max(600, int(os.environ.get("LLM_TIMEOUT_S", "300")))
+        except ValueError:
+            timeout = 600
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",

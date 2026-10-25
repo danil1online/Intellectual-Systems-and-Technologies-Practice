@@ -1343,7 +1343,9 @@ docker run --rm \
   alpine sh -c "mkdir -p /data/runner-config && chown -R $(id -u):$(id -g) /data/runner-config"
 
 cat > "$RUNNER_CONFIG" << RUNNEREOF
-concurrent = ${GRADE_CONCURRENCY:-2}
+# LLM-оценка последовательная (llama.cpp обрабатывает запросы по одному):
+# concurrency > 1 только увеличивает очередь на LLM без параллельного инференса.
+concurrent = ${GRADE_CONCURRENCY:-1}
 check_interval = 0
 shutdown_request_timeout = 0
 

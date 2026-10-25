@@ -350,6 +350,9 @@ grade:
     LLM_CI_BASE_URL: "__LLM_CI_BASE_URL__"
     LLM_CI_API_KEY: "__LLM_CI_API_KEY__"
     LLM_CI_MODEL: "__LLM_CI_MODEL__"
+    # Бюджет одной практики на оценку (сек): потолок subprocess'а = LLM_TIMEOUT_S + 60.
+    # LLM-сервер последовательный, при медленном инференсе вызовы занимают минуты.
+    LLM_TIMEOUT_S: "900"
   before_script:
     - cd /
     - rm -rf /builds/${CI_PROJECT_PATH}

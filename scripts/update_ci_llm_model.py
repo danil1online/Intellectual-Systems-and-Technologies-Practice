@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Обновляет LLM_CI_MODEL (и timeout) в .gitlab-ci.yml всех проектов GitLab.
+"""Обновляет LLM_CI_MODEL, job-level timeout и LLM_TIMEOUT_S в .gitlab-ci.yml всех проектов GitLab.
 
 Студенческие проекты защищены (main: push=Maintainers), а root не участник —
 поэтому перед коммитом защита main временно снимается и восстанавливается
@@ -76,6 +76,14 @@ def transform(content, model):
     if "  timeout:" not in new_content and anchor in new_content:
         new_content = new_content.replace(anchor, f"{anchor}{JOB_TIMEOUT_LINE}\n", 1)
         changed = True
+
+    # Бюджет LLM-оценки одной практики (потолок subprocess'а = LLM_TIMEOUT_S + 60).
+    if "LLM_TIMEOUT_S:" not in new_content:
+        m = re.search(r'^([ \t]*)LLM_CI_MODEL:[^\n]*\n', new_content, flags=re.M)
+        if m:
+            new_content = new_content.replace(
+                m.group(0), f'{m.group(0)}{m.group(1)}LLM_TIMEOUT_S: "900"\n', 1)
+            changed = True
 
     return new_content, changed
 
