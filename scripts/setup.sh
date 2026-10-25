@@ -486,7 +486,7 @@ configure_langflow_llm() {
 print_header "ШАГ 0/11: Проверка портов и автоопределение сетевых параметров"
 
 # Проверка занятых портов
-REQUIRED_PORTS="80 2222 8000 8080 9000 5050 7860 8021"
+REQUIRED_PORTS="80 2222 8000 8080 9000 7860 8021"
 PORTS_IN_USE=""
 for port in $REQUIRED_PORTS; do
     if ss -tlnp 2>/dev/null | grep -q ":${port} " || netstat -tlnp 2>/dev/null | grep -q ":${port} "; then
@@ -879,7 +879,6 @@ HOST_IP_LOCAL=localhost
 # Порты
 JUPYTERHUB_PORT=$JUPYTERHUB_PORT
 DASHBOARD_PORT=$DASHBOARD_PORT
-REGISTRY_PORT=5050
 
 # --- LLM ---
 LLM_MENTOR_TYPE=$LLM_MENTOR_TYPE
@@ -985,7 +984,6 @@ if [[ "$LLM_USE_LOCAL" == "true" ]] || [[ "$LLM_CI_TYPE" == "local" && "$LLM_MEN
     print_step "Загрузка базовых образов..."
     docker pull gitlab/gitlab-ce:18.10.4-ce.0 2>/dev/null || true
     docker pull gitlab/gitlab-runner:alpine-v18.10.1 2>/dev/null || true
-    docker pull registry:2 2>/dev/null || true
     docker pull python:3.10-slim 2>/dev/null || true
     
     # Определяем какие образы нужны

@@ -251,25 +251,6 @@ services:
       retries: 10
       start_period: 60s
 
-  # --- DOCKER REGISTRY ---
-  registry:
-    image: registry:2
-    container_name: registry
-    restart: unless-stopped
-    ports:
-      - "${REGISTRY_PORT:-5050}:5000"
-    volumes:
-      - ./shared/data/registry:/var/lib/registry
-    networks:
-      - internal
-      - host-facing
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:5000/v2/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
   # --- ADMIN DASHBOARD ---
   admin-dashboard:
     build:

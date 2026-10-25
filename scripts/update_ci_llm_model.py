@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Обновляет LLM_CI_MODEL (и timeout) в .gitlab-ci.yml всех проектов GitLab.
 
+Студенческие проекты защищены (main: push=Maintainers), а root не участник —
+поэтому перед коммитом защита main временно снимается и восстанавливается
+после (try/finally).
+
 Запуск с сервера стека:
     GITLAB_ADMIN_TOKEN=$(grep '^GITLAB_ADMIN_TOKEN=' /home/user1/ISTP/istp0808/.env | cut -d= -f2) \
         python3 scripts/update_ci_llm_model.py [новая_модель]
@@ -70,6 +74,42 @@ def transform(content, model):
     return new_content, changed
 
 
+def _levels(levels):
+    out = []
+    for lvl in levels or []:
+        item = {"access_level": lvl["access_level"]}
+        if lvl.get("user_id"):
+            item["user_id"] = lvl["user_id"]
+        if lvl.get("group_id"):
+            item["group_id"] = lvl["group_id"]
+        out.append(item)
+    return out or [{"access_level": 40}]
+
+
+def get_main_protection(project_id):
+    resp = api("GET", f"/projects/{project_id}/protected_branches?search=main")
+    if resp.status_code != 200:
+        return None
+    for branch in resp.json():
+        if branch.get("name") == "main":
+            return branch
+    return None
+
+
+def restore_main_protection(project_id, protection):
+    payload = {
+        "name": "main",
+        "allow_force_push": bool(protection.get("allow_force_push", False)),
+        "code_owner_approval_required": bool(protection.get("code_owner_approval_required", False)),
+        "push_access_levels": _levels(protection.get("push_access_levels")),
+        "merge_access_levels": _levels(protection.get("merge_access_levels")),
+    }
+    resp = api("POST", f"/projects/{project_id}/protected_branches", json=payload)
+    if resp.status_code not in (200, 201):
+        print(f"  ⚠️ не удалось восстановить защиту main: "
+              f"HTTP {resp.status_code}: {resp.text[:200]}", file=sys.stderr)
+
+
 def main():
     model = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODEL
     if not TOKEN:
@@ -85,8 +125,9 @@ def main():
     updated, unchanged, skipped, failed = [], [], [], []
     for proj in projects:
         name = proj["path_with_namespace"]
+        pid = proj["id"]
         try:
-            content = get_ci_file(proj["id"])
+            content = get_ci_file(pid)
         except Exception as exc:
             failed.append((name, str(exc)))
             continue
@@ -97,13 +138,28 @@ def main():
         if not changed:
             unchanged.append(name)
             continue
-        payload = {
-            "branch": "main",
-            "content": new_content,
-            "encoding": "text",
-            "commit_message": f"CI: LLM_CI_MODEL -> {model}, timeout 90m",
-        }
-        resp = api("PUT", f"/projects/{proj['id']}/repository/files/.gitlab-ci.yml", json=payload)
+
+        protection = get_main_protection(pid)
+        unprotect_ok = True
+        if protection is not None:
+            resp = api("DELETE", f"/projects/{pid}/protected_branches/main")
+            unprotect_ok = resp.status_code in (200, 204)
+            if not unprotect_ok:
+                failed.append((name, f"не удалось снять защиту main: HTTP {resp.status_code}"))
+                continue
+
+        try:
+            payload = {
+                "branch": "main",
+                "content": new_content,
+                "encoding": "text",
+                "commit_message": f"CI: LLM_CI_MODEL -> {model}, timeout 90m",
+            }
+            resp = api("PUT", f"/projects/{pid}/repository/files/.gitlab-ci.yml", json=payload)
+        finally:
+            if protection is not None and unprotect_ok:
+                restore_main_protection(pid, protection)
+
         if resp.status_code in (200, 201):
             updated.append(name)
         else:
