@@ -339,11 +339,10 @@ CI_TEXT=$(cat <<'CIEOF'
 stages:
   - grade
 
-# LLM-оценка: до 3 практик × ретраи × длинные ответы модели (RAM-инференс)
-timeout: 90m
-
 grade:
   stage: grade
+  # LLM-оценка: до 3 практик × ретраи × длинные ответы модели (RAM-инференс)
+  timeout: 90m
   tags:
     - istp-runner
   variables:

@@ -21,7 +21,7 @@ import requests
 GITLAB_URL = os.environ.get("GITLAB_URL", "http://localhost")
 TOKEN = os.environ.get("GITLAB_ADMIN_TOKEN", "")
 DEFAULT_MODEL = "GigaChat3.1-10B-A1.8B-q4_K_M.gguf"
-JOB_TIMEOUT_LINE = "timeout: 90m"
+JOB_TIMEOUT_LINE = "  timeout: 90m"
 
 
 def api(method, path, **kwargs):
@@ -65,11 +65,17 @@ def transform(content, model):
 
     new_content = re.sub(r'LLM_CI_MODEL:\s*"[^"]*"', _sub_model, new_content)
 
-    if "timeout:" not in new_content:
-        anchor = "stages:\n  - grade\n"
-        if anchor in new_content:
-            new_content = new_content.replace(anchor, f"{anchor}\n{JOB_TIMEOUT_LINE}\n", 1)
-            changed = True
+    # Верхнеуровневый timeout невалиден (GitLab трактует его как job без script) —
+    # удаляем неиндентированную строку и ставим timeout внутрь job grade.
+    stripped = re.sub(r"^timeout:[^\n]*\n", "", new_content, flags=re.M)
+    if stripped != new_content:
+        new_content = stripped
+        changed = True
+
+    anchor = "grade:\n  stage: grade\n"
+    if "  timeout:" not in new_content and anchor in new_content:
+        new_content = new_content.replace(anchor, f"{anchor}{JOB_TIMEOUT_LINE}\n", 1)
+        changed = True
 
     return new_content, changed
 
